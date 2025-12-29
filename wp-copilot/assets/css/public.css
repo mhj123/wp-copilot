@@ -1,0 +1,130 @@
+/* Work Copilot Public Styles */
+
+.wcp-page-items {
+    margin-top: 40px;
+    padding-top: 30px;
+    border-top: 2px solid #eee;
+}
+
+.wcp-page-items h2 {
+    font-size: 24px;
+    margin-bottom: 20px;
+}
+
+.wcp-filters {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.wcp-filter {
+    margin-right: 10px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    background: #fff;
+}
+
+.wcp-items-list {
+    display: grid;
+    gap: 20px;
+}
+
+.wcp-item {
+    padding: 20px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    transition: box-shadow 0.2s;
+}
+
+.wcp-item:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.wcp-item.wcp-pinned {
+    border-left: 4px solid #2271b1;
+    background: #f0f6fc;
+}
+
+.wcp-item h3 {
+    margin-top: 0;
+    font-size: 20px;
+}
+
+.wcp-item h3 a {
+    text-decoration: none;
+    color: #2271b1;
+}
+
+.wcp-item h3 a:hover {
+    color: #135e96;
+}
+
+.wcp-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    margin-right: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 3px;
+    text-transform: uppercase;
+}
+
+.wcp-ai-badge {
+    background: #9b51e0;
+    color: #fff;
+}
+
+.wcp-type-task {
+    background: #3498db;
+    color: #fff;
+}
+
+.wcp-type-info {
+    background: #95a5a6;
+    color: #fff;
+}
+
+.wcp-type-learning {
+    background: #f39c12;
+    color: #fff;
+}
+
+.wcp-priority-high {
+    background: #e74c3c;
+    color: #fff;
+}
+
+.wcp-priority-medium {
+    background: #f39c12;
+    color: #fff;
+}
+
+.wcp-priority-low {
+    background: #2ecc71;
+    color: #fff;
+}
+
+.wcp-excerpt {
+    margin: 15px 0;
+    color: #555;
+    line-height: 1.6;
+}
+
+.wcp-meta {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+    font-size: 13px;
+    color: #999;
+}
+
+/* Responsive */
+@media (min-width: 768px) {
+    .wcp-items-list {
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    }
+}
