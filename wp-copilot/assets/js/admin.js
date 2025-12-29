@@ -149,9 +149,17 @@ jQuery(document).ready(function($) {
 
     // AI suggest tags in post editor
     $('.wcp-ai-suggest-tags').on('click', function() {
+        var $button = $(this);
         var postId = $(this).data('post-id');
         var title = $('#title').val();
-        var content = $('#content').val() || wp.editor.getContent('content');
+        var content = $('#content').val() || (typeof tinymce !== 'undefined' && tinymce.get('content') ? tinymce.get('content').getContent() : '');
+
+        if (!title && !content) {
+            alert('Please enter a title and/or content first.');
+            return;
+        }
+
+        $button.prop('disabled', true).text('Getting suggestions...');
 
         $.ajax({
             url: wcpData.restUrl + '/ai/suggest-tags',
@@ -164,11 +172,56 @@ jQuery(document).ready(function($) {
                 xhr.setRequestHeader('X-WP-Nonce', wcpData.nonce);
             },
             success: function(response) {
-                if (response.success) {
+                if (response.success && response.suggestions) {
+                    var suggestions = response.suggestions;
+                    var messages = [];
+
+                    // Apply item_type
+                    if (suggestions.item_type) {
+                        $('input[name="tax_input[item_type][]"][value="' + suggestions.item_type + '"]').prop('checked', true);
+                        messages.push('Item Type: ' + suggestions.item_type);
+                    }
+
+                    // Apply priority
+                    if (suggestions.priority) {
+                        $('input[name="tax_input[priority][]"][value="' + suggestions.priority + '"]').prop('checked', true);
+                        messages.push('Priority: ' + suggestions.priority);
+                    }
+
+                    // Apply tags to WordPress tag field
+                    if (suggestions.tags && suggestions.tags.length > 0) {
+                        var tagString = suggestions.tags.join(', ');
+                        $('#new-tag-post_tag').val(tagString);
+                        messages.push('Tags: ' + tagString);
+
+                        // Auto-add tags if tagBox is available
+                        if (typeof tagBox !== 'undefined') {
+                            suggestions.tags.forEach(function(tag) {
+                                tagBox.flushTags($('#post_tag'), false);
+                                $('#new-tag-post_tag').val(tag);
+                                tagBox.flushTags($('#post_tag'), false);
+                            });
+                        }
+                    }
+
                     $('#wcp-ai-suggestions').html(
-                        '<div class="notice notice-info"><p>AI suggestions ready! (Mock data)</p></div>'
+                        '<div class="notice notice-success is-dismissible"><p><strong>AI suggestions applied!</strong><br>' +
+                        messages.join('<br>') +
+                        '</p></div>'
+                    );
+                } else {
+                    $('#wcp-ai-suggestions').html(
+                        '<div class="notice notice-error is-dismissible"><p>Error: ' + (response.message || 'Unknown error') + '</p></div>'
                     );
                 }
+            },
+            error: function(xhr, status, error) {
+                $('#wcp-ai-suggestions').html(
+                    '<div class="notice notice-error is-dismissible"><p>Error: ' + error + '</p></div>'
+                );
+            },
+            complete: function() {
+                $button.prop('disabled', false).text('Suggest Tags');
             }
         });
     });
