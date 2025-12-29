@@ -107,6 +107,11 @@ class WCP_AI_Client {
         // Extract text from response
         $text = isset($response['content'][0]['text']) ? $response['content'][0]['text'] : '';
 
+        // Strip markdown code blocks if present
+        $text = preg_replace('/```json\s*/i', '', $text);
+        $text = preg_replace('/```\s*$/i', '', $text);
+        $text = trim($text);
+
         // Try to parse JSON from response
         $json_start = strpos($text, '{');
         $json_end = strrpos($text, '}');
@@ -115,7 +120,7 @@ class WCP_AI_Client {
             $json_str = substr($text, $json_start, $json_end - $json_start + 1);
             $suggestions = json_decode($json_str, true);
 
-            if ($suggestions) {
+            if (json_last_error() === JSON_ERROR_NONE && is_array($suggestions)) {
                 return array(
                     'item_type' => isset($suggestions['item_type']) ? $suggestions['item_type'] : '',
                     'priority' => isset($suggestions['priority']) ? $suggestions['priority'] : '',
@@ -125,7 +130,14 @@ class WCP_AI_Client {
             }
         }
 
-        return new WP_Error('parse_error', 'Could not parse AI response');
+        // More detailed error for debugging
+        $error_msg = 'Could not parse AI response';
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $error_msg .= ': ' . json_last_error_msg();
+        }
+        $error_msg .= '. Response: ' . substr($text, 0, 200);
+
+        return new WP_Error('parse_error', $error_msg);
     }
 
     /**
@@ -216,6 +228,11 @@ class WCP_AI_Client {
 
         $text = isset($response['content'][0]['text']) ? $response['content'][0]['text'] : '';
 
+        // Strip markdown code blocks if present
+        $text = preg_replace('/```json\s*/i', '', $text);
+        $text = preg_replace('/```\s*$/i', '', $text);
+        $text = trim($text);
+
         // Extract JSON array
         $json_start = strpos($text, '[');
         $json_end = strrpos($text, ']');
@@ -224,7 +241,7 @@ class WCP_AI_Client {
             $json_str = substr($text, $json_start, $json_end - $json_start + 1);
             $candidates = json_decode($json_str, true);
 
-            if ($candidates && is_array($candidates)) {
+            if (json_last_error() === JSON_ERROR_NONE && is_array($candidates)) {
                 return array(
                     'candidates' => $candidates,
                     'model' => $this->model,
@@ -233,7 +250,14 @@ class WCP_AI_Client {
             }
         }
 
-        return new WP_Error('parse_error', 'Could not parse coaching response');
+        // More detailed error for debugging
+        $error_msg = 'Could not parse coaching response';
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $error_msg .= ': ' . json_last_error_msg();
+        }
+        $error_msg .= '. Response: ' . substr($text, 0, 200);
+
+        return new WP_Error('parse_error', $error_msg);
     }
 
     /**
