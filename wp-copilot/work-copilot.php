@@ -44,6 +44,8 @@ class Work_Copilot {
         require_once WCP_PLUGIN_DIR . 'includes/class-rest-api.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-ai-logger.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-ai-client.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-embeddings-client.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-embeddings-manager.php';
         require_once WCP_PLUGIN_DIR . 'admin/class-admin.php';
         require_once WCP_PLUGIN_DIR . 'admin/class-settings.php';
         require_once WCP_PLUGIN_DIR . 'public/class-public.php';
@@ -62,6 +64,7 @@ class Work_Copilot {
         WCP_Taxonomies::instance();
         WCP_Taxonomy_Sync::instance();
         WCP_REST_API::instance();
+        WCP_Embeddings_Manager::instance();
 
         if (is_admin()) {
             WCP_Admin::instance();
@@ -117,6 +120,27 @@ class Work_Copilot {
 
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
+
+        // Embeddings table for RAG/vector search
+        $embeddings_table = $wpdb->prefix . 'wcp_embeddings';
+
+        $sql_embeddings = "CREATE TABLE IF NOT EXISTS $embeddings_table (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            post_id bigint(20) unsigned NOT NULL,
+            post_type varchar(20) NOT NULL,
+            embedding_text longtext NOT NULL,
+            embedding_vector longtext NOT NULL,
+            model varchar(100) DEFAULT 'text-embedding-3-small',
+            dimensions int(11) DEFAULT 1536,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY post_id (post_id),
+            KEY post_type (post_type),
+            KEY updated_at (updated_at)
+        ) $charset_collate;";
+
+        dbDelta($sql_embeddings);
     }
 
     public function load_textdomain() {

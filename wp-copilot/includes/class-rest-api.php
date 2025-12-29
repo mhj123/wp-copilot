@@ -73,6 +73,34 @@ class WCP_REST_API {
             'callback' => array($this, 'ai_decide'),
             'permission_callback' => array($this, 'check_permission'),
         ));
+
+        // Embeddings: Semantic search
+        register_rest_route($namespace, '/search/semantic', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'semantic_search'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Embeddings: Batch generate
+        register_rest_route($namespace, '/embeddings/batch', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'batch_generate_embeddings'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Embeddings: Stats
+        register_rest_route($namespace, '/embeddings/stats', array(
+            'methods' => 'GET',
+            'callback' => array($this, 'get_embedding_stats'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Embeddings: Generate for single post
+        register_rest_route($namespace, '/embeddings/generate/(?P<post_id>\d+)', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'generate_single_embedding'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
     }
 
     public function check_permission() {
@@ -361,8 +389,8 @@ class WCP_REST_API {
             ));
         }
 
-        // Build context pack
-        $context = $this->build_page_context($page_id);
+        // Build context pack (with semantic search if available)
+        $context = $this->build_page_context($page_id, $prompt);
 
         // Call AI
         $result = $ai_client->page_chat($context, $prompt);
@@ -504,8 +532,9 @@ class WCP_REST_API {
 
     /**
      * Build context pack for AI
+     * Enhanced with semantic search when available
      */
-    private function build_page_context($post_id) {
+    private function build_page_context($post_id, $query = null) {
         $post = get_post($post_id);
 
         if (!$post) {
@@ -537,28 +566,217 @@ class WCP_REST_API {
         if (!empty($terms)) {
             $term_id = $terms[0]->term_id;
 
-            // Get items
-            $args = array(
-                'post_type' => 'post',
-                'posts_per_page' => 20,
-                'tax_query' => array(
-                    array(
-                        'taxonomy' => 'wcp_context',
-                        'field' => 'term_id',
-                        'terms' => $term_id,
-                    ),
-                ),
-            );
+            // Use semantic search if embeddings are enabled and query is provided
+            $use_semantic_search = false;
+            if ($query && get_option('wcp_embeddings_enabled', false)) {
+                $embeddings_client = WCP_Embeddings_Client::instance();
+                if ($embeddings_client->is_configured()) {
+                    $use_semantic_search = true;
+                }
+            }
 
-            $items = get_posts($args);
-            foreach ($items as $item) {
-                $context['recent_items'][] = array(
-                    'title' => $item->post_title,
-                    'content' => $item->post_content,
+            if ($use_semantic_search) {
+                // Get all posts in this context
+                $args = array(
+                    'post_type' => 'post',
+                    'post_status' => 'publish',
+                    'posts_per_page' => -1,
+                    'fields' => 'ids',
+                    'tax_query' => array(
+                        array(
+                            'taxonomy' => 'wcp_context',
+                            'field' => 'term_id',
+                            'terms' => $term_id,
+                        ),
+                    ),
                 );
+                $context_post_ids = get_posts($args);
+
+                if (!empty($context_post_ids)) {
+                    // Use semantic search to find most relevant items
+                    $similar_posts = $embeddings_client->find_similar_posts(
+                        $query,
+                        15, // Get top 15 most relevant
+                        'post',
+                        array() // Don't exclude any
+                    );
+
+                    if (!is_wp_error($similar_posts)) {
+                        // Filter to only posts in this context
+                        foreach ($similar_posts as $similar) {
+                            if (in_array($similar['post_id'], $context_post_ids)) {
+                                $item = get_post($similar['post_id']);
+                                if ($item) {
+                                    $context['recent_items'][] = array(
+                                        'title' => $item->post_title,
+                                        'content' => $item->post_content,
+                                        'similarity' => $similar['similarity'],
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Fallback to recent items if semantic search not used or returned nothing
+            if (empty($context['recent_items'])) {
+                $args = array(
+                    'post_type' => 'post',
+                    'posts_per_page' => 20,
+                    'orderby' => 'date',
+                    'order' => 'DESC',
+                    'tax_query' => array(
+                        array(
+                            'taxonomy' => 'wcp_context',
+                            'field' => 'term_id',
+                            'terms' => $term_id,
+                        ),
+                    ),
+                );
+
+                $items = get_posts($args);
+                foreach ($items as $item) {
+                    $context['recent_items'][] = array(
+                        'title' => $item->post_title,
+                        'content' => $item->post_content,
+                    );
+                }
             }
         }
 
         return $context;
+    }
+
+    /**
+     * Semantic search endpoint
+     */
+    public function semantic_search($request) {
+        $query = $request->get_param('query');
+        $limit = $request->get_param('limit') ?: 10;
+        $post_type = $request->get_param('post_type');
+        $exclude_ids = $request->get_param('exclude_ids') ?: array();
+
+        if (empty($query)) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'Query parameter is required',
+            ));
+        }
+
+        // Check if embeddings are enabled
+        if (!get_option('wcp_embeddings_enabled', false)) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'Semantic search is not enabled',
+            ));
+        }
+
+        $embeddings_client = WCP_Embeddings_Client::instance();
+
+        if (!$embeddings_client->is_configured()) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'OpenAI API key not configured',
+            ));
+        }
+
+        // Find similar posts
+        $results = $embeddings_client->find_similar_posts($query, $limit, $post_type, $exclude_ids);
+
+        if (is_wp_error($results)) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => $results->get_error_message(),
+            ));
+        }
+
+        // Format results with post details
+        $formatted_results = array();
+        foreach ($results as $result) {
+            $post = get_post($result['post_id']);
+            if ($post) {
+                $formatted_results[] = array(
+                    'post_id' => $post->ID,
+                    'title' => $post->post_title,
+                    'content' => wp_trim_words($post->post_content, 50),
+                    'excerpt' => $post->post_excerpt,
+                    'post_type' => $post->post_type,
+                    'similarity' => round($result['similarity'], 4),
+                    'edit_url' => get_edit_post_link($post->ID, 'raw'),
+                    'view_url' => get_permalink($post->ID),
+                    'contexts' => wp_get_post_terms($post->ID, 'wcp_context', array('fields' => 'names')),
+                );
+            }
+        }
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'query' => $query,
+            'results' => $formatted_results,
+            'count' => count($formatted_results),
+        ));
+    }
+
+    /**
+     * Batch generate embeddings
+     */
+    public function batch_generate_embeddings($request) {
+        $post_type = $request->get_param('post_type') ?: 'post';
+        $limit = $request->get_param('limit') ?: 50;
+        $offset = $request->get_param('offset') ?: 0;
+
+        $manager = WCP_Embeddings_Manager::instance();
+        $results = $manager->batch_generate_embeddings($post_type, $limit, $offset);
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'results' => $results,
+            'post_type' => $post_type,
+            'processed' => $results['total'],
+        ));
+    }
+
+    /**
+     * Get embedding statistics
+     */
+    public function get_embedding_stats($request) {
+        $manager = WCP_Embeddings_Manager::instance();
+        $stats = $manager->get_stats();
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'stats' => $stats,
+        ));
+    }
+
+    /**
+     * Generate embedding for a single post
+     */
+    public function generate_single_embedding($request) {
+        $post_id = $request->get_param('post_id');
+
+        if (!$post_id) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'Post ID is required',
+            ));
+        }
+
+        $manager = WCP_Embeddings_Manager::instance();
+        $result = $manager->generate_embedding($post_id);
+
+        if (is_wp_error($result)) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => $result->get_error_message(),
+            ));
+        }
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'message' => 'Embedding generated successfully',
+            'post_id' => $post_id,
+        ));
     }
 }

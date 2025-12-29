@@ -54,6 +54,19 @@ class WCP_Settings {
             'default' => false,
         ));
 
+        // Embeddings/RAG Settings
+        register_setting('wcp_settings', 'wcp_openai_api_key', array(
+            'type' => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+            'default' => '',
+        ));
+
+        register_setting('wcp_settings', 'wcp_embeddings_enabled', array(
+            'type' => 'boolean',
+            'sanitize_callback' => 'rest_sanitize_boolean',
+            'default' => false,
+        ));
+
         add_settings_section(
             'wcp_ai_section',
             __('AI Configuration', 'work-copilot'),
@@ -83,6 +96,30 @@ class WCP_Settings {
             array($this, 'render_model_field'),
             'work-copilot-settings',
             'wcp_ai_section'
+        );
+
+        // Embeddings section
+        add_settings_section(
+            'wcp_embeddings_section',
+            __('Semantic Search & RAG Configuration', 'work-copilot'),
+            array($this, 'render_embeddings_section'),
+            'work-copilot-settings'
+        );
+
+        add_settings_field(
+            'wcp_embeddings_enabled',
+            __('Enable Semantic Search', 'work-copilot'),
+            array($this, 'render_embeddings_enabled_field'),
+            'work-copilot-settings',
+            'wcp_embeddings_section'
+        );
+
+        add_settings_field(
+            'wcp_openai_api_key',
+            __('OpenAI API Key', 'work-copilot'),
+            array($this, 'render_openai_api_key_field'),
+            'work-copilot-settings',
+            'wcp_embeddings_section'
         );
     }
 
@@ -263,6 +300,63 @@ class WCP_Settings {
         </select>
         <p class="description">
             <?php _e('Choose the Claude model to use. Sonnet offers the best balance of quality and speed.', 'work-copilot'); ?>
+        </p>
+        <?php
+    }
+
+    public function render_embeddings_section() {
+        ?>
+        <p><?php _e('Configure semantic search and RAG (Retrieval-Augmented Generation) using OpenAI embeddings.', 'work-copilot'); ?></p>
+        <p><?php _e('This enables intelligent search across your notes based on meaning, not just keywords.', 'work-copilot'); ?></p>
+        <?php
+
+        // Show stats if embeddings are enabled
+        if (get_option('wcp_embeddings_enabled', false)) {
+            $manager = WCP_Embeddings_Manager::instance();
+            $stats = $manager->get_stats();
+            ?>
+            <div class="notice notice-info inline">
+                <p>
+                    <strong><?php _e('Embedding Stats:', 'work-copilot'); ?></strong><br>
+                    <?php printf(__('%d of %d posts have embeddings (%s%% coverage)', 'work-copilot'),
+                        $stats['total_embeddings'],
+                        $stats['total_posts'],
+                        $stats['coverage_percentage']
+                    ); ?>
+                </p>
+                <?php if (!empty($stats['posts_without_embeddings'])): ?>
+                <p>
+                    <a href="#" id="wcp-batch-generate" class="button">
+                        <?php _e('Generate Missing Embeddings', 'work-copilot'); ?>
+                    </a>
+                    <span id="wcp-batch-status"></span>
+                </p>
+                <?php endif; ?>
+            </div>
+            <?php
+        }
+    }
+
+    public function render_embeddings_enabled_field() {
+        $enabled = get_option('wcp_embeddings_enabled', false);
+        ?>
+        <label>
+            <input type="checkbox" name="wcp_embeddings_enabled" value="1" <?php checked($enabled, true); ?>>
+            <?php _e('Enable semantic search and RAG features', 'work-copilot'); ?>
+        </label>
+        <p class="description">
+            <?php _e('Automatically generates embeddings for posts when they are saved. Requires OpenAI API key.', 'work-copilot'); ?>
+        </p>
+        <?php
+    }
+
+    public function render_openai_api_key_field() {
+        $api_key = get_option('wcp_openai_api_key', '');
+        ?>
+        <input type="password" name="wcp_openai_api_key" value="<?php echo esc_attr($api_key); ?>" class="regular-text" placeholder="sk-...">
+        <p class="description">
+            <?php _e('Get your API key from', 'work-copilot'); ?> <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a><br>
+            <?php _e('Used for generating embeddings (text-embedding-3-small model). Very affordable (~$0.02 per 1M tokens).', 'work-copilot'); ?>
         </p>
         <?php
     }
