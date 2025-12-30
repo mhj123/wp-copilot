@@ -78,6 +78,14 @@ get_header();
                 <textarea id="wcp-item-content" name="content" rows="6" class="wcp-form-control"></textarea>
             </div>
 
+            <div class="wcp-form-group">
+                <label for="wcp-item-contexts"><?php _e('Contexts (Pages and Headings)', 'work-copilot-theme'); ?></label>
+                <div id="wcp-item-contexts" class="wcp-context-selector-wrapper">
+                    <p class="wcp-loading"><?php _e('Loading contexts...', 'work-copilot-theme'); ?></p>
+                </div>
+                <p class="description"><?php _e('Select which pages or headings this item belongs to. Current page is pre-selected.', 'work-copilot-theme'); ?></p>
+            </div>
+
             <div class="wcp-form-row">
                 <div class="wcp-form-group">
                     <label for="wcp-item-type"><?php _e('Item Type', 'work-copilot-theme'); ?></label>
@@ -114,6 +122,24 @@ get_header();
         </form>
     </section>
 
+    <!-- Child Pages -->
+    <?php
+    $child_pages = wcp_theme_get_page_tree($page_id);
+    if (!empty($child_pages)) :
+    ?>
+    <section class="wcp-child-pages-section">
+        <h2><?php _e('Sub-Pages', 'work-copilot-theme'); ?> (<?php echo count($child_pages); ?>)</h2>
+        <div class="wcp-child-pages-list">
+            <?php foreach ($child_pages as $child_page) : ?>
+                <a href="<?php echo get_permalink($child_page->ID); ?>" class="wcp-child-page-link">
+                    <span class="wcp-child-page-icon">📄</span>
+                    <?php echo esc_html($child_page->post_title); ?>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    </section>
+    <?php endif; ?>
+
     <!-- ItemPosts List -->
     <section class="wcp-items-section">
         <h2><?php _e('Items', 'work-copilot-theme'); ?> (<?php echo count($items); ?>)</h2>
@@ -146,10 +172,6 @@ get_header();
                     $is_pinned = in_array('yes', $pinned);
                 ?>
                 <article class="wcp-item <?php echo $is_pinned ? 'wcp-item-pinned' : ''; ?>">
-                    <h3 class="wcp-item-title">
-                        <a href="<?php echo get_permalink($item->ID); ?>"><?php echo esc_html($item->post_title); ?></a>
-                    </h3>
-
                     <div class="wcp-item-meta">
                         <?php if (!empty($item_types)) : ?>
                             <span class="wcp-badge wcp-type-<?php echo esc_attr($item_types[0]); ?>">
@@ -164,17 +186,19 @@ get_header();
                         <?php endif; ?>
 
                         <?php if ($is_pinned) : ?>
-                            <span class="wcp-badge wcp-pinned-badge">
-                                <?php _e('Pinned', 'work-copilot-theme'); ?>
-                            </span>
+                            <span class="wcp-badge wcp-pinned-badge">📌</span>
                         <?php endif; ?>
-
-                        <span class="wcp-item-date"><?php echo get_the_date('', $item->ID); ?></span>
                     </div>
+
+                    <h3 class="wcp-item-title">
+                        <a href="<?php echo get_permalink($item->ID); ?>"><?php echo esc_html($item->post_title); ?></a>
+                    </h3>
 
                     <div class="wcp-item-excerpt">
                         <?php echo wp_trim_words($item->post_content, 30); ?>
                     </div>
+
+                    <span class="wcp-item-date"><?php echo get_the_date('M j', $item->ID); ?></span>
                 </article>
                 <?php endforeach; ?>
             <?php endif; ?>

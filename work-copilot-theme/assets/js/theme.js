@@ -1,5 +1,69 @@
 jQuery(document).ready(function($) {
 
+    // Load context tree for the form
+    function loadContextTree() {
+        var $container = $('#wcp-item-contexts');
+        var currentPageId = $('input[name="page_id"]').val();
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/contexts/tree',
+            method: 'GET',
+            beforeSend: function(xhr) {
+                xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce);
+            },
+            success: function(response) {
+                if (response.success && response.tree) {
+                    renderContextTree(response.tree, $container, currentPageId);
+                } else {
+                    $container.html('<p class="wcp-error">Failed to load contexts.</p>');
+                }
+            },
+            error: function() {
+                $container.html('<p class="wcp-error">Failed to load contexts.</p>');
+            }
+        });
+    }
+
+    function renderContextTree(tree, $container, currentPageId, level) {
+        level = level || 0;
+
+        if (level === 0) {
+            $container.html('<ul class="wcp-context-tree"></ul>');
+            $container = $container.find('ul');
+        }
+
+        tree.forEach(function(node) {
+            var $li = $('<li>');
+
+            // Check if this node corresponds to the current page
+            var isCurrentPage = (node.ref_type === 'page' && node.ref_id == currentPageId);
+
+            var $label = $('<label>');
+            var $checkbox = $('<input type="checkbox" name="contexts[]">')
+                .val(node.term_id)
+                .prop('checked', isCurrentPage); // Pre-select current page
+
+            var $name = $('<span class="context-name">').text(node.name);
+            var $count = $('<span class="context-count">').text('(' + node.count + ')');
+
+            $label.append($checkbox).append($name).append($count);
+            $li.append($label);
+
+            if (node.children && node.children.length > 0) {
+                var $ul = $('<ul>');
+                $li.append($ul);
+                renderContextTree(node.children, $ul, currentPageId, level + 1);
+            }
+
+            $container.append($li);
+        });
+    }
+
+    // Load context tree on page load
+    if ($('#wcp-create-item-form').length) {
+        loadContextTree();
+    }
+
     // Create ItemPost form submission
     $('#wcp-create-item-form').on('submit', function(e) {
         e.preventDefault();
@@ -7,9 +71,6 @@ jQuery(document).ready(function($) {
         var $form = $(this);
         var $status = $('.wcp-form-status');
         var $submitBtn = $form.find('button[type="submit"]');
-
-        // Get current page context
-        var pageId = $form.find('input[name="page_id"]').val();
 
         // Get form data
         var title = $('#wcp-item-title').val();
@@ -21,85 +82,56 @@ jQuery(document).ready(function($) {
             return tag.trim();
         }) : [];
 
-        // Get context term for this page
+        // Get selected contexts
+        var contexts = [];
+        $('#wcp-item-contexts input[name="contexts[]"]:checked').each(function() {
+            contexts.push($(this).val());
+        });
+
+        if (contexts.length === 0) {
+            $status.addClass('error').text('Please select at least one context.');
+            return;
+        }
+
+        $submitBtn.prop('disabled', true).text('Creating...');
+        $status.removeClass('success error').text('');
+
+        // Create the item
+        var data = {
+            title: title,
+            content: content,
+            contexts: contexts,
+            item_type: itemType,
+            priority: priority,
+            tags: tags
+        };
+
         $.ajax({
-            url: wcpThemeData.restUrl + '/contexts/tree',
-            method: 'GET',
+            url: wcpThemeData.restUrl + '/items/create',
+            method: 'POST',
+            data: data,
             beforeSend: function(xhr) {
                 xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce);
-                $submitBtn.prop('disabled', true).text('Creating...');
-                $status.removeClass('success error').text('');
             },
             success: function(response) {
-                // Find context term ID for current page
-                var contextTermId = findContextTermForPage(response.tree, pageId);
+                if (response.success) {
+                    $status.addClass('success').text('Item created successfully!');
+                    $form[0].reset();
 
-                if (!contextTermId) {
-                    $status.addClass('error').text('Error: Could not find context for this page.');
+                    // Reload context tree and page after 1 second
+                    setTimeout(function() {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    $status.addClass('error').text('Error: ' + response.message);
                     $submitBtn.prop('disabled', false).text('Create Item');
-                    return;
                 }
-
-                // Create the item
-                createItem(contextTermId, title, content, itemType, priority, tags);
             },
             error: function() {
-                $status.addClass('error').text('Error loading page context.');
+                $status.addClass('error').text('Error creating item. Please try again.');
                 $submitBtn.prop('disabled', false).text('Create Item');
             }
         });
-
-        function findContextTermForPage(tree, targetPageId) {
-            for (var i = 0; i < tree.length; i++) {
-                var node = tree[i];
-                if (node.ref_type === 'page' && node.ref_id == targetPageId) {
-                    return node.term_id;
-                }
-                if (node.children && node.children.length > 0) {
-                    var found = findContextTermForPage(node.children, targetPageId);
-                    if (found) return found;
-                }
-            }
-            return null;
-        }
-
-        function createItem(contextTermId, title, content, itemType, priority, tags) {
-            var data = {
-                title: title,
-                content: content,
-                contexts: [contextTermId],
-                item_type: itemType,
-                priority: priority,
-                tags: tags
-            };
-
-            $.ajax({
-                url: wcpThemeData.restUrl + '/items/create',
-                method: 'POST',
-                data: data,
-                beforeSend: function(xhr) {
-                    xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce);
-                },
-                success: function(response) {
-                    if (response.success) {
-                        $status.addClass('success').text('Item created successfully!');
-                        $form[0].reset();
-
-                        // Reload page after 1 second to show new item
-                        setTimeout(function() {
-                            location.reload();
-                        }, 1000);
-                    } else {
-                        $status.addClass('error').text('Error: ' + response.message);
-                        $submitBtn.prop('disabled', false).text('Create Item');
-                    }
-                },
-                error: function() {
-                    $status.addClass('error').text('Error creating item. Please try again.');
-                    $submitBtn.prop('disabled', false).text('Create Item');
-                }
-            });
-        }
     });
 
     // Filtering items

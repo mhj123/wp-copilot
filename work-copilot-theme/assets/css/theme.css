@@ -331,34 +331,49 @@ textarea.wcp-form-control {
 }
 
 .wcp-items-list {
-    display: grid;
-    gap: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
 }
 
 .wcp-item {
-    padding: 20px;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
+    padding: 12px 0;
+    border-bottom: 1px solid #e8e8e8;
     transition: all 0.2s;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    width: 100%;
+}
+
+.wcp-item:last-child {
+    border-bottom: none;
 }
 
 .wcp-item:hover {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    border-color: #2271b1;
+    background: #f9f9f9;
+    padding-left: 8px;
+    padding-right: 8px;
+    margin-left: -8px;
+    margin-right: -8px;
 }
 
 .wcp-item-pinned {
-    border-left: 4px solid #f39c12;
-    background: #fffbf0;
+    border-left: 3px solid #f39c12;
+    padding-left: 12px;
+    margin-left: -12px;
 }
 
 .wcp-item-title {
-    margin: 0 0 10px 0;
-    font-size: 20px;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    flex-shrink: 0;
 }
 
 .wcp-item-title a {
     color: #1e1e1e;
+    text-decoration: none;
 }
 
 .wcp-item-title a:hover {
@@ -368,18 +383,28 @@ textarea.wcp-form-control {
 .wcp-item-meta {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 15px;
-    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+}
+
+.wcp-item-excerpt {
+    color: #555;
+    line-height: 1.5;
+    font-size: 15px;
+    flex: 1;
+    margin: 0;
 }
 
 .wcp-badge {
     display: inline-block;
-    padding: 4px 10px;
-    font-size: 12px;
+    padding: 3px 8px;
+    font-size: 11px;
     font-weight: 600;
     border-radius: 3px;
     text-transform: uppercase;
+    line-height: 1;
 }
 
 .wcp-type-task {
@@ -419,12 +444,8 @@ textarea.wcp-form-control {
 
 .wcp-item-date {
     color: #999;
-    font-size: 13px;
-}
-
-.wcp-item-excerpt {
-    color: #555;
-    line-height: 1.6;
+    font-size: 12px;
+    white-space: nowrap;
 }
 
 .wcp-no-items {
@@ -458,6 +479,122 @@ textarea.wcp-form-control {
     margin-top: 40px;
     padding-top: 40px;
     border-top: 2px solid #eee;
+}
+
+/* ==========================================================================
+   Child Pages Section
+   ========================================================================== */
+
+.wcp-child-pages-section {
+    background: #fff;
+    padding: 20px 30px;
+    border-radius: 6px;
+    margin-bottom: 30px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.wcp-child-pages-section h2 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 20px;
+    color: #1e1e1e;
+}
+
+.wcp-child-pages-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.wcp-child-page-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    color: #1e1e1e;
+    text-decoration: none;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.wcp-child-page-link:hover {
+    background: #e9ecef;
+    border-color: #2271b1;
+    color: #2271b1;
+    text-decoration: none;
+}
+
+.wcp-child-page-icon {
+    font-size: 16px;
+}
+
+/* ==========================================================================
+   Context Selector
+   ========================================================================== */
+
+.wcp-context-selector-wrapper {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 12px;
+    background: #fafafa;
+}
+
+.wcp-context-selector-wrapper .wcp-loading {
+    color: #666;
+    font-style: italic;
+    margin: 0;
+    padding: 8px;
+}
+
+.wcp-context-tree {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.wcp-context-tree ul {
+    list-style: none;
+    margin: 0;
+    padding-left: 20px;
+}
+
+.wcp-context-tree li {
+    margin: 4px 0;
+}
+
+.wcp-context-tree label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.wcp-context-tree label:hover {
+    background: #fff;
+}
+
+.wcp-context-tree input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.wcp-context-tree .context-name {
+    font-size: 14px;
+    color: #333;
+}
+
+.wcp-context-tree .context-count {
+    font-size: 12px;
+    color: #999;
+    margin-left: auto;
 }
 
 /* ==========================================================================
