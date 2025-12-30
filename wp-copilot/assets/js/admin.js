@@ -359,13 +359,15 @@ jQuery(document).ready(function($) {
         var $button = $(this);
         var $status = $('#wcp-batch-status');
 
-        if (!confirm('Generate embeddings for all posts without embeddings? This may take a few minutes and will consume OpenAI API credits.')) {
+        if (!confirm('Generate embeddings for all posts, pages, and headings without embeddings? This may take a few minutes and will consume OpenAI API credits.')) {
             return;
         }
 
         $button.prop('disabled', true).text('Generating...');
         $status.html('<span style="color: #2271b1;">Starting batch generation...</span>');
 
+        var postTypes = ['post', 'page', 'wcp_heading'];
+        var currentTypeIndex = 0;
         var offset = 0;
         var limit = 50;
         var totalProcessed = 0;
@@ -373,11 +375,13 @@ jQuery(document).ready(function($) {
         var totalErrors = 0;
 
         function processBatch() {
+            var currentPostType = postTypes[currentTypeIndex];
+
             $.ajax({
                 url: wcpData.restUrl + '/embeddings/batch',
                 method: 'POST',
                 data: {
-                    post_type: 'post',
+                    post_type: currentPostType,
                     limit: limit,
                     offset: offset
                 },
@@ -390,32 +394,43 @@ jQuery(document).ready(function($) {
                         totalSuccess += response.results.success;
                         totalErrors += response.results.errors;
 
+                        var currentPostType = postTypes[currentTypeIndex];
                         $status.html(
                             '<span style="color: #2271b1;">' +
-                            'Processed: ' + totalProcessed + ' | ' +
-                            'Success: ' + totalSuccess + ' | ' +
+                            'Processing ' + currentPostType + 's... | ' +
+                            'Total: ' + totalProcessed + ' | ' +
+                            'Generated: ' + totalSuccess + ' | ' +
                             'Errors: ' + totalErrors +
                             '</span>'
                         );
 
-                        // If we processed a full batch, there might be more
+                        // If we processed a full batch, there might be more of this type
                         if (response.results.total >= limit) {
                             offset += limit;
                             // Continue with next batch after a short delay
                             setTimeout(processBatch, 1000);
                         } else {
-                            // Done
-                            $button.prop('disabled', false).text('Generate Missing Embeddings');
-                            $status.html(
-                                '<span style="color: #2ecc71;">' +
-                                '✓ Complete! Generated ' + totalSuccess + ' embeddings' +
-                                (totalErrors > 0 ? ' (' + totalErrors + ' errors)' : '') +
-                                '</span>'
-                            );
-                            // Reload page after 2 seconds to update stats
-                            setTimeout(function() {
-                                location.reload();
-                            }, 2000);
+                            // Done with this post type, move to next
+                            currentTypeIndex++;
+                            offset = 0; // Reset offset for next post type
+
+                            if (currentTypeIndex < postTypes.length) {
+                                // Process next post type
+                                setTimeout(processBatch, 1000);
+                            } else {
+                                // All done
+                                $button.prop('disabled', false).text('Generate Missing Embeddings');
+                                $status.html(
+                                    '<span style="color: #2ecc71;">' +
+                                    '✓ Complete! Generated ' + totalSuccess + ' embeddings' +
+                                    (totalErrors > 0 ? ' (' + totalErrors + ' errors)' : '') +
+                                    '</span>'
+                                );
+                                // Reload page after 2 seconds to update stats
+                                setTimeout(function() {
+                                    location.reload();
+                                }, 2000);
+                            }
                         }
                     } else {
                         $button.prop('disabled', false).text('Generate Missing Embeddings');
