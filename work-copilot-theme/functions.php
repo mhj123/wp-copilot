@@ -35,10 +35,10 @@ add_action('after_setup_theme', 'wcp_theme_setup');
 // Enqueue scripts and styles
 function wcp_theme_scripts() {
     // Main theme stylesheet
-    wp_enqueue_style('wcp-theme-style', get_stylesheet_uri(), array(), '1.0.0');
+    wp_enqueue_style('wcp-theme-style', get_stylesheet_uri(), array(), '1.1.0');
 
     // Custom theme styles
-    wp_enqueue_style('wcp-theme-custom', get_template_directory_uri() . '/assets/css/theme.css', array(), '1.0.0');
+    wp_enqueue_style('wcp-theme-custom', get_template_directory_uri() . '/assets/css/theme.css', array(), '1.1.0');
 
     // Theme JavaScript
     wp_enqueue_script('wcp-theme-js', get_template_directory_uri() . '/assets/js/theme.js', array('jquery'), '1.0.0', true);

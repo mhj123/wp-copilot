@@ -331,19 +331,25 @@ textarea.wcp-form-control {
 }
 
 .wcp-items-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+    grid-template-columns: none !important;
 }
 
 .wcp-item {
-    padding: 12px 0;
-    border-bottom: 1px solid #e8e8e8;
+    padding: 12px 0 !important;
+    border: none !important;
+    border-bottom: 1px solid #e8e8e8 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
     transition: all 0.2s;
-    display: flex;
+    display: flex !important;
     align-items: baseline;
     gap: 12px;
-    width: 100%;
+    width: 100% !important;
+    max-width: none !important;
+    background: transparent !important;
 }
 
 .wcp-item:last-child {
