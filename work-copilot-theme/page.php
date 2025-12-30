@@ -33,6 +33,34 @@ get_header();
     $items = wcp_theme_get_page_items($page_id);
     ?>
 
+    <!-- Semantic Search Widget -->
+    <?php if (get_option('wcp_embeddings_enabled', false)) : ?>
+    <section class="wcp-semantic-search-section">
+        <div class="wcp-search-toggle">
+            <button type="button" id="wcp-toggle-search" class="wcp-btn wcp-btn-secondary">
+                <span class="wcp-search-icon">🔍</span>
+                <?php _e('Search My Notes', 'work-copilot-theme'); ?>
+            </button>
+        </div>
+
+        <div id="wcp-search-panel" class="wcp-search-panel" style="display: none;">
+            <div class="wcp-search-input-wrapper">
+                <input
+                    type="text"
+                    id="wcp-semantic-search-input"
+                    class="wcp-form-control wcp-search-input"
+                    placeholder="<?php esc_attr_e('Search by meaning... e.g., "customer feedback"', 'work-copilot-theme'); ?>"
+                >
+                <button type="button" id="wcp-semantic-search-btn" class="wcp-btn wcp-btn-primary wcp-search-btn">
+                    <?php _e('Search', 'work-copilot-theme'); ?>
+                </button>
+            </div>
+
+            <div id="wcp-search-results" class="wcp-search-results"></div>
+        </div>
+    </section>
+    <?php endif; ?>
+
     <!-- Create ItemPost Form -->
     <section class="wcp-create-item-section">
         <h2><?php _e('Create New Item', 'work-copilot-theme'); ?></h2>

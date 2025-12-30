@@ -461,6 +461,228 @@ textarea.wcp-form-control {
 }
 
 /* ==========================================================================
+   Semantic Search Widget
+   ========================================================================== */
+
+.wcp-semantic-search-section {
+    background: #fff;
+    padding: 20px 30px;
+    border-radius: 6px;
+    margin-bottom: 30px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.wcp-search-toggle {
+    margin-bottom: 15px;
+}
+
+#wcp-toggle-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: #f8f9fa;
+    color: #333;
+    border: 2px solid #e0e0e0;
+    width: auto;
+    transition: all 0.3s;
+}
+
+#wcp-toggle-search:hover {
+    background: #e9ecef;
+    border-color: #2271b1;
+}
+
+#wcp-toggle-search.active {
+    background: #2271b1;
+    color: #fff;
+    border-color: #2271b1;
+}
+
+.wcp-search-icon {
+    font-size: 18px;
+}
+
+.wcp-search-panel {
+    overflow: hidden;
+}
+
+.wcp-search-input-wrapper {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.wcp-search-input {
+    flex: 1;
+    padding: 12px 16px;
+    font-size: 16px;
+}
+
+.wcp-search-btn {
+    white-space: nowrap;
+    min-width: 100px;
+}
+
+.wcp-btn-secondary {
+    background: #6c757d;
+    color: #fff;
+}
+
+.wcp-btn-secondary:hover {
+    background: #5a6268;
+}
+
+/* Search Results */
+.wcp-search-results {
+    min-height: 50px;
+}
+
+.wcp-search-loading,
+.wcp-search-empty,
+.wcp-search-error {
+    padding: 30px;
+    text-align: center;
+    color: #666;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.wcp-search-error {
+    background: #fff3f3;
+    color: #e74c3c;
+}
+
+.wcp-search-hint {
+    font-size: 14px;
+    color: #999;
+    margin-top: 10px;
+}
+
+.wcp-search-results-header {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #eee;
+}
+
+.wcp-search-results-header h3 {
+    margin: 0;
+    font-size: 18px;
+    color: #333;
+}
+
+.wcp-search-results-list {
+    display: grid;
+    gap: 15px;
+}
+
+.wcp-search-result {
+    padding: 20px;
+    border: 2px solid #e0e0e0;
+    border-radius: 6px;
+    transition: all 0.2s;
+    background: #fff;
+}
+
+.wcp-search-result:hover {
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+.wcp-search-result.wcp-relevance-high {
+    border-left: 4px solid #2ecc71;
+}
+
+.wcp-search-result.wcp-relevance-medium {
+    border-left: 4px solid #f39c12;
+}
+
+.wcp-search-result.wcp-relevance-low {
+    border-left: 4px solid #95a5a6;
+}
+
+.wcp-search-result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 15px;
+    margin-bottom: 12px;
+}
+
+.wcp-search-result-header h4 {
+    margin: 0;
+    font-size: 18px;
+    flex: 1;
+}
+
+.wcp-search-result-header h4 a {
+    color: #1e1e1e;
+    text-decoration: none;
+}
+
+.wcp-search-result-header h4 a:hover {
+    color: #2271b1;
+}
+
+.wcp-search-relevance {
+    display: inline-block;
+    padding: 4px 10px;
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #666;
+    white-space: nowrap;
+}
+
+.wcp-relevance-high .wcp-search-relevance {
+    background: #d4edda;
+    border-color: #2ecc71;
+    color: #155724;
+}
+
+.wcp-relevance-medium .wcp-search-relevance {
+    background: #fff3cd;
+    border-color: #f39c12;
+    color: #856404;
+}
+
+.wcp-search-result-content {
+    color: #555;
+    line-height: 1.6;
+    margin-bottom: 12px;
+    font-size: 14px;
+}
+
+.wcp-search-result-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    padding-top: 12px;
+    border-top: 1px solid #f0f0f0;
+    font-size: 13px;
+}
+
+.wcp-search-context {
+    color: #666;
+    flex: 1;
+}
+
+.wcp-search-edit-link {
+    color: #2271b1;
+    text-decoration: none;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.wcp-search-edit-link:hover {
+    color: #135e96;
+    text-decoration: underline;
+}
+
+/* ==========================================================================
    Responsive
    ========================================================================== */
 
@@ -479,6 +701,23 @@ textarea.wcp-form-control {
 
     .wcp-form-row {
         grid-template-columns: 1fr;
+    }
+
+    .wcp-search-input-wrapper {
+        flex-direction: column;
+    }
+
+    .wcp-search-btn {
+        width: 100%;
+    }
+
+    .wcp-search-result-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .wcp-search-relevance {
+        align-self: flex-start;
     }
 }
 
