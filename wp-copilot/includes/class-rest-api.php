@@ -722,6 +722,10 @@ class WCP_REST_API {
      * Batch generate embeddings
      */
     public function batch_generate_embeddings($request) {
+        // Increase PHP execution time for batch processing
+        // Each embedding API call takes ~1-2 seconds, batch of 50 could take 100+ seconds
+        set_time_limit(120);
+
         $post_type = $request->get_param('post_type') ?: 'post';
         $limit = $request->get_param('limit') ?: 50;
         $offset = $request->get_param('offset') ?: 0;
