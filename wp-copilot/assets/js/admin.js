@@ -352,6 +352,91 @@ jQuery(document).ready(function($) {
         });
     });
 
+    // Batch generate embeddings
+    $('#wcp-batch-generate').on('click', function(e) {
+        e.preventDefault();
+
+        var $button = $(this);
+        var $status = $('#wcp-batch-status');
+
+        if (!confirm('Generate embeddings for all posts without embeddings? This may take a few minutes and will consume OpenAI API credits.')) {
+            return;
+        }
+
+        $button.prop('disabled', true).text('Generating...');
+        $status.html('<span style="color: #2271b1;">Starting batch generation...</span>');
+
+        var offset = 0;
+        var limit = 50;
+        var totalProcessed = 0;
+        var totalSuccess = 0;
+        var totalErrors = 0;
+
+        function processBatch() {
+            $.ajax({
+                url: wcpData.restUrl + '/embeddings/batch',
+                method: 'POST',
+                data: {
+                    post_type: 'post',
+                    limit: limit,
+                    offset: offset
+                },
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('X-WP-Nonce', wcpData.nonce);
+                },
+                success: function(response) {
+                    if (response.success && response.results) {
+                        totalProcessed += response.results.total;
+                        totalSuccess += response.results.success;
+                        totalErrors += response.results.errors;
+
+                        $status.html(
+                            '<span style="color: #2271b1;">' +
+                            'Processed: ' + totalProcessed + ' | ' +
+                            'Success: ' + totalSuccess + ' | ' +
+                            'Errors: ' + totalErrors +
+                            '</span>'
+                        );
+
+                        // If we processed a full batch, there might be more
+                        if (response.results.total >= limit) {
+                            offset += limit;
+                            // Continue with next batch after a short delay
+                            setTimeout(processBatch, 1000);
+                        } else {
+                            // Done
+                            $button.prop('disabled', false).text('Generate Missing Embeddings');
+                            $status.html(
+                                '<span style="color: #2ecc71;">' +
+                                '✓ Complete! Generated ' + totalSuccess + ' embeddings' +
+                                (totalErrors > 0 ? ' (' + totalErrors + ' errors)' : '') +
+                                '</span>'
+                            );
+                            // Reload page after 2 seconds to update stats
+                            setTimeout(function() {
+                                location.reload();
+                            }, 2000);
+                        }
+                    } else {
+                        $button.prop('disabled', false).text('Generate Missing Embeddings');
+                        $status.html('<span style="color: #e74c3c;">Error: ' + (response.message || 'Unknown error') + '</span>');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $button.prop('disabled', false).text('Generate Missing Embeddings');
+                    var message = 'Request failed';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        message = xhr.responseJSON.message;
+                    }
+                    $status.html('<span style="color: #e74c3c;">Error: ' + message + '</span>');
+                }
+            });
+        }
+
+        // Start the first batch
+        processBatch();
+    });
+
     // Initialize
     if ($('#wcp-context-tree').length) {
         loadContextTree();
