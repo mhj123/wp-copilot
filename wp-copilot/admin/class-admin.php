@@ -196,63 +196,172 @@ class WCP_Admin {
     }
 
     public function add_ai_meta_boxes() {
-        // Add AI assistant meta box to posts
+        // Add AI assistant meta box to posts AND pages
         add_meta_box(
             'wcp_ai_assistant',
             __('AI Assistant', 'work-copilot'),
-            array($this, 'render_ai_assistant_meta_box'),
-            'post',
-            'side',
-            'default'
-        );
-
-        // Add AI assistant to pages
-        add_meta_box(
-            'wcp_page_ai',
-            __('AI Chat & Coaching', 'work-copilot'),
-            array($this, 'render_page_ai_meta_box'),
-            'page',
+            array($this, 'render_editor_ai_meta_box'),
+            array('post', 'page'),
             'side',
             'default'
         );
     }
 
-    public function render_ai_assistant_meta_box($post) {
+    /**
+     * Render enhanced AI assistant meta box for editor
+     */
+    public function render_editor_ai_meta_box($post) {
+        // Get saved prompts
+        $saved_prompts = get_option('wcp_saved_prompts', array());
+        if (empty($saved_prompts)) {
+            $saved_prompts = array(
+                array('label' => 'Expand', 'prompt' => 'Expand this with more detail and examples'),
+                array('label' => 'Concise', 'prompt' => 'Make this more concise while keeping key points'),
+                array('label' => 'Actions', 'prompt' => 'Add actionable next steps'),
+            );
+        }
         ?>
-        <div class="wcp-ai-assistant">
-            <p><?php _e('Get AI suggestions for this note:', 'work-copilot'); ?></p>
-            <button type="button" class="button button-primary wcp-ai-suggest-tags" data-post-id="<?php echo esc_attr($post->ID); ?>">
-                <?php _e('Suggest Tags', 'work-copilot'); ?>
-            </button>
-            <div id="wcp-ai-suggestions" style="margin-top: 10px;"></div>
+        <div class="wcp-editor-ai" data-post-id="<?php echo esc_attr($post->ID); ?>">
+            <!-- Prompt chips -->
+            <div class="wcp-editor-ai-chips">
+                <?php foreach ($saved_prompts as $prompt): ?>
+                    <button type="button" class="wcp-editor-chip" data-prompt="<?php echo esc_attr($prompt['prompt']); ?>">
+                        <?php echo esc_html($prompt['label']); ?>
+                    </button>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- Context selector -->
+            <div class="wcp-editor-ai-context">
+                <label><?php _e('Context:', 'work-copilot'); ?></label>
+                <select id="wcp-editor-context-mode">
+                    <option value="page"><?php _e('This Page', 'work-copilot'); ?></option>
+                    <option value="corpus"><?php _e('Entire Corpus (RAG)', 'work-copilot'); ?></option>
+                </select>
+            </div>
+
+            <!-- Prompt input -->
+            <div class="wcp-editor-ai-input">
+                <textarea
+                    id="wcp-editor-ai-prompt"
+                    placeholder="<?php _e('Describe how to modify your draft...', 'work-copilot'); ?>"
+                    rows="3"
+                ></textarea>
+            </div>
+
+            <!-- Actions -->
+            <div class="wcp-editor-ai-actions">
+                <button type="button" id="wcp-editor-ai-generate" class="button button-primary">
+                    <?php _e('Generate', 'work-copilot'); ?>
+                </button>
+                <button type="button" id="wcp-editor-ai-save-prompt" class="button" title="<?php _e('Save prompt as chip', 'work-copilot'); ?>">
+                    <span class="dashicons dashicons-star-empty"></span>
+                </button>
+            </div>
+
+            <!-- Loading indicator -->
+            <div class="wcp-editor-ai-loading" style="display: none;">
+                <span class="spinner is-active"></span>
+                <span><?php _e('Generating...', 'work-copilot'); ?></span>
+            </div>
+
+            <!-- Response area -->
+            <div class="wcp-editor-ai-response" style="display: none;">
+                <h4><?php _e('AI Response:', 'work-copilot'); ?></h4>
+                <div class="wcp-editor-ai-response-content"></div>
+                <div class="wcp-editor-ai-response-actions">
+                    <button type="button" id="wcp-editor-ai-insert" class="button button-primary">
+                        <?php _e('Insert into Content', 'work-copilot'); ?>
+                    </button>
+                    <button type="button" id="wcp-editor-ai-discard" class="button">
+                        <?php _e('Discard', 'work-copilot'); ?>
+                    </button>
+                </div>
+            </div>
         </div>
+
+        <style>
+            .wcp-editor-ai-chips {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px;
+                margin-bottom: 10px;
+            }
+            .wcp-editor-chip {
+                padding: 4px 10px;
+                background: #e8f4fc;
+                border: 1px solid #b8daff;
+                border-radius: 12px;
+                font-size: 11px;
+                color: #0073aa;
+                cursor: pointer;
+            }
+            .wcp-editor-chip:hover {
+                background: #cce5ff;
+            }
+            .wcp-editor-ai-context {
+                margin-bottom: 10px;
+            }
+            .wcp-editor-ai-context label {
+                display: block;
+                font-weight: 600;
+                margin-bottom: 5px;
+                font-size: 11px;
+            }
+            .wcp-editor-ai-context select {
+                width: 100%;
+            }
+            .wcp-editor-ai-input textarea {
+                width: 100%;
+                margin-bottom: 10px;
+            }
+            .wcp-editor-ai-actions {
+                display: flex;
+                gap: 5px;
+                margin-bottom: 10px;
+            }
+            .wcp-editor-ai-actions .dashicons {
+                margin-top: 3px;
+            }
+            .wcp-editor-ai-loading {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px;
+                background: #f7f7f7;
+                border-radius: 4px;
+                margin-bottom: 10px;
+            }
+            .wcp-editor-ai-response {
+                background: #f0f6fc;
+                border: 1px solid #b8daff;
+                border-radius: 4px;
+                padding: 10px;
+                margin-top: 10px;
+            }
+            .wcp-editor-ai-response h4 {
+                margin: 0 0 10px 0;
+                font-size: 12px;
+                color: #0073aa;
+            }
+            .wcp-editor-ai-response-content {
+                background: #fff;
+                border: 1px solid #ddd;
+                padding: 10px;
+                border-radius: 4px;
+                margin-bottom: 10px;
+                max-height: 200px;
+                overflow-y: auto;
+                white-space: pre-wrap;
+                font-size: 12px;
+            }
+            .wcp-editor-ai-response-actions {
+                display: flex;
+                gap: 5px;
+            }
+        </style>
         <?php
     }
 
-    public function render_page_ai_meta_box($post) {
-        ?>
-        <div class="wcp-page-ai">
-            <h4><?php _e('Quick Prompts', 'work-copilot'); ?></h4>
-            <button type="button" class="button wcp-ai-chat" data-post-id="<?php echo esc_attr($post->ID); ?>" data-prompt="Summarise this page and its items">
-                <?php _e('Summarise', 'work-copilot'); ?>
-            </button>
-            <button type="button" class="button wcp-ai-chat" data-post-id="<?php echo esc_attr($post->ID); ?>" data-prompt="What are the most important items here?">
-                <?php _e('Important Items', 'work-copilot'); ?>
-            </button>
 
-            <h4 style="margin-top: 15px;"><?php _e('Coaching', 'work-copilot'); ?></h4>
-            <button type="button" class="button wcp-ai-coaching" data-post-id="<?php echo esc_attr($post->ID); ?>" data-type="coach">
-                <?php _e('Coach me', 'work-copilot'); ?>
-            </button>
-            <button type="button" class="button wcp-ai-coaching" data-post-id="<?php echo esc_attr($post->ID); ?>" data-type="business">
-                <?php _e('Reframe as Business Owner', 'work-copilot'); ?>
-            </button>
-            <button type="button" class="button wcp-ai-coaching" data-post-id="<?php echo esc_attr($post->ID); ?>" data-type="pm">
-                <?php _e('Reframe as PM', 'work-copilot'); ?>
-            </button>
-
-            <div id="wcp-ai-response" style="margin-top: 15px;"></div>
-        </div>
-        <?php
-    }
 }

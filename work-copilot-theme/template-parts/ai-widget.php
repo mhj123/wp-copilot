@@ -1,0 +1,173 @@
+<?php
+/**
+ * AI Widget Template
+ *
+ * Floating AI assistant widget for frontend pages
+ * Updated: 2 action buttons, context selector, prompt chips
+ */
+
+// Only show if user is logged in and AI is enabled
+if (!is_user_logged_in() || !get_option('wcp_ai_enabled', false)) {
+    return;
+}
+
+// Get current page ID
+global $post;
+$page_id = ($post && $post->post_type === 'page') ? $post->ID : 0;
+
+if (!$page_id) {
+    return; // Only show on pages
+}
+
+// Get saved prompts
+$saved_prompts = get_option('wcp_saved_prompts', array());
+if (empty($saved_prompts)) {
+    $saved_prompts = array(
+        array('label' => 'Summarise', 'prompt' => 'Summarise this page and its items'),
+        array('label' => 'Important', 'prompt' => 'What are the most important items here?'),
+        array('label' => 'Next Steps', 'prompt' => 'Suggest next steps based on this context'),
+    );
+}
+?>
+
+<div id="wcp-ai-widget" class="wcp-ai-widget minimized">
+    <!-- Floating toggle button (when minimized) -->
+    <button type="button" class="wcp-ai-toggle" aria-label="Open AI Assistant">
+        <span class="dashicons dashicons-format-chat"></span>
+    </button>
+
+    <!-- Widget container -->
+    <div class="wcp-ai-container">
+        <!-- Header -->
+        <div class="wcp-ai-header">
+            <h3><?php _e('AI Assistant', 'work-copilot'); ?></h3>
+            <div class="wcp-ai-header-actions">
+                <button type="button" class="wcp-ai-minimize" aria-label="Minimize">
+                    <span class="dashicons dashicons-minus"></span>
+                </button>
+                <button type="button" class="wcp-ai-close" aria-label="Close">
+                    <span class="dashicons dashicons-no-alt"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Action buttons (replaces dropdown) -->
+        <div class="wcp-ai-action-buttons">
+            <button type="button" class="wcp-ai-action-btn active" data-action="chat">
+                <span class="dashicons dashicons-format-chat"></span>
+                <?php _e('Chat', 'work-copilot'); ?>
+            </button>
+            <button type="button" class="wcp-ai-action-btn" data-action="generate">
+                <span class="dashicons dashicons-plus-alt2"></span>
+                <?php _e('Generate Items', 'work-copilot'); ?>
+            </button>
+        </div>
+
+        <!-- Context selector -->
+        <div class="wcp-ai-context-selector">
+            <label><?php _e('Context:', 'work-copilot'); ?></label>
+            <select id="wcp-ai-context-mode" class="wcp-ai-context-dropdown">
+                <option value="page"><?php echo esc_html(sprintf(__('This Page: %s', 'work-copilot'), get_the_title($page_id))); ?></option>
+                <option value="corpus"><?php _e('Entire Corpus (RAG)', 'work-copilot'); ?></option>
+                <option value="select"><?php _e('Select Pages...', 'work-copilot'); ?></option>
+            </select>
+        </div>
+
+        <!-- Page picker (shown when context mode is 'select') -->
+        <div class="wcp-ai-page-picker" style="display: none;">
+            <div class="wcp-ai-page-picker-header">
+                <input type="text" id="wcp-ai-page-search" placeholder="<?php _e('Search pages...', 'work-copilot'); ?>">
+            </div>
+            <div class="wcp-ai-page-list">
+                <!-- Pages will be loaded by JavaScript -->
+            </div>
+            <div class="wcp-ai-selected-pages">
+                <span class="wcp-ai-selected-label"><?php _e('Selected:', 'work-copilot'); ?></span>
+                <span class="wcp-ai-selected-count">0</span>
+            </div>
+        </div>
+
+        <!-- Prompt chips -->
+        <div class="wcp-ai-prompt-chips">
+            <?php foreach ($saved_prompts as $index => $prompt): ?>
+                <button type="button" class="wcp-ai-chip" data-prompt="<?php echo esc_attr($prompt['prompt']); ?>">
+                    <?php echo esc_html($prompt['label']); ?>
+                </button>
+            <?php endforeach; ?>
+        </div>
+
+        <!-- Conversation view -->
+        <div class="wcp-ai-conversation">
+            <div class="wcp-ai-messages">
+                <!-- Messages will be inserted here by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Input area -->
+        <div class="wcp-ai-input-area">
+            <div class="wcp-ai-input-wrapper">
+                <textarea
+                    id="wcp-ai-prompt"
+                    class="wcp-ai-prompt"
+                    rows="3"
+                    placeholder="<?php _e('Ask a question or describe what you need...', 'work-copilot'); ?>"
+                ></textarea>
+                <div class="wcp-ai-input-actions">
+                    <button type="button" id="wcp-ai-save-prompt" class="wcp-ai-save-btn" title="<?php _e('Save as chip', 'work-copilot'); ?>">
+                        <span class="dashicons dashicons-star-empty"></span>
+                    </button>
+                    <button type="button" id="wcp-ai-send" class="wcp-ai-send-btn">
+                        <span class="dashicons dashicons-arrow-up-alt2"></span>
+                        <?php _e('Send', 'work-copilot'); ?>
+                    </button>
+                </div>
+            </div>
+
+            <div class="wcp-ai-loading" style="display: none;">
+                <span class="spinner is-active"></span>
+                <span><?php _e('AI is thinking...', 'work-copilot'); ?></span>
+            </div>
+        </div>
+
+        <!-- Approval panel (shown when proposals need approval) -->
+        <div class="wcp-ai-approval-panel" style="display: none;">
+            <div class="wcp-ai-approval-header">
+                <h4><?php _e('Review AI Suggestion', 'work-copilot'); ?></h4>
+                <p class="description"><?php _e('Review the AI-generated item below and decide whether to accept or dismiss it.', 'work-copilot'); ?></p>
+            </div>
+            <div class="wcp-ai-proposals">
+                <!-- Proposals will be inserted here by JavaScript -->
+            </div>
+            <div class="wcp-ai-approval-actions">
+                <button type="button" class="wcp-ai-accept-btn button button-primary">
+                    <?php _e('Accept & Create Item', 'work-copilot'); ?>
+                </button>
+                <button type="button" class="wcp-ai-dismiss-btn button">
+                    <?php _e('Dismiss', 'work-copilot'); ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Save prompt modal -->
+<div id="wcp-ai-save-modal" class="wcp-ai-modal" style="display: none;">
+    <div class="wcp-ai-modal-content">
+        <h4><?php _e('Save Prompt', 'work-copilot'); ?></h4>
+        <input type="text" id="wcp-ai-save-label" placeholder="<?php _e('Chip label (short)', 'work-copilot'); ?>" maxlength="20">
+        <div class="wcp-ai-modal-actions">
+            <button type="button" id="wcp-ai-save-confirm" class="button button-primary"><?php _e('Save', 'work-copilot'); ?></button>
+            <button type="button" id="wcp-ai-save-cancel" class="button"><?php _e('Cancel', 'work-copilot'); ?></button>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+    // Pass data to JavaScript
+    var wcpAiWidgetData = {
+        pageId: <?php echo absint($page_id); ?>,
+        pageName: <?php echo wp_json_encode(get_the_title($page_id)); ?>,
+        restUrl: <?php echo wp_json_encode(rest_url('work-copilot/v1')); ?>,
+        nonce: <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>
+    };
+</script>

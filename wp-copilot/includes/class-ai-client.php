@@ -261,6 +261,57 @@ class WCP_AI_Client {
     }
 
     /**
+     * Make a request with conversation history
+     *
+     * @param string $system_prompt System prompt (3 layers combined)
+     * @param string $user_message User message with context
+     * @param array $conversation_history Array of previous messages (role => content)
+     * @param int $max_tokens Maximum tokens for response
+     * @return array|WP_Error Response with content, model, and usage
+     */
+    public function request_with_conversation($system_prompt, $user_message, $conversation_history = array(), $max_tokens = 4096) {
+        if (!$this->is_configured()) {
+            return new WP_Error('not_configured', 'AI API key not configured');
+        }
+
+        // Build messages array
+        $messages = array();
+
+        // Include conversation history (limit to last 10 turns to avoid token limits)
+        $history_limit = 10;
+        $recent_history = array_slice($conversation_history, -$history_limit);
+
+        foreach ($recent_history as $msg) {
+            $messages[] = array(
+                'role' => $msg['role'],
+                'content' => $msg['content']
+            );
+        }
+
+        // Add current user message
+        $messages[] = array(
+            'role' => 'user',
+            'content' => $user_message
+        );
+
+        // Make request with system prompt
+        $response = $this->request($messages, $max_tokens, $system_prompt);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        // Extract content from response
+        $content = isset($response['content'][0]['text']) ? $response['content'][0]['text'] : '';
+
+        return array(
+            'content' => $content,
+            'model' => $this->model,
+            'usage' => isset($response['usage']) ? $response['usage'] : null
+        );
+    }
+
+    /**
      * Test API connection
      */
     public function test_connection() {

@@ -46,6 +46,10 @@ class Work_Copilot {
         require_once WCP_PLUGIN_DIR . 'includes/class-ai-client.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-embeddings-client.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-embeddings-manager.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-conversations-manager.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-context-builder.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-prompt-builder.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-ai-actions.php';
         require_once WCP_PLUGIN_DIR . 'admin/class-admin.php';
         require_once WCP_PLUGIN_DIR . 'admin/class-settings.php';
         require_once WCP_PLUGIN_DIR . 'public/class-public.php';
@@ -141,6 +145,55 @@ class Work_Copilot {
         ) $charset_collate;";
 
         dbDelta($sql_embeddings);
+
+        // Conversations table for persistent AI chat per page
+        $conversations_table = $wpdb->prefix . 'wcp_ai_conversations';
+
+        $sql_conversations = "CREATE TABLE IF NOT EXISTS $conversations_table (
+            conversation_id varchar(64) NOT NULL,
+            user_id bigint(20) unsigned NOT NULL,
+            context_post_id bigint(20) unsigned NOT NULL,
+            conversation_title varchar(255) DEFAULT NULL,
+            started_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            last_activity_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+            status varchar(20) DEFAULT 'active',
+            metadata longtext DEFAULT NULL,
+            PRIMARY KEY  (conversation_id),
+            KEY context_post_id_status (context_post_id, status),
+            KEY user_id_activity (user_id, last_activity_at)
+        ) $charset_collate;";
+
+        dbDelta($sql_conversations);
+
+        // Messages table for conversation history
+        $messages_table = $wpdb->prefix . 'wcp_ai_messages';
+
+        $sql_messages = "CREATE TABLE IF NOT EXISTS $messages_table (
+            message_id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            conversation_id varchar(64) NOT NULL,
+            role varchar(20) NOT NULL,
+            content longtext NOT NULL,
+            timestamp datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            metadata longtext DEFAULT NULL,
+            PRIMARY KEY  (message_id),
+            KEY conversation_id_timestamp (conversation_id, timestamp),
+            KEY timestamp (timestamp)
+        ) $charset_collate;";
+
+        dbDelta($sql_messages);
+
+        // Set default global AI instructions if not exists
+        if (!get_option('wcp_ai_global_instructions')) {
+            $default_instructions = "You are a work copilot helping a professional manage their knowledge and work. ";
+            $default_instructions .= "Be clear, actionable, and concise. ";
+            $default_instructions .= "When generating items, provide specific and practical suggestions. ";
+            $default_instructions .= "Remember that all your suggestions require user approval before being saved.";
+
+            add_option('wcp_ai_global_instructions', $default_instructions);
+        }
+
+        // Update database version
+        update_option('wcp_db_version', '2.0.0');
     }
 
     public function load_textdomain() {

@@ -458,4 +458,204 @@ jQuery(document).ready(function($) {
         loadRecentItems();
     }
 
+    // ========================================
+    // Editor AI Assistant
+    // ========================================
+
+    var EditorAI = {
+        currentResponse: null,
+
+        init: function() {
+            this.bindEvents();
+        },
+
+        bindEvents: function() {
+            // Prompt chips
+            $(document).on('click', '.wcp-editor-chip', function() {
+                var prompt = $(this).data('prompt');
+                $('#wcp-editor-ai-prompt').val(prompt);
+            });
+
+            // Generate button
+            $(document).on('click', '#wcp-editor-ai-generate', function() {
+                EditorAI.generate();
+            });
+
+            // Enter key in prompt
+            $(document).on('keydown', '#wcp-editor-ai-prompt', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    EditorAI.generate();
+                }
+            });
+
+            // Insert into content
+            $(document).on('click', '#wcp-editor-ai-insert', function() {
+                EditorAI.insertContent();
+            });
+
+            // Discard response
+            $(document).on('click', '#wcp-editor-ai-discard', function() {
+                EditorAI.discardResponse();
+            });
+
+            // Save prompt
+            $(document).on('click', '#wcp-editor-ai-save-prompt', function() {
+                EditorAI.savePrompt();
+            });
+        },
+
+        getEditorContent: function() {
+            // Try Gutenberg first
+            if (typeof wp !== 'undefined' && wp.data && wp.data.select('core/editor')) {
+                var blocks = wp.data.select('core/editor').getBlocks();
+                if (blocks && blocks.length > 0) {
+                    return wp.data.select('core/editor').getEditedPostContent();
+                }
+            }
+
+            // Try Classic Editor (TinyMCE)
+            if (typeof tinymce !== 'undefined' && tinymce.get('content')) {
+                return tinymce.get('content').getContent();
+            }
+
+            // Fallback to textarea
+            return $('#content').val() || '';
+        },
+
+        generate: function() {
+            var prompt = $('#wcp-editor-ai-prompt').val().trim();
+            if (!prompt) {
+                return;
+            }
+
+            var postId = $('.wcp-editor-ai').data('post-id');
+            var contextMode = $('#wcp-editor-context-mode').val();
+            var draftContent = this.getEditorContent();
+
+            // Show loading
+            $('.wcp-editor-ai-loading').show();
+            $('#wcp-editor-ai-generate').prop('disabled', true);
+            $('.wcp-editor-ai-response').hide();
+
+            $.ajax({
+                url: wcpData.restUrl + '/ai/editor/expand',
+                method: 'POST',
+                data: {
+                    prompt: prompt,
+                    draft_content: draftContent,
+                    post_id: postId,
+                    context_mode: contextMode
+                },
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('X-WP-Nonce', wcpData.nonce);
+                },
+                success: function(response) {
+                    $('.wcp-editor-ai-loading').hide();
+                    $('#wcp-editor-ai-generate').prop('disabled', false);
+
+                    if (response.success && response.result) {
+                        EditorAI.currentResponse = response.result.content;
+                        $('.wcp-editor-ai-response-content').text(response.result.content);
+                        $('.wcp-editor-ai-response').show();
+                    } else {
+                        alert('Error: ' + (response.message || 'Unknown error'));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('.wcp-editor-ai-loading').hide();
+                    $('#wcp-editor-ai-generate').prop('disabled', false);
+                    alert('Error: ' + error);
+                }
+            });
+        },
+
+        insertContent: function() {
+            if (!this.currentResponse) {
+                return;
+            }
+
+            var content = this.currentResponse;
+
+            // Try Gutenberg first
+            if (typeof wp !== 'undefined' && wp.data && wp.data.dispatch('core/block-editor')) {
+                // Create a new paragraph block with the content
+                var block = wp.blocks.createBlock('core/paragraph', {
+                    content: content
+                });
+
+                // Insert at the end
+                wp.data.dispatch('core/block-editor').insertBlocks([block]);
+
+                this.discardResponse();
+                return;
+            }
+
+            // Try Classic Editor (TinyMCE)
+            if (typeof tinymce !== 'undefined' && tinymce.get('content')) {
+                var editor = tinymce.get('content');
+                editor.execCommand('mceInsertContent', false, '<p>' + content.replace(/\n/g, '</p><p>') + '</p>');
+                this.discardResponse();
+                return;
+            }
+
+            // Fallback to textarea
+            var $textarea = $('#content');
+            if ($textarea.length) {
+                var current = $textarea.val();
+                $textarea.val(current + '\n\n' + content);
+                this.discardResponse();
+            }
+        },
+
+        discardResponse: function() {
+            this.currentResponse = null;
+            $('.wcp-editor-ai-response').hide();
+            $('.wcp-editor-ai-response-content').text('');
+        },
+
+        savePrompt: function() {
+            var prompt = $('#wcp-editor-ai-prompt').val().trim();
+            if (!prompt) {
+                return;
+            }
+
+            var label = window.prompt('Enter a short label for this prompt (max 20 chars):');
+            if (!label) {
+                return;
+            }
+
+            label = label.substring(0, 20);
+
+            $.ajax({
+                url: wcpData.restUrl + '/prompts',
+                method: 'POST',
+                data: {
+                    label: label,
+                    prompt: prompt
+                },
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('X-WP-Nonce', wcpData.nonce);
+                },
+                success: function(response) {
+                    if (response.success) {
+                        // Add new chip to UI
+                        var $chip = $('<button type="button" class="wcp-editor-chip"></button>')
+                            .text(label)
+                            .data('prompt', prompt);
+                        $('.wcp-editor-ai-chips').append($chip);
+                        alert('Prompt saved!');
+                    } else {
+                        alert('Error: ' + (response.message || 'Failed to save'));
+                    }
+                }
+            });
+        }
+    };
+
+    // Initialize Editor AI if on post/page edit screen
+    if ($('.wcp-editor-ai').length) {
+        EditorAI.init();
+    }
+
 });

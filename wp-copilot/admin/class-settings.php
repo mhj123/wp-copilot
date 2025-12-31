@@ -54,6 +54,12 @@ class WCP_Settings {
             'default' => false,
         ));
 
+        register_setting('wcp_settings', 'wcp_ai_global_instructions', array(
+            'type' => 'string',
+            'sanitize_callback' => 'wp_kses_post',
+            'default' => '',
+        ));
+
         // Embeddings/RAG Settings
         register_setting('wcp_settings', 'wcp_openai_api_key', array(
             'type' => 'string',
@@ -94,6 +100,14 @@ class WCP_Settings {
             'wcp_ai_model',
             __('Claude Model', 'work-copilot'),
             array($this, 'render_model_field'),
+            'work-copilot-settings',
+            'wcp_ai_section'
+        );
+
+        add_settings_field(
+            'wcp_ai_global_instructions',
+            __('Global AI Instructions', 'work-copilot'),
+            array($this, 'render_global_instructions_field'),
             'work-copilot-settings',
             'wcp_ai_section'
         );
@@ -300,6 +314,43 @@ class WCP_Settings {
         </select>
         <p class="description">
             <?php _e('Choose the Claude model to use. Sonnet offers the best balance of quality and speed.', 'work-copilot'); ?>
+        </p>
+        <?php
+    }
+
+    public function render_global_instructions_field() {
+        $default_instructions = "You are a work copilot helping a professional manage their knowledge and work. ";
+        $default_instructions .= "Be clear, actionable, and concise. ";
+        $default_instructions .= "When generating items, provide specific and practical suggestions. ";
+        $default_instructions .= "Remember that all your suggestions require user approval before being saved.";
+
+        $instructions = get_option('wcp_ai_global_instructions', $default_instructions);
+
+        ?>
+        <p class="description" style="margin-bottom: 10px;">
+            <?php _e('Define global instructions that will be included in all AI requests. These form Layer 1 of the 3-layer prompt system (Global → Page Context → Action).', 'work-copilot'); ?>
+        </p>
+        <?php
+
+        wp_editor(
+            $instructions,
+            'wcp_ai_global_instructions',
+            array(
+                'textarea_name' => 'wcp_ai_global_instructions',
+                'textarea_rows' => 10,
+                'media_buttons' => false,
+                'teeny' => false,
+                'quicktags' => true,
+                'tinymce' => array(
+                    'toolbar1' => 'bold,italic,underline,bullist,numlist,link,unlink',
+                    'toolbar2' => '',
+                ),
+            )
+        );
+
+        ?>
+        <p class="description" style="margin-top: 10px;">
+            <?php _e('These instructions set the overall tone and behavior for all AI interactions in Work Copilot.', 'work-copilot'); ?>
         </p>
         <?php
     }

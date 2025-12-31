@@ -158,6 +158,53 @@ function wcp_theme_get_page_items($page_id, $filters = array()) {
     return get_posts($args);
 }
 
+// Enqueue AI widget assets
+function wcp_theme_enqueue_ai_widget() {
+    // Only enqueue on frontend pages and if user is logged in
+    if (is_admin() || !is_user_logged_in() || !get_option('wcp_ai_enabled', false)) {
+        return;
+    }
+
+    // Only on pages
+    if (!is_page()) {
+        return;
+    }
+
+    // Enqueue widget CSS
+    wp_enqueue_style(
+        'wcp-ai-widget',
+        get_template_directory_uri() . '/assets/css/ai-widget.css',
+        array(),
+        '1.0.0'
+    );
+
+    // Enqueue widget JavaScript
+    wp_enqueue_script(
+        'wcp-ai-widget',
+        get_template_directory_uri() . '/assets/js/ai-widget.js',
+        array('jquery'),
+        '1.0.0',
+        true
+    );
+}
+add_action('wp_enqueue_scripts', 'wcp_theme_enqueue_ai_widget');
+
+// Include AI widget in footer
+function wcp_theme_ai_widget_footer() {
+    // Only show on frontend pages if user is logged in
+    if (is_admin() || !is_user_logged_in() || !get_option('wcp_ai_enabled', false)) {
+        return;
+    }
+
+    // Only on pages
+    if (!is_page()) {
+        return;
+    }
+
+    get_template_part('template-parts/ai-widget');
+}
+add_action('wp_footer', 'wcp_theme_ai_widget_footer');
+
 // Add body classes
 function wcp_theme_body_classes($classes) {
     if (is_page()) {

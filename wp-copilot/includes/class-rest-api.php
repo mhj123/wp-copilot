@@ -74,6 +74,28 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // NEW: Conversation-based AI endpoints
+        // Initialize conversation for a page
+        register_rest_route($namespace, '/ai/conversations/init', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'init_conversation'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Execute AI action with conversation
+        register_rest_route($namespace, '/ai/actions/execute', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'execute_action'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Decide on proposals (accept/dismiss)
+        register_rest_route($namespace, '/ai/proposals/decide', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'decide_proposals'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // Embeddings: Semantic search
         register_rest_route($namespace, '/search/semantic', array(
             'methods' => 'POST',
@@ -99,6 +121,40 @@ class WCP_REST_API {
         register_rest_route($namespace, '/embeddings/generate/(?P<post_id>\d+)', array(
             'methods' => 'POST',
             'callback' => array($this, 'generate_single_embedding'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // NEW: Editor expand draft
+        register_rest_route($namespace, '/ai/editor/expand', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'editor_expand_draft'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // NEW: Prompt chips (get/save/delete)
+        register_rest_route($namespace, '/prompts', array(
+            array(
+                'methods' => 'GET',
+                'callback' => array($this, 'get_prompts'),
+                'permission_callback' => array($this, 'check_permission'),
+            ),
+            array(
+                'methods' => 'POST',
+                'callback' => array($this, 'save_prompt'),
+                'permission_callback' => array($this, 'check_permission'),
+            ),
+        ));
+
+        register_rest_route($namespace, '/prompts/(?P<index>\d+)', array(
+            'methods' => 'DELETE',
+            'callback' => array($this, 'delete_prompt'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // NEW: Pages list for selector
+        register_rest_route($namespace, '/pages/list', array(
+            'methods' => 'GET',
+            'callback' => array($this, 'get_pages_list'),
             'permission_callback' => array($this, 'check_permission'),
         ));
     }
@@ -781,6 +837,374 @@ class WCP_REST_API {
             'success' => true,
             'message' => 'Embedding generated successfully',
             'post_id' => $post_id,
+        ));
+    }
+
+    /**
+     * NEW: Initialize or get conversation for a page
+     */
+    public function init_conversation($request) {
+        $page_id = $request->get_param('page_id');
+        $user_id = get_current_user_id();
+
+        if (!$page_id) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'Page ID is required',
+            ));
+        }
+
+        if (!$user_id) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'User not authenticated',
+            ));
+        }
+
+        // Get or create conversation
+        $conversations_manager = WCP_Conversations_Manager::instance();
+        $conversation_id = $conversations_manager->get_or_create_conversation($page_id, $user_id);
+
+        if (is_wp_error($conversation_id)) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => $conversation_id->get_error_message(),
+            ));
+        }
+
+        // Get conversation messages
+        $messages = $conversations_manager->get_messages($conversation_id, 50);
+
+        // Get conversation details
+        $conversation = $conversations_manager->get_conversation($conversation_id);
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'conversation_id' => $conversation_id,
+            'conversation_title' => $conversation->conversation_title ?? null,
+            'messages' => $messages,
+            'message_count' => count($messages),
+        ));
+    }
+
+    /**
+     * NEW: Execute AI action with conversation
+     */
+    public function execute_action($request) {
+        $action_type = $request->get_param('action_type');
+        $prompt = $request->get_param('prompt');
+        $page_id = $request->get_param('page_id');
+        $conversation_id = $request->get_param('conversation_id');
+        $context_mode = $request->get_param('context_mode') ?? 'page';
+        $selected_pages = $request->get_param('selected_pages') ?? array();
+
+        // Validate required params
+        if (!$action_type || !$prompt || !$page_id) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'Missing required parameters (action_type, prompt, page_id)',
+            ));
+        }
+
+        // Check if AI is enabled
+        if (!get_option('wcp_ai_enabled', false)) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'AI features are not enabled',
+            ));
+        }
+
+        $ai_client = WCP_AI_Client::instance();
+        if (!$ai_client->is_configured()) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'AI is not configured',
+            ));
+        }
+
+        // Execute action
+        $ai_actions = WCP_AI_Actions::instance();
+        $result = null;
+
+        switch ($action_type) {
+            case 'chat':
+            case 'chat_qa':
+                $result = $ai_actions->chat_qa($prompt, $page_id, $context_mode, $selected_pages, $conversation_id);
+                break;
+
+            case 'generate':
+            case 'generate-single':
+            case 'generate_items':
+                $result = $ai_actions->generate_items($prompt, $page_id, $context_mode, $selected_pages, $conversation_id);
+                break;
+
+            // Legacy support
+            case 'coaching':
+            case 'coaching_dialogue':
+                $use_rag = ($context_mode === 'corpus');
+                $result = $ai_actions->coaching_dialogue($prompt, $page_id, $use_rag, $conversation_id);
+                break;
+
+            case 'generate_single_item':
+                $use_rag = ($context_mode === 'corpus');
+                $result = $ai_actions->generate_single_item($prompt, $page_id, $use_rag, $conversation_id);
+                break;
+
+            default:
+                return rest_ensure_response(array(
+                    'success' => false,
+                    'message' => 'Unknown action type: ' . $action_type,
+                ));
+        }
+
+        if (is_wp_error($result)) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => $result->get_error_message(),
+            ));
+        }
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'result' => $result,
+        ));
+    }
+
+    /**
+     * NEW: Decide on proposals (accept/dismiss items)
+     */
+    public function decide_proposals($request) {
+        $proposal_id = $request->get_param('proposal_id');
+        $decision = $request->get_param('decision'); // 'accept' or 'dismiss'
+        $accepted_items = $request->get_param('accepted_items') ?? array();
+
+        if (!$proposal_id || !$decision) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'Missing required parameters (proposal_id, decision)',
+            ));
+        }
+
+        if ($decision === 'accept') {
+            // Execute proposal
+            $ai_actions = WCP_AI_Actions::instance();
+            $result = $ai_actions->execute_proposal($proposal_id, $accepted_items);
+
+            if (is_wp_error($result)) {
+                return rest_ensure_response(array(
+                    'success' => false,
+                    'message' => $result->get_error_message(),
+                ));
+            }
+
+            return rest_ensure_response(array(
+                'success' => true,
+                'decision' => 'accepted',
+                'created_posts' => $result['created_posts'],
+                'message' => $result['message'],
+            ));
+        } else if ($decision === 'dismiss') {
+            // Just delete the transient
+            delete_transient('wcp_proposal_' . $proposal_id);
+
+            return rest_ensure_response(array(
+                'success' => true,
+                'decision' => 'dismissed',
+                'message' => 'Proposal dismissed',
+            ));
+        } else {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'Invalid decision. Must be "accept" or "dismiss"',
+            ));
+        }
+    }
+
+    /**
+     * NEW: Expand draft content from editor
+     */
+    public function editor_expand_draft($request) {
+        $prompt = $request->get_param('prompt');
+        $draft_content = $request->get_param('draft_content');
+        $post_id = $request->get_param('post_id');
+        $context_mode = $request->get_param('context_mode') ?? 'page';
+        $selected_pages = $request->get_param('selected_pages') ?? array();
+
+        // Validate required params
+        if (!$prompt || !$post_id) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'Missing required parameters (prompt, post_id)',
+            ));
+        }
+
+        // Check if AI is enabled
+        if (!get_option('wcp_ai_enabled', false)) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'AI features are not enabled',
+            ));
+        }
+
+        $ai_client = WCP_AI_Client::instance();
+        if (!$ai_client->is_configured()) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'AI is not configured',
+            ));
+        }
+
+        // Execute expand draft action
+        $ai_actions = WCP_AI_Actions::instance();
+        $result = $ai_actions->expand_draft($prompt, $draft_content, $post_id, $context_mode, $selected_pages);
+
+        if (is_wp_error($result)) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => $result->get_error_message(),
+            ));
+        }
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'result' => $result,
+        ));
+    }
+
+    /**
+     * NEW: Get saved prompt chips
+     */
+    public function get_prompts($request) {
+        $prompts = get_option('wcp_saved_prompts', array());
+
+        // Add default prompts if none saved
+        if (empty($prompts)) {
+            $prompts = array(
+                array('label' => 'Expand', 'prompt' => 'Expand this with more detail and examples'),
+                array('label' => 'Concise', 'prompt' => 'Make this more concise while keeping key points'),
+                array('label' => 'Actions', 'prompt' => 'Add actionable next steps'),
+            );
+        }
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'prompts' => $prompts,
+        ));
+    }
+
+    /**
+     * NEW: Save a new prompt chip
+     */
+    public function save_prompt($request) {
+        $label = sanitize_text_field($request->get_param('label'));
+        $prompt = sanitize_textarea_field($request->get_param('prompt'));
+
+        if (empty($label) || empty($prompt)) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'Label and prompt are required',
+            ));
+        }
+
+        $prompts = get_option('wcp_saved_prompts', array());
+
+        // Limit to 20 prompts
+        if (count($prompts) >= 20) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'Maximum 20 saved prompts allowed',
+            ));
+        }
+
+        // Add new prompt
+        $prompts[] = array(
+            'label' => $label,
+            'prompt' => $prompt,
+            'created_at' => current_time('mysql'),
+        );
+
+        update_option('wcp_saved_prompts', $prompts);
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'prompts' => $prompts,
+            'message' => 'Prompt saved',
+        ));
+    }
+
+    /**
+     * NEW: Delete a prompt chip
+     */
+    public function delete_prompt($request) {
+        $index = intval($request->get_param('index'));
+
+        $prompts = get_option('wcp_saved_prompts', array());
+
+        if (!isset($prompts[$index])) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'Prompt not found',
+            ));
+        }
+
+        // Remove prompt at index
+        array_splice($prompts, $index, 1);
+
+        update_option('wcp_saved_prompts', $prompts);
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'prompts' => $prompts,
+            'message' => 'Prompt deleted',
+        ));
+    }
+
+    /**
+     * NEW: Get pages list for context selector
+     */
+    public function get_pages_list($request) {
+        $search = $request->get_param('search');
+
+        $args = array(
+            'post_type' => 'page',
+            'post_status' => 'publish',
+            'posts_per_page' => 50,
+            'orderby' => 'title',
+            'order' => 'ASC',
+        );
+
+        if (!empty($search)) {
+            $args['s'] = $search;
+        }
+
+        $pages = get_posts($args);
+
+        $formatted_pages = array();
+        foreach ($pages as $page) {
+            // Get parent chain for breadcrumb
+            $breadcrumb = array();
+            $parent_id = $page->post_parent;
+            while ($parent_id) {
+                $parent = get_post($parent_id);
+                if ($parent) {
+                    array_unshift($breadcrumb, $parent->post_title);
+                    $parent_id = $parent->post_parent;
+                } else {
+                    break;
+                }
+            }
+
+            $formatted_pages[] = array(
+                'id' => $page->ID,
+                'title' => $page->post_title,
+                'breadcrumb' => $breadcrumb,
+                'parent_id' => $page->post_parent,
+            );
+        }
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'pages' => $formatted_pages,
         ));
     }
 }

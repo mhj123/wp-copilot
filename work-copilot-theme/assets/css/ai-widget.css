@@ -1,0 +1,649 @@
+/**
+ * AI Widget Styles
+ *
+ * Floating widget for AI assistant on frontend pages
+ */
+
+/* Widget container */
+.wcp-ai-widget {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 400px;
+    max-height: 600px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    z-index: 9999;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Minimized state */
+.wcp-ai-widget.minimized .wcp-ai-container {
+    display: none;
+}
+
+.wcp-ai-widget.minimized {
+    width: 60px;
+    height: 60px;
+    max-height: 60px;
+    border-radius: 50%;
+}
+
+/* Closed state */
+.wcp-ai-widget.closed {
+    display: none;
+}
+
+/* Toggle button (when minimized) */
+.wcp-ai-toggle {
+    display: none;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #0073aa;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    transition: background 0.2s ease;
+}
+
+.wcp-ai-widget.minimized .wcp-ai-toggle {
+    display: flex;
+}
+
+.wcp-ai-toggle:hover {
+    background: #005a87;
+}
+
+.wcp-ai-toggle .dashicons {
+    font-size: 30px;
+    width: 30px;
+    height: 30px;
+}
+
+/* Widget container */
+.wcp-ai-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-height: 600px;
+}
+
+.wcp-ai-widget:not(.minimized) .wcp-ai-toggle {
+    display: none;
+}
+
+/* Header */
+.wcp-ai-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #e0e0e0;
+    background: #f7f7f7;
+    border-radius: 12px 12px 0 0;
+}
+
+.wcp-ai-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+}
+
+.wcp-ai-header-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.wcp-ai-header-actions button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    color: #666;
+    transition: color 0.2s ease;
+}
+
+.wcp-ai-header-actions button:hover {
+    color: #0073aa;
+}
+
+.wcp-ai-header-actions .dashicons {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+}
+
+/* Context indicator */
+.wcp-ai-context {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: #f0f6fc;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 13px;
+    color: #555;
+}
+
+.wcp-ai-context .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    color: #0073aa;
+}
+
+.wcp-ai-context-name {
+    font-weight: 500;
+}
+
+/* Action buttons (replaces dropdown) */
+.wcp-ai-action-buttons {
+    display: flex;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.wcp-ai-action-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px 15px;
+    background: #f7f7f7;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: #666;
+    transition: all 0.2s ease;
+}
+
+.wcp-ai-action-btn:hover {
+    background: #f0f0f0;
+    color: #333;
+}
+
+.wcp-ai-action-btn.active {
+    background: #fff;
+    color: #0073aa;
+    border-bottom-color: #0073aa;
+}
+
+.wcp-ai-action-btn .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+
+/* Context selector */
+.wcp-ai-context-selector {
+    padding: 10px 20px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #fafafa;
+}
+
+.wcp-ai-context-selector label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #666;
+    margin: 0;
+}
+
+.wcp-ai-context-dropdown {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 12px;
+    background: #fff;
+}
+
+/* Page picker */
+.wcp-ai-page-picker {
+    border-bottom: 1px solid #e0e0e0;
+    background: #f9f9f9;
+}
+
+.wcp-ai-page-picker-header {
+    padding: 10px 20px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.wcp-ai-page-picker-header input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.wcp-ai-page-list {
+    max-height: 150px;
+    overflow-y: auto;
+    padding: 10px 20px;
+}
+
+.wcp-ai-page-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.wcp-ai-page-item:hover {
+    color: #0073aa;
+}
+
+.wcp-ai-page-item .breadcrumb {
+    color: #999;
+    font-size: 11px;
+}
+
+.wcp-ai-selected-pages {
+    padding: 8px 20px;
+    border-top: 1px solid #e0e0e0;
+    font-size: 12px;
+    color: #666;
+}
+
+.wcp-ai-selected-count {
+    font-weight: 600;
+    color: #0073aa;
+}
+
+/* Prompt chips */
+.wcp-ai-prompt-chips {
+    padding: 10px 20px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.wcp-ai-chip {
+    padding: 6px 12px;
+    background: #e8f4fc;
+    border: 1px solid #b8daff;
+    border-radius: 16px;
+    font-size: 12px;
+    color: #0073aa;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.wcp-ai-chip:hover {
+    background: #cce5ff;
+    border-color: #80bdff;
+}
+
+/* Conversation view */
+.wcp-ai-conversation {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px 20px;
+    background: #fafafa;
+}
+
+.wcp-ai-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Message bubbles */
+.wcp-ai-message {
+    display: flex;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.wcp-ai-message-content {
+    padding: 10px 14px;
+    border-radius: 12px;
+    max-width: 85%;
+    word-wrap: break-word;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+/* User messages (right, blue) */
+.wcp-ai-message-user {
+    justify-content: flex-end;
+}
+
+.wcp-ai-message-user .wcp-ai-message-content {
+    background: #0073aa;
+    color: #fff;
+    border-bottom-right-radius: 4px;
+}
+
+/* Assistant messages (left, white) */
+.wcp-ai-message-assistant {
+    justify-content: flex-start;
+}
+
+.wcp-ai-message-assistant .wcp-ai-message-content {
+    background: #fff;
+    color: #333;
+    border: 1px solid #e0e0e0;
+    border-bottom-left-radius: 4px;
+}
+
+/* System messages (centered, yellow) */
+.wcp-ai-message-system {
+    justify-content: center;
+}
+
+.wcp-ai-message-system .wcp-ai-message-content {
+    background: #fff8e1;
+    color: #856404;
+    border: 1px solid #ffd54f;
+    border-radius: 8px;
+    max-width: 90%;
+    text-align: center;
+    font-size: 13px;
+}
+
+/* Input area */
+.wcp-ai-input-area {
+    border-top: 1px solid #e0e0e0;
+    background: #fff;
+}
+
+.wcp-ai-options {
+    padding: 10px 20px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.wcp-ai-rag-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #555;
+    cursor: pointer;
+    margin: 0;
+}
+
+.wcp-ai-rag-toggle input[type="checkbox"] {
+    margin: 0;
+}
+
+.wcp-ai-input-wrapper {
+    display: flex;
+    gap: 10px;
+    padding: 15px 20px;
+    align-items: flex-start;
+}
+
+.wcp-ai-input-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.wcp-ai-save-btn {
+    padding: 8px;
+    background: #f7f7f7;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #666;
+    transition: all 0.2s ease;
+}
+
+.wcp-ai-save-btn:hover {
+    background: #fff8e1;
+    border-color: #ffd54f;
+    color: #f9a825;
+}
+
+.wcp-ai-prompt {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: none;
+    transition: border-color 0.2s ease;
+}
+
+.wcp-ai-prompt:focus {
+    outline: none;
+    border-color: #0073aa;
+}
+
+.wcp-ai-send-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 10px 16px;
+    background: #0073aa;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.wcp-ai-send-btn:hover:not(:disabled) {
+    background: #005a87;
+}
+
+.wcp-ai-send-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.wcp-ai-send-btn .dashicons {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+}
+
+/* Loading indicator */
+.wcp-ai-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    border-top: 1px solid #e0e0e0;
+    background: #f7f7f7;
+    font-size: 13px;
+    color: #666;
+}
+
+/* Approval panel */
+.wcp-ai-approval-panel {
+    border-top: 2px solid #0073aa;
+    background: #f0f6fc;
+    padding: 15px 20px;
+}
+
+.wcp-ai-approval-header h4 {
+    margin: 0 0 5px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #0073aa;
+}
+
+.wcp-ai-approval-header .description {
+    margin: 0 0 12px 0;
+    font-size: 12px;
+    color: #666;
+}
+
+.wcp-ai-proposals {
+    margin-bottom: 15px;
+}
+
+.wcp-ai-proposal-card {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 10px;
+}
+
+.wcp-ai-proposal-card h5 {
+    margin: 0 0 10px 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #333;
+}
+
+.wcp-ai-proposal-content {
+    margin-bottom: 10px;
+    font-size: 14px;
+    color: #555;
+    line-height: 1.5;
+}
+
+.wcp-ai-proposal-meta {
+    font-size: 12px;
+    color: #666;
+}
+
+.wcp-ai-approval-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.wcp-ai-accept-btn,
+.wcp-ai-dismiss-btn {
+    flex: 1;
+    padding: 10px;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.wcp-ai-accept-btn {
+    background: #0073aa;
+    color: #fff;
+    border: none;
+}
+
+.wcp-ai-accept-btn:hover {
+    background: #005a87;
+}
+
+.wcp-ai-dismiss-btn {
+    background: #fff;
+    color: #666;
+    border: 1px solid #ddd;
+}
+
+.wcp-ai-dismiss-btn:hover {
+    background: #f7f7f7;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .wcp-ai-widget {
+        width: calc(100% - 40px);
+        max-height: calc(100vh - 100px);
+        bottom: 10px;
+        right: 10px;
+        left: 10px;
+    }
+
+    .wcp-ai-widget.minimized {
+        width: 60px;
+        height: 60px;
+        left: auto;
+    }
+}
+
+/* Scrollbar styling */
+.wcp-ai-conversation::-webkit-scrollbar {
+    width: 6px;
+}
+
+.wcp-ai-conversation::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.wcp-ai-conversation::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 3px;
+}
+
+.wcp-ai-conversation::-webkit-scrollbar-thumb:hover {
+    background: #999;
+}
+
+/* Save prompt modal */
+.wcp-ai-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.wcp-ai-modal-content {
+    background: #fff;
+    padding: 25px;
+    border-radius: 8px;
+    width: 300px;
+    max-width: 90%;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.wcp-ai-modal-content h4 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    color: #333;
+}
+
+.wcp-ai-modal-content input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    margin-bottom: 15px;
+}
+
+.wcp-ai-modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.wcp-ai-modal-actions .button {
+    padding: 8px 16px;
+}
