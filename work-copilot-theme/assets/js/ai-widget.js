@@ -531,10 +531,19 @@
             if (result.outcome === 'chat') {
                 // Chat response - just append message
                 this.appendMessage('assistant', result.message);
+
+                // Auto-extract memories for chat actions
+                if (this.currentAction === 'chat' && this.conversationId) {
+                    this.extractMemories();
+                }
             } else if (result.outcome === 'create_items') {
                 // Generate items - show approval panel
                 this.currentBatchId = result.batch_id || null;
                 this.showProposals(result.proposals);
+            } else if (result.outcome === 'create_memories') {
+                // Memory proposals - show approval panel
+                this.currentBatchId = result.batch_id || null;
+                this.showMemoryProposals(result.proposals);
             }
         },
 
@@ -799,6 +808,58 @@
                     $('.wcp-mission-source').text('Error loading');
                 }
             });
+        },
+
+        /**
+         * Extract memories from current conversation
+         */
+        extractMemories: function() {
+            $.ajax({
+                url: wcpAiWidgetData.restUrl + '/ai/memories/extract',
+                method: 'POST',
+                headers: { 'X-WP-Nonce': wcpAiWidgetData.nonce },
+                data: {
+                    conversation_id: this.conversationId
+                },
+                success: (response) => {
+                    if (response.success && response.outcome === 'create_memories' && response.proposals && response.proposals.length > 0) {
+                        this.currentBatchId = response.batch_id;
+                        this.showMemoryProposals(response.proposals);
+                    }
+                    // Silently ignore if no memories found
+                }
+            });
+        },
+
+        /**
+         * Show memory proposals for approval
+         */
+        showMemoryProposals: function(proposals) {
+            this.currentProposals = proposals;
+
+            const $container = $('.wcp-ai-proposals');
+            $container.empty();
+
+            proposals.forEach(proposal => {
+                const memory = proposal.memory;
+                const $card = $('<div>')
+                    .addClass('wcp-ai-proposal-card wcp-memory-proposal selected')
+                    .attr('data-proposal-id', proposal.proposal_id)
+                    .append(
+                        $('<label>').addClass('wcp-proposal-checkbox').append(
+                            $('<input>').attr('type', 'checkbox').prop('checked', true).val(proposal.proposal_id)
+                        ),
+                        $('<h5>').text(memory.title),
+                        $('<div>').addClass('wcp-ai-proposal-content').text(memory.content),
+                        $('<div>').addClass('wcp-ai-proposal-meta')
+                            .html('<strong>Type:</strong> ' + memory.type + ' | <strong>Confidence:</strong> ' + memory.confidence + '%')
+                    );
+
+                $container.append($card);
+            });
+
+            $('.wcp-ai-approval-panel').slideDown();
+            this.appendMessage('assistant', 'I extracted ' + proposals.length + ' memory(s) from our conversation. Review and accept the ones you want to keep.');
         }
     };
 

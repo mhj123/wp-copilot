@@ -100,8 +100,15 @@ class WCP_Context_Builder {
         $context = array(
             'pages' => array(),
             'items' => array(),
-            'rag_items' => array()
+            'rag_items' => array(),
+            'memories' => array()
         );
+
+        // Fetch relevant memories if RAG is enabled and query provided
+        if (get_option('wcp_embeddings_enabled', false) && !empty($options['query'])) {
+            $memory_manager = WCP_Memory_Manager::instance();
+            $context['memories'] = $memory_manager->get_relevant_memories($options['query'], 5);
+        }
 
         switch ($context_mode) {
             case 'corpus':
@@ -380,6 +387,20 @@ class WCP_Context_Builder {
                 $similarity_pct = round($item['similarity'] * 100);
                 $content_preview = wp_trim_words($item['content'], 50, '...');
                 $prompt .= "- [{$similarity_pct}% match] {$item['title']}: {$content_preview}\n";
+            }
+
+            $prompt .= "\n";
+        }
+
+        // Add relevant memories if available
+        if (!empty($context_data['memories'])) {
+            $prompt .= "## Relevant Memories:\n\n";
+
+            foreach ($context_data['memories'] as $memory) {
+                $type = get_post_meta($memory->ID, '_wcp_memory_type', true);
+                $content_preview = wp_trim_words($memory->post_content, 30, '...');
+                $prompt .= "- **{$memory->post_title}** ({$type})\n";
+                $prompt .= "  {$content_preview}\n\n";
             }
 
             $prompt .= "\n";

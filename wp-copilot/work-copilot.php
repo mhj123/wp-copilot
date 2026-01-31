@@ -56,6 +56,7 @@ class Work_Copilot {
         require_once WCP_PLUGIN_DIR . 'includes/class-conversations-manager.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-context-builder.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-mission-loader.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-memory-manager.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-prompt-builder.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-ai-actions.php';
         require_once WCP_PLUGIN_DIR . 'admin/class-admin.php';
@@ -91,6 +92,7 @@ class Work_Copilot {
     public function activate() {
         require_once WCP_PLUGIN_DIR . 'includes/class-post-types.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-taxonomies.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-memory-manager.php';
 
         WCP_Post_Types::instance();
         WCP_Taxonomies::instance();
@@ -98,6 +100,9 @@ class Work_Copilot {
         flush_rewrite_rules();
 
         $this->create_tables();
+
+        // Ensure Memories page exists
+        WCP_Memory_Manager::instance()->ensure_memories_page();
     }
 
     public function deactivate() {

@@ -637,6 +637,30 @@ class WCP_AI_Actions {
             $context_term_id = $terms[0]->term_id;
         }
 
+        // Check if this is a memory proposal
+        if (isset($proposal['action_type']) && $proposal['action_type'] === 'extract_memories') {
+            $memory_data = $proposal['memory'];
+            $conversation_id = $proposal['conversation_id'] ?? null;
+
+            $memory_manager = WCP_Memory_Manager::instance();
+            $post_id = $memory_manager->save_memory($memory_data, $conversation_id);
+
+            if (is_wp_error($post_id)) {
+                return $post_id;
+            }
+
+            $created_posts[] = $post_id;
+
+            // Delete proposal transient
+            delete_transient('wcp_proposal_' . $proposal_id);
+
+            return array(
+                'created_posts' => $created_posts,
+                'message' => 'Memory saved successfully',
+                'debug' => array('memory_id' => $post_id)
+            );
+        }
+
         // Handle both single and multiple item proposals
         $item = isset($proposal['item']) ? $proposal['item'] : null;
 
@@ -777,6 +801,17 @@ class WCP_AI_Actions {
         }
 
         return $parsed;
+    }
+
+    /**
+     * Extract memories from conversation
+     *
+     * @param string $conversation_id Conversation ID
+     * @return array|WP_Error Result with memory proposals or error
+     */
+    public function extract_memories_action($conversation_id) {
+        $memory_manager = WCP_Memory_Manager::instance();
+        return $memory_manager->extract_memories($conversation_id);
     }
 
     /**

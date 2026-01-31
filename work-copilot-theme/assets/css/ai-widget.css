@@ -704,6 +704,16 @@
     color: #666;
 }
 
+/* Memory proposal specific styles */
+.wcp-memory-proposal {
+    border-left: 3px solid #9b59b6;
+}
+
+.wcp-memory-proposal.selected {
+    border-color: #9b59b6;
+    background: #fcf8ff;
+}
+
 .wcp-ai-approval-actions {
     display: flex;
     gap: 10px;

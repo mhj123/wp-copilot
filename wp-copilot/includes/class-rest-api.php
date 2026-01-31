@@ -138,6 +138,13 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // Memories: Extract from conversation
+        register_rest_route($namespace, '/ai/memories/extract', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'extract_memories'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // NEW: Editor expand draft
         register_rest_route($namespace, '/ai/editor/expand', array(
             'methods' => 'POST',
@@ -1465,6 +1472,43 @@ class WCP_REST_API {
             'page_objectives' => $mission_context['page'],
             'source' => $mission_context['source'],
             'mission_text' => !empty($mission_context['page']) ? $mission_context['page'] : $mission_context['global']
+        ));
+    }
+
+    /**
+     * Extract memories from conversation
+     *
+     * POST /work-copilot/v1/ai/memories/extract
+     *
+     * @param WP_REST_Request $request Request object
+     * @return WP_REST_Response Response with memory proposals
+     */
+    public function extract_memories($request) {
+        $conversation_id = $request->get_param('conversation_id');
+
+        if (empty($conversation_id)) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'Missing conversation_id parameter'
+            ));
+        }
+
+        $ai_actions = WCP_AI_Actions::instance();
+        $result = $ai_actions->extract_memories_action($conversation_id);
+
+        if (is_wp_error($result)) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => $result->get_error_message()
+            ));
+        }
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'outcome' => $result['outcome'],
+            'proposals' => isset($result['proposals']) ? $result['proposals'] : array(),
+            'batch_id' => isset($result['batch_id']) ? $result['batch_id'] : null,
+            'message' => isset($result['message']) ? $result['message'] : null
         ));
     }
 }
