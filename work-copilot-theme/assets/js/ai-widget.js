@@ -10,7 +10,8 @@
 
     const AIWidget = {
         conversationId: null,
-        currentProposal: null,
+        currentProposals: [], // Array of proposals for multi-item support
+        currentBatchId: null, // Batch ID for grouping proposals
         currentAction: 'chat', // 'chat' or 'generate'
         contextMode: 'page', // 'page', 'corpus', or 'select'
         selectedPages: [],
@@ -22,6 +23,7 @@
         init: function() {
             this.bindEvents();
             this.initConversation();
+            this.fetchActiveMission();
         },
 
         /**
@@ -58,11 +60,36 @@
             });
 
             // Page selection
-            $(document).on('change', '.wcp-ai-page-checkbox', (e) => {
+            $(document).on('change', '.wcp-page-checkbox input', (e) => {
                 this.togglePageSelection(
                     parseInt($(e.target).val()),
                     $(e.target).is(':checked')
                 );
+            });
+
+            // Tree toggle
+            $(document).on('click', '.wcp-tree-toggle', (e) => {
+                const $toggle = $(e.target);
+                const $item = $toggle.closest('.wcp-page-tree-item');
+                const expanded = $toggle.data('expanded');
+
+                if (expanded) {
+                    $item.find('> ul').slideUp();
+                    $toggle.text('▶').data('expanded', false);
+                } else {
+                    $item.find('> ul').slideDown();
+                    $toggle.text('▼').data('expanded', true);
+                }
+            });
+
+            // Page options change
+            $(document).on('change', '.wcp-page-options input', (e) => {
+                const $item = $(e.target).closest('.wcp-page-tree-item');
+                const pageId = parseInt($item.data('page-id'));
+                const option = $(e.target).hasClass('include-children') ? 'include_children' : 'include_items';
+                const checked = $(e.target).is(':checked');
+
+                this.updatePageOption(pageId, option, checked);
             });
 
             // Prompt chips
@@ -99,11 +126,22 @@
 
             // Approval actions
             $(document).on('click', '.wcp-ai-accept-btn', () => {
-                this.acceptProposal();
+                this.acceptProposals();
             });
 
             $(document).on('click', '.wcp-ai-dismiss-btn', () => {
-                this.dismissProposal();
+                this.dismissProposals();
+            });
+
+            // Proposal checkbox change
+            $(document).on('change', '.wcp-proposal-checkbox input', (e) => {
+                this.updateProposalSelection(e.target);
+            });
+
+            // Mission toggle
+            $(document).on('click', '.wcp-mission-toggle', () => {
+                $('.wcp-mission-content').slideToggle();
+                $('.wcp-mission-toggle .dashicons').toggleClass('dashicons-arrow-down dashicons-arrow-up');
             });
         },
 
@@ -117,11 +155,13 @@
             $('.wcp-ai-action-btn').removeClass('active');
             $(`.wcp-ai-action-btn[data-action="${action}"]`).addClass('active');
 
-            // Update placeholder
-            if (action === 'chat') {
-                $('#wcp-ai-prompt').attr('placeholder', 'Ask a question about your work...');
+            // Show/hide item count wrapper
+            if (action === 'generate') {
+                $('.wcp-ai-item-count-wrapper').css('display', 'flex');
+                $('#wcp-ai-prompt').attr('placeholder', 'Describe the items you want to create...');
             } else {
-                $('#wcp-ai-prompt').attr('placeholder', 'Describe the item you want to create...');
+                $('.wcp-ai-item-count-wrapper').css('display', 'none');
+                $('#wcp-ai-prompt').attr('placeholder', 'Ask a question about your work...');
             }
         },
 
@@ -180,37 +220,99 @@
         },
 
         /**
-         * Render page list
+         * Render page list (hierarchical tree)
          */
         renderPageList: function(pages) {
             const $list = $('.wcp-ai-page-list');
             $list.empty();
+            $list.append(this.renderPageTree(pages, 0));
+        },
 
-            pages.forEach((page) => {
-                const isChecked = this.selectedPages.includes(page.id);
-                const breadcrumb = page.breadcrumb.length > 0
-                    ? '<span class="breadcrumb">' + page.breadcrumb.join(' > ') + ' > </span>'
-                    : '';
+        /**
+         * Render hierarchical page tree
+         */
+        renderPageTree: function(pages, level = 0) {
+            let html = '<ul class="wcp-page-tree' + (level === 0 ? ' root' : '') + '">';
 
-                $list.append(`
-                    <label class="wcp-ai-page-item">
-                        <input type="checkbox" class="wcp-ai-page-checkbox" value="${page.id}" ${isChecked ? 'checked' : ''}>
-                        ${breadcrumb}${page.title}
-                    </label>
-                `);
+            pages.forEach(page => {
+                const hasChildren = page.children && page.children.length > 0;
+                const isSelected = this.isPageSelected(page.id);
+
+                html += '<li class="wcp-page-tree-item" data-page-id="' + page.id + '">';
+
+                if (hasChildren) {
+                    html += '<span class="wcp-tree-toggle" data-expanded="false">▶</span>';
+                } else {
+                    html += '<span class="wcp-tree-spacer"></span>';
+                }
+
+                html += '<label class="wcp-page-checkbox">';
+                html += '<input type="checkbox" value="' + page.id + '"' + (isSelected ? ' checked' : '') + '>';
+                html += this.escapeHtml(page.title);
+                html += '</label>';
+
+                html += '<div class="wcp-page-options" style="display:' + (isSelected ? 'block' : 'none') + ';">';
+                html += '<label><input type="checkbox" class="include-children"' + (this.getPageOption(page.id, 'include_children') ? ' checked' : '') + '> Include sub-pages</label>';
+                html += '<label><input type="checkbox" class="include-items"' + (this.getPageOption(page.id, 'include_items') ? ' checked' : '') + '> Include items</label>';
+                html += '</div>';
+
+                if (hasChildren) {
+                    html += this.renderPageTree(page.children, level + 1);
+                }
+
+                html += '</li>';
             });
+
+            html += '</ul>';
+            return html;
+        },
+
+        /**
+         * Check if page is selected
+         */
+        isPageSelected: function(pageId) {
+            return this.selectedPages.some(p => p.page_id === pageId);
+        },
+
+        /**
+         * Get page option value
+         */
+        getPageOption: function(pageId, option) {
+            const page = this.selectedPages.find(p => p.page_id === pageId);
+            return page && page[option];
         },
 
         /**
          * Toggle page selection
          */
         togglePageSelection: function(pageId, selected) {
-            if (selected && !this.selectedPages.includes(pageId)) {
-                this.selectedPages.push(pageId);
-            } else if (!selected) {
-                this.selectedPages = this.selectedPages.filter(id => id !== pageId);
+            const $item = $('.wcp-page-tree-item[data-page-id="' + pageId + '"]');
+            const $options = $item.find('> .wcp-page-options');
+
+            if (selected) {
+                if (!this.isPageSelected(pageId)) {
+                    this.selectedPages.push({
+                        page_id: pageId,
+                        include_children: false,
+                        include_items: true
+                    });
+                }
+                $options.slideDown();
+            } else {
+                this.selectedPages = this.selectedPages.filter(p => p.page_id !== pageId);
+                $options.slideUp();
             }
             this.updateSelectedCount();
+        },
+
+        /**
+         * Update page option
+         */
+        updatePageOption: function(pageId, option, value) {
+            const page = this.selectedPages.find(p => p.page_id === pageId);
+            if (page) {
+                page[option] = value;
+            }
         },
 
         /**
@@ -389,6 +491,14 @@
                 data.selected_pages = this.selectedPages;
             }
 
+            // Add item count for generate action
+            if (this.currentAction === 'generate') {
+                const itemCount = parseInt($('#wcp-ai-item-count').val()) || 0;
+                if (itemCount > 0) {
+                    data.item_count = itemCount;
+                }
+            }
+
             $.ajax({
                 url: wcpAiWidgetData.restUrl + '/ai/actions/execute',
                 method: 'POST',
@@ -423,54 +533,122 @@
                 this.appendMessage('assistant', result.message);
             } else if (result.outcome === 'create_items') {
                 // Generate items - show approval panel
+                this.currentBatchId = result.batch_id || null;
                 this.showProposals(result.proposals);
             }
         },
 
         /**
-         * Show proposals for approval
+         * Show proposals for approval (supports multiple)
          */
         showProposals: function(proposals) {
+            console.log('showProposals called with:', proposals);
+
             if (!proposals || proposals.length === 0) {
+                console.log('No proposals to show');
                 return;
             }
 
-            this.currentProposal = proposals[0]; // For MVP, only handle single proposal
-
+            this.currentProposals = proposals;
             const $container = $('.wcp-ai-proposals');
+            console.log('Proposal container found:', $container.length > 0);
             $container.empty();
 
-            const proposal = this.currentProposal;
-            const item = proposal.item;
+            proposals.forEach((proposal, index) => {
+                const item = proposal.item;
+                const $proposalCard = $('<div>')
+                    .addClass('wcp-ai-proposal-card selected')
+                    .attr('data-proposal-id', proposal.proposal_id)
+                    .append(
+                        $('<label>')
+                            .addClass('wcp-proposal-checkbox')
+                            .append(
+                                $('<input>')
+                                    .attr('type', 'checkbox')
+                                    .prop('checked', true)
+                                    .val(proposal.proposal_id)
+                            ),
+                        $('<h5>').text(item.title),
+                        $('<div>')
+                            .addClass('wcp-ai-proposal-content')
+                            .text(item.content),
+                        item.item_type ? $('<div>')
+                            .addClass('wcp-ai-proposal-meta')
+                            .html('<strong>Type:</strong> ' + item.item_type) : ''
+                    );
 
-            const $proposalCard = $('<div>')
-                .addClass('wcp-ai-proposal-card')
-                .append(
-                    $('<h5>').text(item.title),
-                    $('<div>')
-                        .addClass('wcp-ai-proposal-content')
-                        .text(item.content),
-                    item.item_type ? $('<div>')
-                        .addClass('wcp-ai-proposal-meta')
-                        .html('<strong>Type:</strong> ' + item.item_type) : ''
-                );
+                $container.append($proposalCard);
+            });
 
-            $container.append($proposalCard);
+            // Update selected count
+            this.updateProposalSelectedCount();
+
             $('.wcp-ai-approval-panel').slideDown();
 
             // Append system message
-            this.appendMessage('assistant', 'I\'ve generated an item for your review. Please accept or dismiss it below.');
+            const itemWord = proposals.length === 1 ? 'item' : 'items';
+            this.appendMessage('assistant', `I've generated ${proposals.length} ${itemWord} for your review. Select the ones you want to create.`);
         },
 
         /**
-         * Accept proposal
+         * Update proposal checkbox selection
          */
-        acceptProposal: function() {
-            if (!this.currentProposal) {
+        updateProposalSelection: function(checkbox) {
+            const $card = $(checkbox).closest('.wcp-ai-proposal-card');
+            if ($(checkbox).is(':checked')) {
+                $card.addClass('selected');
+            } else {
+                $card.removeClass('selected');
+            }
+            this.updateProposalSelectedCount();
+        },
+
+        /**
+         * Update the selected count in the accept button
+         */
+        updateProposalSelectedCount: function() {
+            const count = $('.wcp-proposal-checkbox input:checked').length;
+            $('.wcp-ai-approval-actions .wcp-ai-selected-count').text(count);
+        },
+
+        /**
+         * Get selected proposal IDs
+         */
+        getSelectedProposalIds: function() {
+            const ids = [];
+            $('.wcp-proposal-checkbox input:checked').each(function() {
+                ids.push($(this).val());
+            });
+            return ids;
+        },
+
+        /**
+         * Accept selected proposals
+         */
+        acceptProposals: function() {
+            const selectedIds = this.getSelectedProposalIds();
+            console.log('Selected IDs:', selectedIds);
+            console.log('Current batch ID:', this.currentBatchId);
+            console.log('Current proposals:', this.currentProposals);
+
+            if (selectedIds.length === 0) {
+                alert('Please select at least one item to create.');
                 return;
             }
 
-            const proposalId = this.currentProposal.proposal_id;
+            const data = {
+                decision: 'accept',
+                selected_proposal_ids: selectedIds
+            };
+
+            // Use batch_id if available, otherwise fall back to single proposal
+            if (this.currentBatchId) {
+                data.batch_id = this.currentBatchId;
+            } else if (this.currentProposals.length > 0) {
+                data.proposal_id = this.currentProposals[0].proposal_id;
+            }
+
+            console.log('Sending data:', data);
 
             $.ajax({
                 url: wcpAiWidgetData.restUrl + '/ai/proposals/decide',
@@ -478,26 +656,32 @@
                 beforeSend: (xhr) => {
                     xhr.setRequestHeader('X-WP-Nonce', wcpAiWidgetData.nonce);
                 },
-                data: {
-                    proposal_id: proposalId,
-                    decision: 'accept'
-                },
+                data: data,
                 success: (response) => {
                     if (response.success) {
                         $('.wcp-ai-approval-panel').slideUp();
-                        this.currentProposal = null;
+                        this.currentProposals = [];
+                        this.currentBatchId = null;
 
                         const postCount = response.created_posts ? response.created_posts.length : 0;
-                        this.appendMessage('system', 'Item created successfully! (' + postCount + ' post(s) created)');
+                        const itemWord = postCount === 1 ? 'item' : 'items';
+                        this.appendMessage('system', `${postCount} ${itemWord} created successfully!`);
 
-                        // Optionally reload page to show new item
-                        setTimeout(() => {
-                            if (confirm('Item created! Would you like to reload the page to see it?')) {
-                                window.location.reload();
-                            }
-                        }, 1000);
+                        // Log debug info if present
+                        if (response.debug) {
+                            console.log('Debug info:', response.debug);
+                        }
+
+                        // Optionally reload page to show new items
+                        if (postCount > 0) {
+                            setTimeout(() => {
+                                if (confirm(`${postCount} ${itemWord} created! Would you like to reload the page to see them?`)) {
+                                    window.location.reload();
+                                }
+                            }, 1000);
+                        }
                     } else {
-                        this.showError(response.message || 'Failed to create item');
+                        this.showError(response.message || 'Failed to create items');
                     }
                 },
                 error: (xhr) => {
@@ -507,14 +691,19 @@
         },
 
         /**
-         * Dismiss proposal
+         * Dismiss all proposals
          */
-        dismissProposal: function() {
-            if (!this.currentProposal) {
-                return;
-            }
+        dismissProposals: function() {
+            const data = {
+                decision: 'dismiss'
+            };
 
-            const proposalId = this.currentProposal.proposal_id;
+            // Use batch_id if available, otherwise fall back to single proposal
+            if (this.currentBatchId) {
+                data.batch_id = this.currentBatchId;
+            } else if (this.currentProposals.length > 0) {
+                data.proposal_id = this.currentProposals[0].proposal_id;
+            }
 
             $.ajax({
                 url: wcpAiWidgetData.restUrl + '/ai/proposals/decide',
@@ -522,17 +711,15 @@
                 beforeSend: (xhr) => {
                     xhr.setRequestHeader('X-WP-Nonce', wcpAiWidgetData.nonce);
                 },
-                data: {
-                    proposal_id: proposalId,
-                    decision: 'dismiss'
-                },
+                data: data,
                 success: (response) => {
                     if (response.success) {
                         $('.wcp-ai-approval-panel').slideUp();
-                        this.currentProposal = null;
-                        this.appendMessage('system', 'Proposal dismissed.');
+                        this.currentProposals = [];
+                        this.currentBatchId = null;
+                        this.appendMessage('system', 'All proposals dismissed.');
                     } else {
-                        this.showError(response.message || 'Failed to dismiss proposal');
+                        this.showError(response.message || 'Failed to dismiss proposals');
                     }
                 },
                 error: (xhr) => {
@@ -589,6 +776,29 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        },
+
+        /**
+         * Fetch active mission for current page
+         */
+        fetchActiveMission: function() {
+            $.ajax({
+                url: wcpAiWidgetData.restUrl + '/mission/active',
+                method: 'GET',
+                headers: { 'X-WP-Nonce': wcpAiWidgetData.nonce },
+                data: {
+                    page_id: wcpAiWidgetData.currentPageId
+                },
+                success: (response) => {
+                    if (response.success) {
+                        $('.wcp-mission-source').text(response.source);
+                        $('.wcp-mission-text').text(response.mission_text || 'No mission defined');
+                    }
+                },
+                error: () => {
+                    $('.wcp-mission-source').text('Error loading');
+                }
+            });
         }
     };
 

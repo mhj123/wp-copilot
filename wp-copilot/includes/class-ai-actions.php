@@ -50,9 +50,9 @@ class WCP_AI_Actions {
             'rag_limit' => 10
         ));
 
-        // Build system prompt (2 layers)
+        // Build system prompt (4 layers)
         $prompt_builder = WCP_Prompt_Builder::instance();
-        $system_prompt = $prompt_builder->build_system_prompt('coaching');
+        $system_prompt = $prompt_builder->build_system_prompt('coaching', $page_id);
 
         // Build user message with context
         $user_message = $prompt_builder->build_user_message($prompt, $context_data);
@@ -139,9 +139,9 @@ class WCP_AI_Actions {
             'rag_limit' => 10
         ));
 
-        // Build system prompt (2 layers)
+        // Build system prompt (4 layers)
         $prompt_builder = WCP_Prompt_Builder::instance();
-        $system_prompt = $prompt_builder->build_system_prompt('generate-single');
+        $system_prompt = $prompt_builder->build_system_prompt('generate-single', $page_id);
 
         // Build user message with context
         $user_message = $prompt_builder->build_user_message($prompt, $context_data);
@@ -266,9 +266,9 @@ class WCP_AI_Actions {
             'item_limit' => 20
         ));
 
-        // Build system prompt (2 layers)
+        // Build system prompt (4 layers)
         $prompt_builder = WCP_Prompt_Builder::instance();
-        $system_prompt = $prompt_builder->build_system_prompt('chat');
+        $system_prompt = $prompt_builder->build_system_prompt('chat', $page_id);
 
         // Build user message with context
         $user_message = $prompt_builder->build_user_message($prompt, $context_data);
@@ -377,9 +377,9 @@ class WCP_AI_Actions {
             'item_limit' => 10
         ));
 
-        // Build system prompt (2 layers)
+        // Build system prompt (4 layers)
         $prompt_builder = WCP_Prompt_Builder::instance();
-        $system_prompt = $prompt_builder->build_system_prompt('expand_draft');
+        $system_prompt = $prompt_builder->build_system_prompt('expand_draft', $page_id);
 
         // Build user message with draft content
         $user_message = "User Instruction:\n{$prompt}\n\n";
@@ -440,9 +440,10 @@ class WCP_AI_Actions {
      * @param string $context_mode Context mode: 'page', 'corpus', or 'select'
      * @param array $selected_pages Array of page IDs (for 'select' mode)
      * @param string $conversation_id Conversation ID
+     * @param int $item_count Optional number of items to generate (0 = let AI decide)
      * @return array|WP_Error Response with proposals requiring approval
      */
-    public function generate_items($prompt, $page_id, $context_mode = 'page', $selected_pages = array(), $conversation_id = null) {
+    public function generate_items($prompt, $page_id, $context_mode = 'page', $selected_pages = array(), $conversation_id = null, $item_count = 0) {
         // Get current user
         $user_id = get_current_user_id();
         if (!$user_id) {
@@ -458,9 +459,9 @@ class WCP_AI_Actions {
             'item_limit' => 20
         ));
 
-        // Build system prompt (2 layers)
+        // Build system prompt (4 layers) - use generate-multiple
         $prompt_builder = WCP_Prompt_Builder::instance();
-        $system_prompt = $prompt_builder->build_system_prompt('generate-single');
+        $system_prompt = $prompt_builder->build_system_prompt('generate-multiple', $page_id, $item_count);
 
         // Build user message with context
         $user_message = $prompt_builder->build_user_message($prompt, $context_data);
@@ -498,48 +499,75 @@ class WCP_AI_Actions {
             $conversations_manager->add_message($conversation_id, 'user', $prompt);
         }
 
-        // Parse JSON from response
-        $parsed_item = $this->parse_json_response($response['content']);
+        // Parse JSON from response (expecting array of items)
+        $parsed_items = $this->parse_json_response($response['content']);
 
-        if (is_wp_error($parsed_item)) {
+        if (is_wp_error($parsed_items)) {
             // Save error to conversation
             if ($conversation_id) {
-                $error_msg = 'Failed to parse AI response: ' . $parsed_item->get_error_message();
+                $error_msg = 'Failed to parse AI response: ' . $parsed_items->get_error_message();
                 $conversations_manager->add_message($conversation_id, 'system', $error_msg);
             }
-            return $parsed_item;
+            return $parsed_items;
         }
 
-        // Validate item structure
-        if (!isset($parsed_item['title']) || !isset($parsed_item['content'])) {
-            $error = new WP_Error('invalid_item', 'AI response missing required fields (title, content)');
+        // Normalize to array (in case AI returned single item)
+        if (isset($parsed_items['title'])) {
+            $parsed_items = array($parsed_items);
+        }
+
+        // Validate we have items
+        if (empty($parsed_items) || !is_array($parsed_items)) {
+            $error = new WP_Error('invalid_response', 'AI did not return any items');
             if ($conversation_id) {
                 $conversations_manager->add_message($conversation_id, 'system', $error->get_error_message());
             }
             return $error;
         }
 
-        // Create proposal
-        $proposal_id = wp_generate_uuid4();
-        $proposal = array(
-            'proposal_id' => $proposal_id,
-            'action_type' => 'generate-single',
-            'item' => $parsed_item,
-            'conversation_id' => $conversation_id,
+        // Create proposals for each item
+        $proposals = array();
+        $batch_id = wp_generate_uuid4(); // Group proposals together
+
+        foreach ($parsed_items as $index => $item) {
+            // Validate item structure
+            if (!isset($item['title']) || !isset($item['content'])) {
+                continue; // Skip invalid items
+            }
+
+            $proposal_id = wp_generate_uuid4();
+            $proposal = array(
+                'proposal_id' => $proposal_id,
+                'batch_id' => $batch_id,
+                'index' => $index,
+                'action_type' => 'generate-multiple',
+                'item' => $item,
+                'conversation_id' => $conversation_id,
+                'page_id' => $page_id,
+                'created_at' => current_time('mysql')
+            );
+
+            // Store proposal in transient (expires in 1 hour)
+            set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
+
+            $proposals[] = $proposal;
+        }
+
+        // Store batch info
+        set_transient('wcp_batch_' . $batch_id, array(
+            'proposal_ids' => array_column($proposals, 'proposal_id'),
             'page_id' => $page_id,
-            'created_at' => current_time('mysql')
-        );
+            'conversation_id' => $conversation_id
+        ), HOUR_IN_SECONDS);
 
-        // Store proposal in transient (expires in 1 hour)
-        set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
-
-        // Save assistant response to conversation (with proposal reference)
+        // Save assistant response to conversation
         if ($conversation_id) {
+            $item_count_msg = count($proposals);
             $conversations_manager->add_message(
                 $conversation_id,
                 'assistant',
-                'Generated item proposal (requires approval)',
-                array('proposal_id' => $proposal_id)
+                "Generated {$item_count_msg} item(s) for your review",
+                array('batch_id' => $batch_id)
             );
         }
 
@@ -550,8 +578,8 @@ class WCP_AI_Actions {
             'user_id' => $user_id,
             'model' => $response['model'],
             'prompt' => $prompt,
-            'input_context' => json_encode(array('context_mode' => $context_mode, 'page_id' => $page_id)),
-            'output_snapshot' => json_encode($parsed_item),
+            'input_context' => json_encode(array('context_mode' => $context_mode, 'page_id' => $page_id, 'item_count' => $item_count)),
+            'output_snapshot' => json_encode($parsed_items),
             'context_post_id' => $page_id,
             'accepted_items' => array(),
             'dismissed_items' => array()
@@ -559,7 +587,8 @@ class WCP_AI_Actions {
 
         return array(
             'outcome' => 'create_items',
-            'proposals' => array($proposal),
+            'proposals' => $proposals,
+            'batch_id' => $batch_id,
             'action_id' => $action_id,
             'metadata' => array(
                 'model' => $response['model'],
@@ -586,11 +615,12 @@ class WCP_AI_Actions {
         $proposal = get_transient('wcp_proposal_' . $proposal_id);
 
         if (!$proposal) {
-            return new WP_Error('proposal_not_found', 'Proposal not found or expired');
+            return new WP_Error('proposal_not_found', 'Proposal not found or expired. ID: ' . $proposal_id);
         }
 
         $created_posts = array();
-        $page_id = $proposal['page_id'];
+        $debug_info = array();
+        $page_id = $proposal['page_id'] ?? 0;
 
         // Get or create context term for this page
         $terms = get_terms(array(
@@ -607,10 +637,17 @@ class WCP_AI_Actions {
             $context_term_id = $terms[0]->term_id;
         }
 
-        if ($proposal['action_type'] === 'generate-single') {
-            // Single item
-            $item = $proposal['item'];
+        // Handle both single and multiple item proposals
+        $item = isset($proposal['item']) ? $proposal['item'] : null;
 
+        // Debug: log what we found
+        $debug_info['proposal_id'] = $proposal_id;
+        $debug_info['has_item'] = !empty($item);
+        $debug_info['item_keys'] = $item ? array_keys($item) : array();
+        $debug_info['has_title'] = !empty($item['title']);
+        $debug_info['has_content'] = !empty($item['content']);
+
+        if (!empty($item['title']) && !empty($item['content'])) {
             $post_id = wp_insert_post(array(
                 'post_type' => 'post',
                 'post_title' => sanitize_text_field($item['title']),
@@ -631,7 +668,12 @@ class WCP_AI_Actions {
                 }
 
                 $created_posts[] = $post_id;
+                $debug_info['post_created'] = $post_id;
+            } else {
+                $debug_info['insert_error'] = $post_id->get_error_message();
             }
+        } else {
+            $debug_info['skip_reason'] = 'Missing title or content';
         }
 
         // Delete proposal transient
@@ -642,6 +684,10 @@ class WCP_AI_Actions {
         $table = $wpdb->prefix . 'wcp_ai_actions';
 
         // Find recent action for this proposal (within last hour)
+        $action_type_search = isset($proposal['action_type']) && $proposal['action_type'] === 'generate-single'
+            ? 'generate_single_item'
+            : 'generate_items';
+
         $action = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM $table
             WHERE context_post_id = %d
@@ -649,7 +695,7 @@ class WCP_AI_Actions {
             AND timestamp > DATE_SUB(NOW(), INTERVAL 1 HOUR)
             ORDER BY timestamp DESC LIMIT 1",
             $page_id,
-            $proposal['action_type'] === 'generate-single' ? 'generate_single_item' : 'generate_multiple_items'
+            $action_type_search
         ));
 
         if ($action) {
@@ -664,7 +710,8 @@ class WCP_AI_Actions {
 
         return array(
             'created_posts' => $created_posts,
-            'message' => sprintf('Created %d item(s)', count($created_posts))
+            'message' => sprintf('Created %d item(s)', count($created_posts)),
+            'debug' => $debug_info
         );
     }
 
@@ -675,33 +722,67 @@ class WCP_AI_Actions {
      * @return array|WP_Error Parsed JSON or error
      */
     private function parse_json_response($response) {
+        $original = $response;
+
         // Remove markdown code blocks if present
-        $response = preg_replace('/```json\s*/', '', $response);
-        $response = preg_replace('/```\s*$/', '', $response);
+        $response = preg_replace('/```json\s*/i', '', $response);
+        $response = preg_replace('/```\s*/', '', $response);
         $response = trim($response);
 
-        // Try to find JSON in response
-        $json_start = strpos($response, '{');
+        // Try to find JSON array first (for generate-multiple)
         $json_start_array = strpos($response, '[');
+        $json_start_object = strpos($response, '{');
 
-        if ($json_start === false && $json_start_array === false) {
-            return new WP_Error('no_json', 'No JSON found in response');
+        if ($json_start_array === false && $json_start_object === false) {
+            return new WP_Error('no_json', 'No JSON found in response. Raw: ' . substr($original, 0, 200));
         }
 
-        // Use whichever comes first
-        if ($json_start !== false && ($json_start_array === false || $json_start < $json_start_array)) {
-            $json_text = substr($response, $json_start);
-        } else {
+        // Determine if we're looking for array or object
+        $is_array = ($json_start_array !== false && ($json_start_object === false || $json_start_array < $json_start_object));
+
+        if ($is_array) {
+            // Extract array - find matching closing bracket
             $json_text = substr($response, $json_start_array);
+            // Find the last ] in the response
+            $last_bracket = strrpos($json_text, ']');
+            if ($last_bracket !== false) {
+                $json_text = substr($json_text, 0, $last_bracket + 1);
+            }
+        } else {
+            // Extract object - find matching closing brace
+            $json_text = substr($response, $json_start_object);
+            $last_brace = strrpos($json_text, '}');
+            if ($last_brace !== false) {
+                $json_text = substr($json_text, 0, $last_brace + 1);
+            }
         }
+
+        // Clean up common issues
+        $json_text = preg_replace('/,\s*([}\]])/', '$1', $json_text); // Remove trailing commas
 
         // Decode JSON
         $parsed = json_decode($json_text, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
-            return new WP_Error('json_parse_error', 'Failed to parse JSON: ' . json_last_error_msg());
+            // Try one more time with more aggressive cleaning
+            $json_text = preg_replace('/[\x00-\x1F\x7F]/u', '', $json_text); // Remove control characters
+            $parsed = json_decode($json_text, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                return new WP_Error(
+                    'json_parse_error',
+                    'Failed to parse JSON: ' . json_last_error_msg() . '. Extract attempted: ' . substr($json_text, 0, 100)
+                );
+            }
         }
 
         return $parsed;
+    }
+
+    /**
+     * Get version for debugging
+     */
+    public static function get_version() {
+        return '1.2.0';
     }
 }

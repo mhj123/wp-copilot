@@ -2,10 +2,11 @@
 /**
  * Prompt Builder
  *
- * Builds 3-layer system prompts for AI requests
- * Layer 1: Global instructions
- * Layer 2: Page context instructions (hierarchical)
- * Layer 3: Action-specific instructions
+ * Builds 4-layer system prompts for AI requests
+ * Layer 1: Global Soul/Mission (WHO the AI is)
+ * Layer 2: Page Context + Objectives (WHAT this page is about)
+ * Layer 3: General System Instructions (HOW to behave)
+ * Layer 4: Action-Specific Instructions (WHAT task to perform)
  */
 
 if (!defined('ABSPATH')) {
@@ -28,31 +29,50 @@ class WCP_Prompt_Builder {
     }
 
     /**
-     * Build complete system prompt (2 layers)
+     * Build complete system prompt (4 layers)
      *
      * @param string $action_type The action type (chat, generate-single, expand_draft, etc.)
+     * @param int $page_id Optional page ID for page-specific context
+     * @param int $item_count Optional item count for generate-multiple (0 = let AI decide)
      * @return string Complete system prompt
      */
-    public function build_system_prompt($action_type) {
+    public function build_system_prompt($action_type, $page_id = 0, $item_count = 0) {
         $layers = array();
+        $mission_loader = WCP_Mission_Loader::instance();
 
-        // Layer 1: Global Instructions
+        // Layer 1: Global Soul/Mission (WHO the AI is)
+        $global_mission = $mission_loader->get_global_mission();
+        if (!empty($global_mission)) {
+            $layers[] = "# Your Soul/Mission\n\n" . $global_mission;
+        }
+
+        // Layer 2: Page Context + Objectives (WHAT this page is about)
+        if ($page_id) {
+            $page_objectives = $mission_loader->get_page_objectives($page_id);
+            if (!empty($page_objectives)) {
+                $page = get_post($page_id);
+                $page_title = $page ? $page->post_title : '';
+                $layers[] = "# Current Page Context\n\n**Page:** {$page_title}\n\n**Objectives:**\n\n{$page_objectives}";
+            }
+        }
+
+        // Layer 3: General System Instructions (HOW to behave)
         $global = $this->get_global_instructions();
         if (!empty($global)) {
-            $layers[] = $global;
+            $layers[] = "# System Instructions\n\n" . $global;
         }
 
-        // Layer 2: Action-Specific Instructions
-        $action_instructions = $this->get_action_instructions($action_type);
+        // Layer 4: Action-Specific Instructions (WHAT task to perform)
+        $action_instructions = $this->get_action_instructions($action_type, $item_count);
         if (!empty($action_instructions)) {
-            $layers[] = "## Current Task:\n\n" . $action_instructions;
+            $layers[] = "# Current Task\n\n" . $action_instructions;
         }
 
-        return implode("\n\n", $layers);
+        return implode("\n\n---\n\n", $layers);
     }
 
     /**
-     * Layer 1: Get global AI instructions
+     * Layer 3: Get global AI instructions
      *
      * @return string Global instructions
      */
@@ -66,12 +86,18 @@ class WCP_Prompt_Builder {
     }
 
     /**
-     * Layer 2: Get action-specific instructions
+     * Layer 4: Get action-specific instructions
      *
      * @param string $action_type The action type
+     * @param int $item_count Optional item count for generate-multiple (0 = let AI decide)
      * @return string Action instructions
      */
-    private function get_action_instructions($action_type) {
+    private function get_action_instructions($action_type, $item_count = 0) {
+        // Dynamic instruction for generate-multiple based on item count
+        $item_count_instruction = $item_count > 0
+            ? "Generate exactly {$item_count} actionable items"
+            : "Generate 3-5 actionable items";
+
         $instructions = array(
             // Chat/Q&A action for frontend widget
             'chat' => "You are a helpful assistant answering questions about the user's work and notes. "
@@ -83,9 +109,11 @@ class WCP_Prompt_Builder {
                 . "Be specific and concrete. Format your response as valid JSON:\n"
                 . '{"title": "Item title", "content": "Detailed content", "item_type": "task|info|learning"}',
 
-            'generate-multiple' => "Generate 3-5 actionable items based on the user's request and context. "
-                . "Each item should be specific, concrete, and immediately useful. Format your response as valid JSON:\n"
-                . '[{"title": "Item 1 title", "content": "Detailed content", "item_type": "task|info|learning"}, ...]',
+            'generate-multiple' => "{$item_count_instruction} based on the user's request and context. "
+                . "Each item should be specific, concrete, and immediately useful.\n\n"
+                . "IMPORTANT: Respond with ONLY a valid JSON array. No text before or after. Example format:\n"
+                . '[{"title": "Item title", "content": "Detailed content", "item_type": "task"}]\n\n'
+                . "Valid item_type values: task, info, learning. Start your response with [ and end with ].",
 
             // Editor sidebar action - expand/modify draft content
             'expand_draft' => "You are helping the user expand and improve their draft content. "

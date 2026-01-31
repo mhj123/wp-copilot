@@ -126,25 +126,47 @@ class WCP_Context_Builder {
                 break;
 
             case 'select':
-                // User-selected pages mode
-                $selected = array_map('intval', $options['selected_pages']);
-                foreach ($selected as $index => $selected_page_id) {
-                    $page = get_post($selected_page_id);
-                    if ($page && $page->post_type === 'page') {
-                        $context['pages'][] = array(
-                            'id' => $page->ID,
-                            'title' => $page->post_title,
-                            'content' => $page->post_content,
-                            'level' => 0
-                        );
+                // User-selected pages mode with hierarchical support
+                $selected_pages = isset($options['selected_pages']) ? $options['selected_pages'] : array();
 
-                        // Get items for each selected page
-                        if ($options['include_items']) {
-                            $page_items = $this->get_page_items($selected_page_id, $options['item_limit']);
-                            $context['items'] = array_merge($context['items'], $page_items);
+                foreach ($selected_pages as $selection) {
+                    // Handle both old format (int) and new format (array with options)
+                    if (is_int($selection)) {
+                        $page_id_to_process = $selection;
+                        $include_children = false;
+                        $include_items = true;
+                    } else {
+                        $page_id_to_process = $selection['page_id'];
+                        $include_children = isset($selection['include_children']) ? $selection['include_children'] : false;
+                        $include_items = isset($selection['include_items']) ? $selection['include_items'] : true;
+                    }
+
+                    // Get parent hierarchy for context
+                    $parent_contexts = $this->collect_parent_contexts($page_id_to_process);
+                    $context['pages'] = array_merge($context['pages'], $parent_contexts);
+
+                    // If include_children, get all descendants
+                    if ($include_children) {
+                        $descendants = $this->get_descendant_pages($page_id_to_process);
+                        foreach ($descendants as $desc_page) {
+                            $context['pages'][] = array(
+                                'id' => $desc_page->ID,
+                                'title' => $desc_page->post_title,
+                                'content' => $desc_page->post_content,
+                                'level' => 0
+                            );
                         }
                     }
+
+                    // If include_items, get items for this page
+                    if ($include_items) {
+                        $page_items = $this->get_page_items($page_id_to_process, $options['item_limit']);
+                        $context['items'] = array_merge($context['items'], $page_items);
+                    }
                 }
+
+                // Deduplicate pages by ID
+                $context['pages'] = $this->deduplicate_pages($context['pages']);
                 break;
 
             case 'page':
@@ -364,5 +386,47 @@ class WCP_Context_Builder {
         }
 
         return $prompt;
+    }
+
+    /**
+     * Get all descendant pages recursively
+     *
+     * @param int $page_id Parent page ID
+     * @param array $descendants Accumulator for recursive calls
+     * @return array Array of descendant page objects
+     */
+    private function get_descendant_pages($page_id, &$descendants = array()) {
+        $children = get_pages(array(
+            'child_of' => $page_id,
+            'parent' => $page_id,
+            'post_status' => 'publish'
+        ));
+
+        foreach ($children as $child) {
+            $descendants[] = $child;
+            $this->get_descendant_pages($child->ID, $descendants);
+        }
+
+        return $descendants;
+    }
+
+    /**
+     * Deduplicate pages by ID
+     *
+     * @param array $pages Array of page data
+     * @return array Deduplicated array
+     */
+    private function deduplicate_pages($pages) {
+        $seen = array();
+        $unique = array();
+
+        foreach ($pages as $page) {
+            if (!in_array($page['id'], $seen)) {
+                $seen[] = $page['id'];
+                $unique[] = $page;
+            }
+        }
+
+        return $unique;
     }
 }

@@ -25,6 +25,13 @@ class WCP_REST_API {
     public function register_routes() {
         $namespace = 'work-copilot/v1';
 
+        // Version check endpoint (for debugging)
+        register_rest_route($namespace, '/version', array(
+            'methods' => 'GET',
+            'callback' => array($this, 'get_version'),
+            'permission_callback' => '__return_true',
+        ));
+
         // Get context tree
         register_rest_route($namespace, '/contexts/tree', array(
             'methods' => 'GET',
@@ -67,13 +74,6 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // AI: Accept/dismiss
-        register_rest_route($namespace, '/ai/(?P<action_id>[a-zA-Z0-9_-]+)/decide', array(
-            'methods' => 'POST',
-            'callback' => array($this, 'ai_decide'),
-            'permission_callback' => array($this, 'check_permission'),
-        ));
-
         // NEW: Conversation-based AI endpoints
         // Initialize conversation for a page
         register_rest_route($namespace, '/ai/conversations/init', array(
@@ -89,10 +89,17 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // Decide on proposals (accept/dismiss)
+        // Decide on proposals (accept/dismiss) - MUST be before the generic pattern below
         register_rest_route($namespace, '/ai/proposals/decide', array(
             'methods' => 'POST',
             'callback' => array($this, 'decide_proposals'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // AI: Accept/dismiss (LEGACY - generic pattern, must be AFTER specific routes)
+        register_rest_route($namespace, '/ai/(?P<action_id>[a-zA-Z0-9_-]+)/decide', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'ai_decide'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
@@ -121,6 +128,13 @@ class WCP_REST_API {
         register_rest_route($namespace, '/embeddings/generate/(?P<post_id>\d+)', array(
             'methods' => 'POST',
             'callback' => array($this, 'generate_single_embedding'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Mission: Get active mission for page
+        register_rest_route($namespace, '/mission/active', array(
+            'methods' => 'GET',
+            'callback' => array($this, 'get_active_mission'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
@@ -157,10 +171,28 @@ class WCP_REST_API {
             'callback' => array($this, 'get_pages_list'),
             'permission_callback' => array($this, 'check_permission'),
         ));
+
+        // NEW: Create heading
+        register_rest_route($namespace, '/headings/create', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'create_heading'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
     }
 
     public function check_permission() {
         return current_user_can('edit_posts');
+    }
+
+    /**
+     * Get plugin version (for debugging)
+     */
+    public function get_version() {
+        return rest_ensure_response(array(
+            'version' => '1.2.1',
+            'timestamp' => current_time('mysql'),
+            'php_version' => PHP_VERSION,
+        ));
     }
 
     /**
@@ -537,10 +569,17 @@ class WCP_REST_API {
     }
 
     /**
-     * AI: Accept or dismiss candidates
+     * AI: Accept or dismiss candidates (OLD ENDPOINT - LEGACY)
      * CRITICAL: This is the ONLY way AI content enters the database
      */
     public function ai_decide($request) {
+        // Debug: Log that OLD endpoint is being called
+        file_put_contents(
+            WCP_PLUGIN_DIR . 'debug-log.txt',
+            date('Y-m-d H:i:s') . " - OLD ai_decide endpoint called!\n",
+            FILE_APPEND
+        );
+
         $action_id = $request->get_param('action_id');
         $accepted = $request->get_param('accepted');
         $dismissed = $request->get_param('dismissed');
@@ -935,7 +974,8 @@ class WCP_REST_API {
             case 'generate':
             case 'generate-single':
             case 'generate_items':
-                $result = $ai_actions->generate_items($prompt, $page_id, $context_mode, $selected_pages, $conversation_id);
+                $item_count = intval($request->get_param('item_count') ?? 0);
+                $result = $ai_actions->generate_items($prompt, $page_id, $context_mode, $selected_pages, $conversation_id, $item_count);
                 break;
 
             // Legacy support
@@ -972,28 +1012,66 @@ class WCP_REST_API {
 
     /**
      * NEW: Decide on proposals (accept/dismiss items)
+     * Supports both single proposals and batch decisions
      */
     public function decide_proposals($request) {
-        $proposal_id = $request->get_param('proposal_id');
-        $decision = $request->get_param('decision'); // 'accept' or 'dismiss'
-        $accepted_items = $request->get_param('accepted_items') ?? array();
+        // Debug: Write to file to confirm this code is running
+        file_put_contents(
+            WCP_PLUGIN_DIR . 'debug-log.txt',
+            date('Y-m-d H:i:s') . " - decide_proposals v1.2.1 called\n",
+            FILE_APPEND
+        );
 
+        $proposal_id = $request->get_param('proposal_id');
+        $batch_id = $request->get_param('batch_id');
+        $decision = $request->get_param('decision'); // 'accept' or 'dismiss'
+
+        // Handle selected_proposal_ids - may come as array or need to be parsed
+        $selected_proposal_ids = $request->get_param('selected_proposal_ids');
+        if (empty($selected_proposal_ids)) {
+            $selected_proposal_ids = array();
+        } elseif (is_string($selected_proposal_ids)) {
+            // Try JSON decode if it's a string
+            $decoded = json_decode($selected_proposal_ids, true);
+            $selected_proposal_ids = is_array($decoded) ? $decoded : array($selected_proposal_ids);
+        } elseif (!is_array($selected_proposal_ids)) {
+            $selected_proposal_ids = array();
+        }
+
+        // Debug: Always include received params in response
+        $received_params = array(
+            'api_version' => '1.2.1',
+            'proposal_id' => $proposal_id,
+            'batch_id' => $batch_id,
+            'decision' => $decision,
+            'selected_proposal_ids' => $selected_proposal_ids,
+            'has_batch_id' => !empty($batch_id),
+        );
+
+        // Handle batch decisions (multiple proposals)
+        if ($batch_id) {
+            return $this->handle_batch_decision($batch_id, $decision, $selected_proposal_ids, $received_params);
+        }
+
+        // Handle single proposal (legacy support)
         if (!$proposal_id || !$decision) {
             return rest_ensure_response(array(
                 'success' => false,
-                'message' => 'Missing required parameters (proposal_id, decision)',
+                'message' => 'Missing required parameters (proposal_id or batch_id, decision)',
+                'debug' => $received_params,
             ));
         }
 
         if ($decision === 'accept') {
             // Execute proposal
             $ai_actions = WCP_AI_Actions::instance();
-            $result = $ai_actions->execute_proposal($proposal_id, $accepted_items);
+            $result = $ai_actions->execute_proposal($proposal_id, array());
 
             if (is_wp_error($result)) {
                 return rest_ensure_response(array(
                     'success' => false,
                     'message' => $result->get_error_message(),
+                    'debug' => $received_params,
                 ));
             }
 
@@ -1002,6 +1080,7 @@ class WCP_REST_API {
                 'decision' => 'accepted',
                 'created_posts' => $result['created_posts'],
                 'message' => $result['message'],
+                'debug' => array_merge($received_params, array('result_debug' => $result['debug'] ?? null)),
             ));
         } else if ($decision === 'dismiss') {
             // Just delete the transient
@@ -1011,13 +1090,115 @@ class WCP_REST_API {
                 'success' => true,
                 'decision' => 'dismissed',
                 'message' => 'Proposal dismissed',
+                'debug' => $received_params,
             ));
         } else {
             return rest_ensure_response(array(
                 'success' => false,
                 'message' => 'Invalid decision. Must be "accept" or "dismiss"',
+                'debug' => $received_params,
             ));
         }
+    }
+
+    /**
+     * Handle batch decision for multiple proposals
+     */
+    private function handle_batch_decision($batch_id, $decision, $selected_proposal_ids, $received_params = array()) {
+        // Get batch info
+        $batch = get_transient('wcp_batch_' . $batch_id);
+
+        if (!$batch) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'Batch not found or expired',
+                'debug' => array_merge($received_params, array('batch_id_searched' => 'wcp_batch_' . $batch_id)),
+            ));
+        }
+
+        $all_proposal_ids = $batch['proposal_ids'] ?? array();
+        $created_posts = array();
+        $ai_actions = WCP_AI_Actions::instance();
+
+        if ($decision === 'dismiss') {
+            // Dismiss all proposals in batch
+            foreach ($all_proposal_ids as $pid) {
+                delete_transient('wcp_proposal_' . $pid);
+            }
+            delete_transient('wcp_batch_' . $batch_id);
+
+            return rest_ensure_response(array(
+                'success' => true,
+                'decision' => 'dismissed',
+                'message' => 'All proposals dismissed',
+                'debug' => $received_params,
+            ));
+        }
+
+        if ($decision === 'accept') {
+            // Ensure selected_proposal_ids is an array
+            if (!is_array($selected_proposal_ids)) {
+                $selected_proposal_ids = array();
+            }
+
+            $errors = array();
+            $proposal_debug = array();
+
+            // Accept selected proposals, dismiss unselected
+            foreach ($all_proposal_ids as $pid) {
+                if (in_array($pid, $selected_proposal_ids, false)) {
+                    // Accept this proposal
+                    $result = $ai_actions->execute_proposal($pid, array());
+                    if (is_wp_error($result)) {
+                        $errors[] = array(
+                            'proposal_id' => $pid,
+                            'error' => $result->get_error_message()
+                        );
+                    } else {
+                        if (!empty($result['created_posts'])) {
+                            $created_posts = array_merge($created_posts, $result['created_posts']);
+                        }
+                        // Collect debug info from each proposal
+                        if (isset($result['debug'])) {
+                            $proposal_debug[] = $result['debug'];
+                        }
+                    }
+                } else {
+                    // Dismiss unselected
+                    delete_transient('wcp_proposal_' . $pid);
+                }
+            }
+
+            // Clean up batch
+            delete_transient('wcp_batch_' . $batch_id);
+
+            $count = count($created_posts);
+            $response = array(
+                'success' => true,
+                'decision' => 'accepted',
+                'created_posts' => $created_posts,
+                'message' => $count . ' item' . ($count !== 1 ? 's' : '') . ' created',
+            );
+
+            // Always include debug info for troubleshooting
+            $response['debug'] = array(
+                'api_version' => '1.2.1',
+                'received_params' => $received_params,
+                'batch_proposal_count' => count($all_proposal_ids),
+                'selected_count' => count($selected_proposal_ids),
+                'selected_ids' => $selected_proposal_ids,
+                'all_ids' => $all_proposal_ids,
+                'errors' => $errors,
+                'proposal_results' => $proposal_debug,
+            );
+
+            return rest_ensure_response($response);
+        }
+
+        return rest_ensure_response(array(
+            'success' => false,
+            'message' => 'Invalid decision. Must be "accept" or "dismiss"',
+        ));
     }
 
     /**
@@ -1168,7 +1349,7 @@ class WCP_REST_API {
         $args = array(
             'post_type' => 'page',
             'post_status' => 'publish',
-            'posts_per_page' => 50,
+            'posts_per_page' => -1, // Get all pages for hierarchical display
             'orderby' => 'title',
             'order' => 'ASC',
         );
@@ -1179,32 +1360,111 @@ class WCP_REST_API {
 
         $pages = get_posts($args);
 
-        $formatted_pages = array();
-        foreach ($pages as $page) {
-            // Get parent chain for breadcrumb
-            $breadcrumb = array();
-            $parent_id = $page->post_parent;
-            while ($parent_id) {
-                $parent = get_post($parent_id);
-                if ($parent) {
-                    array_unshift($breadcrumb, $parent->post_title);
-                    $parent_id = $parent->post_parent;
-                } else {
-                    break;
-                }
-            }
+        // Build hierarchical tree
+        $hierarchical = $this->build_page_tree($pages);
 
-            $formatted_pages[] = array(
-                'id' => $page->ID,
-                'title' => $page->post_title,
-                'breadcrumb' => $breadcrumb,
-                'parent_id' => $page->post_parent,
-            );
+        return rest_ensure_response(array(
+            'success' => true,
+            'pages' => $hierarchical,
+        ));
+    }
+
+    /**
+     * Build hierarchical page tree
+     *
+     * @param array $pages Flat list of pages
+     * @param int $parent_id Parent ID to filter by (0 = root level)
+     * @return array Hierarchical tree structure
+     */
+    private function build_page_tree($pages, $parent_id = 0) {
+        $tree = array();
+
+        foreach ($pages as $page) {
+            if ($page->post_parent == $parent_id) {
+                $node = array(
+                    'id' => $page->ID,
+                    'title' => $page->post_title,
+                    'parent_id' => $page->post_parent,
+                    'children' => $this->build_page_tree($pages, $page->ID)
+                );
+                $tree[] = $node;
+            }
+        }
+
+        return $tree;
+    }
+
+    /**
+     * NEW: Create a Heading under a Page or another Heading
+     */
+    public function create_heading($request) {
+        $title = sanitize_text_field($request->get_param('title'));
+        $content = wp_kses_post($request->get_param('content'));
+        $parent_id = intval($request->get_param('parent_id'));
+        $parent_type = sanitize_text_field($request->get_param('parent_type'));
+
+        if (empty($title) || empty($parent_id)) {
+            return new WP_Error('invalid_params', 'Title and parent_id are required', array('status' => 400));
+        }
+
+        // Validate parent_type
+        if (!in_array($parent_type, array('page', 'wcp_heading'))) {
+            return new WP_Error('invalid_parent_type', 'Parent type must be page or wcp_heading', array('status' => 400));
+        }
+
+        // Create heading
+        $heading_id = wp_insert_post(array(
+            'post_type' => 'wcp_heading',
+            'post_title' => $title,
+            'post_content' => $content,
+            'post_status' => 'publish',
+        ));
+
+        if (is_wp_error($heading_id)) {
+            return $heading_id;
+        }
+
+        // Set parent meta
+        update_post_meta($heading_id, '_wcp_parent_type', $parent_type);
+        update_post_meta($heading_id, '_wcp_parent_id', $parent_id);
+
+        // Taxonomy sync will be triggered automatically by save_post hook
+
+        // Get the context term (wait a moment for taxonomy sync to complete)
+        sleep(1);
+        $term = null;
+        if (function_exists('wcp_theme_get_heading_context_term')) {
+            $term = wcp_theme_get_heading_context_term($heading_id);
         }
 
         return rest_ensure_response(array(
             'success' => true,
-            'pages' => $formatted_pages,
+            'heading_id' => $heading_id,
+            'term_id' => $term ? $term->term_id : null,
+            'heading' => get_post($heading_id),
+        ));
+    }
+
+    /**
+     * Get active mission for a page
+     *
+     * GET /work-copilot/v1/mission/active?page_id=123
+     *
+     * @param WP_REST_Request $request Request object
+     * @return WP_REST_Response Response with mission context
+     */
+    public function get_active_mission($request) {
+        $page_id = $request->get_param('page_id');
+
+        $mission_loader = WCP_Mission_Loader::instance();
+        $mission_context = $mission_loader->get_mission_context($page_id);
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'global_mission' => $mission_context['global'],
+            'page_objectives' => $mission_context['page'],
+            'source' => $mission_context['source'],
+            'mission_text' => !empty($mission_context['page']) ? $mission_context['page'] : $mission_context['global']
         ));
     }
 }

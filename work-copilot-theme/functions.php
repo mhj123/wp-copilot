@@ -35,13 +35,13 @@ add_action('after_setup_theme', 'wcp_theme_setup');
 // Enqueue scripts and styles
 function wcp_theme_scripts() {
     // Main theme stylesheet
-    wp_enqueue_style('wcp-theme-style', get_stylesheet_uri(), array(), '1.1.0');
+    wp_enqueue_style('wcp-theme-style', get_stylesheet_uri(), array(), '1.2.0');
 
     // Custom theme styles
-    wp_enqueue_style('wcp-theme-custom', get_template_directory_uri() . '/assets/css/theme.css', array(), '1.1.0');
+    wp_enqueue_style('wcp-theme-custom', get_template_directory_uri() . '/assets/css/theme.css', array(), '1.2.0');
 
     // Theme JavaScript
-    wp_enqueue_script('wcp-theme-js', get_template_directory_uri() . '/assets/js/theme.js', array('jquery'), '1.0.0', true);
+    wp_enqueue_script('wcp-theme-js', get_template_directory_uri() . '/assets/js/theme.js', array('jquery'), '1.2.0', true);
 
     // Localize script with data
     wp_localize_script('wcp-theme-js', 'wcpThemeData', array(
@@ -170,12 +170,15 @@ function wcp_theme_enqueue_ai_widget() {
         return;
     }
 
+    // Version for cache busting - update with each change
+    $widget_version = '1.2.0';
+
     // Enqueue widget CSS
     wp_enqueue_style(
         'wcp-ai-widget',
         get_template_directory_uri() . '/assets/css/ai-widget.css',
         array(),
-        '1.0.0'
+        $widget_version
     );
 
     // Enqueue widget JavaScript
@@ -183,7 +186,7 @@ function wcp_theme_enqueue_ai_widget() {
         'wcp-ai-widget',
         get_template_directory_uri() . '/assets/js/ai-widget.js',
         array('jquery'),
-        '1.0.0',
+        $widget_version,
         true
     );
 }
@@ -213,3 +216,179 @@ function wcp_theme_body_classes($classes) {
     return $classes;
 }
 add_filter('body_class', 'wcp_theme_body_classes');
+
+// Get Headings directly under a Page
+function wcp_theme_get_page_headings($page_id) {
+    return get_posts(array(
+        'post_type' => 'wcp_heading',
+        'posts_per_page' => -1,
+        'orderby' => 'menu_order title',
+        'order' => 'ASC',
+        'meta_query' => array(
+            array('key' => '_wcp_parent_type', 'value' => 'page'),
+            array('key' => '_wcp_parent_id', 'value' => $page_id),
+        ),
+    ));
+}
+
+// Get context term for a Heading
+function wcp_theme_get_heading_context_term($heading_id) {
+    $terms = get_terms(array(
+        'taxonomy' => 'wcp_context',
+        'hide_empty' => false,
+        'meta_query' => array(
+            array('key' => 'wcp_ref_type', 'value' => 'wcp_heading'),
+            array('key' => 'wcp_ref_id', 'value' => $heading_id),
+        ),
+    ));
+    return !empty($terms) ? $terms[0] : null;
+}
+
+// Get items for a specific Heading
+function wcp_theme_get_heading_items($heading_id) {
+    $heading_term = wcp_theme_get_heading_context_term($heading_id);
+    if (!$heading_term) return array();
+
+    return get_posts(array(
+        'post_type' => 'post',
+        'posts_per_page' => -1,
+        'tax_query' => array(
+            array(
+                'taxonomy' => 'wcp_context',
+                'field' => 'term_id',
+                'terms' => $heading_term->term_id,
+            ),
+        ),
+        'orderby' => 'date',
+        'order' => 'DESC',
+    ));
+}
+
+// Get items for Page ONLY (exclude descendant Heading items)
+function wcp_theme_get_page_only_items($page_id) {
+    $page_term = wcp_theme_get_page_context_term($page_id);
+    if (!$page_term) return array();
+
+    // Get all Heading terms under this page
+    $headings = wcp_theme_get_page_headings($page_id);
+    $heading_term_ids = array();
+    foreach ($headings as $heading) {
+        $term = wcp_theme_get_heading_context_term($heading->ID);
+        if ($term) $heading_term_ids[] = $term->term_id;
+    }
+
+    $tax_query = array(
+        'relation' => 'AND',
+        array(
+            'taxonomy' => 'wcp_context',
+            'field' => 'term_id',
+            'terms' => $page_term->term_id,
+        ),
+    );
+
+    // Exclude items in Heading contexts
+    if (!empty($heading_term_ids)) {
+        $tax_query[] = array(
+            'taxonomy' => 'wcp_context',
+            'field' => 'term_id',
+            'terms' => $heading_term_ids,
+            'operator' => 'NOT IN',
+        );
+    }
+
+    return get_posts(array(
+        'post_type' => 'post',
+        'posts_per_page' => -1,
+        'tax_query' => $tax_query,
+        'orderby' => 'date',
+        'order' => 'DESC',
+    ));
+}
+
+// Get breadcrumb trail for a Page
+function wcp_theme_get_page_breadcrumbs($page_id) {
+    $breadcrumbs = array();
+    $current_page = get_post($page_id);
+
+    if (!$current_page) {
+        return $breadcrumbs;
+    }
+
+    // Build breadcrumb trail by walking up parent chain
+    $trail = array();
+    $current = $current_page;
+
+    while ($current) {
+        $trail[] = array(
+            'id' => $current->ID,
+            'title' => $current->post_title,
+            'url' => get_permalink($current->ID),
+        );
+
+        if ($current->post_parent) {
+            $current = get_post($current->post_parent);
+        } else {
+            $current = null;
+        }
+    }
+
+    // Reverse to get root-to-current order
+    return array_reverse($trail);
+}
+
+// Get breadcrumb trail for a Heading
+function wcp_theme_get_heading_breadcrumbs($heading_id) {
+    $breadcrumbs = array();
+    $heading = get_post($heading_id);
+
+    if (!$heading || $heading->post_type !== 'wcp_heading') {
+        return $breadcrumbs;
+    }
+
+    // Get parent type and ID
+    $parent_type = get_post_meta($heading_id, '_wcp_parent_type', true);
+    $parent_id = get_post_meta($heading_id, '_wcp_parent_id', true);
+
+    // Build parent breadcrumbs first
+    if ($parent_type === 'page' && $parent_id) {
+        $breadcrumbs = wcp_theme_get_page_breadcrumbs($parent_id);
+    } elseif ($parent_type === 'wcp_heading' && $parent_id) {
+        $breadcrumbs = wcp_theme_get_heading_breadcrumbs($parent_id);
+    }
+
+    // Add current heading
+    $breadcrumbs[] = array(
+        'id' => $heading->ID,
+        'title' => $heading->post_title,
+        'url' => null, // Headings don't have permalinks
+        'type' => 'heading',
+    );
+
+    return $breadcrumbs;
+}
+
+// Get breadcrumb trail for an Item Post from its context terms
+function wcp_theme_get_item_breadcrumbs($post_id) {
+    $context_terms = wp_get_post_terms($post_id, 'wcp_context');
+
+    if (empty($context_terms) || is_wp_error($context_terms)) {
+        return array();
+    }
+
+    // Use the first context term
+    $term = $context_terms[0];
+
+    // Get cached path from term meta
+    $cached_path = get_term_meta($term->term_id, 'wcp_cached_path', true);
+    $ref_type = get_term_meta($term->term_id, 'wcp_ref_type', true);
+    $ref_id = get_term_meta($term->term_id, 'wcp_ref_id', true);
+
+    // Build breadcrumbs from the referenced post (page or heading)
+    if ($ref_type === 'page' && $ref_id) {
+        return wcp_theme_get_page_breadcrumbs($ref_id);
+    } elseif ($ref_type === 'wcp_heading' && $ref_id) {
+        return wcp_theme_get_heading_breadcrumbs($ref_id);
+    }
+
+    return array();
+}

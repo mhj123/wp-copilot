@@ -1,6 +1,7 @@
 <?php
 /**
  * Template for displaying Pages with ItemPosts
+ * Simplified clean layout
  */
 
 get_header();
@@ -13,59 +14,149 @@ get_header();
         the_post();
     ?>
 
-    <article id="post-<?php the_ID(); ?>" <?php post_class('wcp-page-article'); ?>>
+    <!-- Page Header: Breadcrumb + Title (outside of any container box) -->
+    <header class="wcp-page-header-clean">
+        <?php
+        // Display breadcrumbs (only if page has parents)
+        $breadcrumbs = wcp_theme_get_page_breadcrumbs(get_the_ID());
+        if (count($breadcrumbs) > 1) {
+            include(locate_template('template-parts/breadcrumbs.php'));
+        }
+        ?>
 
-        <header class="wcp-page-header">
-            <h1 class="wcp-page-title"><?php the_title(); ?></h1>
-        </header>
+        <h1 class="wcp-page-title-clean"><?php the_title(); ?></h1>
+    </header>
 
-        <div class="wcp-page-body">
-            <?php the_content(); ?>
-        </div>
-
-    </article>
+    <!-- Page Content (only show if there is content) -->
+    <?php if (get_the_content()) : ?>
+    <div class="wcp-page-content-box">
+        <?php the_content(); ?>
+    </div>
+    <?php endif; ?>
 
     <?php
     endwhile;
 
-    // Get items for this page
+    // Get items and headings for this page
     $page_id = get_the_ID();
-    $items = wcp_theme_get_page_items($page_id);
+    $headings = wcp_theme_get_page_headings($page_id);
     ?>
 
-    <!-- Semantic Search Widget -->
-    <?php if (get_option('wcp_embeddings_enabled', false)) : ?>
-    <section class="wcp-semantic-search-section">
-        <div class="wcp-search-toggle">
-            <button type="button" id="wcp-toggle-search" class="wcp-btn wcp-btn-secondary">
-                <span class="wcp-search-icon">🔍</span>
-                <?php _e('Search My Notes', 'work-copilot-theme'); ?>
+    <!-- Items Section: Unified view of all headings and items -->
+    <section class="wcp-items-section">
+        <h2><?php _e('Items', 'work-copilot-theme'); ?></h2>
+
+        <?php if (!empty($headings)) : ?>
+            <!-- Display each heading with its items -->
+            <?php foreach ($headings as $heading) :
+                $heading_id = $heading->ID;
+                $items = wcp_theme_get_heading_items($heading_id);
+                $heading_term = wcp_theme_get_heading_context_term($heading_id);
+            ?>
+                <div class="wcp-heading-group">
+                    <h3 class="wcp-heading-title-simple">
+                        <?php echo esc_html($heading->post_title); ?>
+                        <a href="<?php echo get_edit_post_link($heading_id); ?>" class="wcp-edit-link">[edit heading]</a>
+                    </h3>
+
+                    <?php if (!empty($items)) : ?>
+                        <div class="wcp-items-list">
+                            <?php foreach ($items as $item) :
+                                $item_types = wp_get_post_terms($item->ID, 'item_type', array('fields' => 'names'));
+                                $priorities = wp_get_post_terms($item->ID, 'priority', array('fields' => 'names'));
+                            ?>
+                                <div class="wcp-item-row">
+                                    <span class="wcp-item-text">
+                                        <?php echo esc_html($item->post_title); ?>
+                                    </span>
+                                    <a href="<?php echo get_edit_post_link($item->ID); ?>" class="wcp-edit-link">[edit text]</a>
+
+                                    <select class="wcp-inline-select" disabled>
+                                        <option><?php echo !empty($item_types) ? esc_html($item_types[0]) : 'task/info/learning'; ?></option>
+                                    </select>
+
+                                    <select class="wcp-inline-select" disabled>
+                                        <option><?php echo !empty($priorities) ? esc_html($priorities[0]) : 'prio'; ?></option>
+                                    </select>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php else : ?>
+                        <p class="wcp-no-items-in-heading"><?php _e('No items under this heading yet.', 'work-copilot-theme'); ?></p>
+                    <?php endif; ?>
+
+                    <button type="button" class="wcp-btn-add-item-inline wcp-btn-add-item wcp-btn wcp-btn-secondary" data-heading-id="<?php echo esc_attr($heading_id); ?>" data-context-id="<?php echo esc_attr($heading_term ? $heading_term->term_id : ''); ?>">
+                        + Add item under <?php echo esc_html($heading->post_title); ?>
+                    </button>
+
+                    <!-- Hidden inline form for adding items (will be shown on click) -->
+                    <form class="wcp-heading-item-form wcp-item-form" style="display: none;" data-heading-id="<?php echo esc_attr($heading_id); ?>" data-context-id="<?php echo esc_attr($heading_term ? $heading_term->term_id : ''); ?>">
+                        <input type="hidden" name="page_id" value="<?php echo esc_attr($page_id); ?>">
+                        <input type="hidden" name="heading_id" value="<?php echo esc_attr($heading_id); ?>">
+
+                        <div class="wcp-form-group">
+                            <label><?php _e('Title', 'work-copilot-theme'); ?> *</label>
+                            <input type="text" name="title" required class="wcp-form-control wcp-heading-item-title">
+                        </div>
+
+                        <div class="wcp-form-group">
+                            <label><?php _e('Content', 'work-copilot-theme'); ?></label>
+                            <textarea name="content" rows="4" class="wcp-form-control wcp-heading-item-content"></textarea>
+                        </div>
+
+                        <div class="wcp-form-group">
+                            <label><?php _e('Contexts', 'work-copilot-theme'); ?></label>
+                            <div class="wcp-context-selector-wrapper wcp-heading-contexts">
+                                <p class="wcp-loading"><?php _e('Loading contexts...', 'work-copilot-theme'); ?></p>
+                            </div>
+                            <p class="description"><?php _e('Current heading is pre-selected.', 'work-copilot-theme'); ?></p>
+                        </div>
+
+                        <div class="wcp-form-row">
+                            <div class="wcp-form-group">
+                                <label><?php _e('Item Type', 'work-copilot-theme'); ?></label>
+                                <select name="item_type" class="wcp-form-control">
+                                    <option value=""><?php _e('-- Select --', 'work-copilot-theme'); ?></option>
+                                    <option value="task"><?php _e('Task', 'work-copilot-theme'); ?></option>
+                                    <option value="info"><?php _e('Info', 'work-copilot-theme'); ?></option>
+                                    <option value="learning"><?php _e('Learning', 'work-copilot-theme'); ?></option>
+                                </select>
+                            </div>
+
+                            <div class="wcp-form-group">
+                                <label><?php _e('Priority', 'work-copilot-theme'); ?></label>
+                                <select name="priority" class="wcp-form-control">
+                                    <option value=""><?php _e('-- Select --', 'work-copilot-theme'); ?></option>
+                                    <option value="high"><?php _e('High', 'work-copilot-theme'); ?></option>
+                                    <option value="medium"><?php _e('Medium', 'work-copilot-theme'); ?></option>
+                                    <option value="low"><?php _e('Low', 'work-copilot-theme'); ?></option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="wcp-form-group">
+                            <label><?php _e('Tags', 'work-copilot-theme'); ?></label>
+                            <input type="text" name="tags" class="wcp-form-control" placeholder="<?php esc_attr_e('Comma-separated', 'work-copilot-theme'); ?>">
+                        </div>
+
+                        <button type="submit" class="wcp-btn wcp-btn-primary"><?php _e('Create Item', 'work-copilot-theme'); ?></button>
+                        <button type="button" class="wcp-btn-cancel-item wcp-btn wcp-btn-secondary"><?php _e('Cancel', 'work-copilot-theme'); ?></button>
+                    </form>
+                </div>
+            <?php endforeach; ?>
+        <?php else : ?>
+            <p class="wcp-no-headings-message"><?php _e('No headings yet. Create a heading first to organize your items.', 'work-copilot-theme'); ?></p>
+        <?php endif; ?>
+
+        <!-- General Add Item button -->
+        <div class="wcp-add-item-general">
+            <button type="button" id="wcp-btn-add-item-general" class="wcp-btn wcp-btn-primary">
+                + Add item
             </button>
         </div>
 
-        <div id="wcp-search-panel" class="wcp-search-panel" style="display: none;">
-            <div class="wcp-search-input-wrapper">
-                <input
-                    type="text"
-                    id="wcp-semantic-search-input"
-                    class="wcp-form-control wcp-search-input"
-                    placeholder="<?php esc_attr_e('Search by meaning... e.g., "customer feedback"', 'work-copilot-theme'); ?>"
-                >
-                <button type="button" id="wcp-semantic-search-btn" class="wcp-btn wcp-btn-primary wcp-search-btn">
-                    <?php _e('Search', 'work-copilot-theme'); ?>
-                </button>
-            </div>
-
-            <div id="wcp-search-results" class="wcp-search-results"></div>
-        </div>
-    </section>
-    <?php endif; ?>
-
-    <!-- Create ItemPost Form -->
-    <section class="wcp-create-item-section">
-        <h2><?php _e('Create New Item', 'work-copilot-theme'); ?></h2>
-
-        <form id="wcp-create-item-form" class="wcp-item-form">
+        <!-- General item creation form (initially hidden) -->
+        <form id="wcp-create-item-form" class="wcp-item-form" style="display: none;">
             <input type="hidden" name="page_id" value="<?php echo esc_attr($page_id); ?>">
 
             <div class="wcp-form-group">
@@ -79,11 +170,10 @@ get_header();
             </div>
 
             <div class="wcp-form-group">
-                <label for="wcp-item-contexts"><?php _e('Contexts (Pages and Headings)', 'work-copilot-theme'); ?></label>
+                <label for="wcp-item-contexts"><?php _e('Select Heading / Context', 'work-copilot-theme'); ?></label>
                 <div id="wcp-item-contexts" class="wcp-context-selector-wrapper">
                     <p class="wcp-loading"><?php _e('Loading contexts...', 'work-copilot-theme'); ?></p>
                 </div>
-                <p class="description"><?php _e('Select which pages or headings this item belongs to. Current page is pre-selected.', 'work-copilot-theme'); ?></p>
             </div>
 
             <div class="wcp-form-row">
@@ -117,92 +207,12 @@ get_header();
                 <button type="submit" class="wcp-btn wcp-btn-primary">
                     <?php _e('Create Item', 'work-copilot-theme'); ?>
                 </button>
+                <button type="button" id="wcp-btn-cancel-general-item" class="wcp-btn wcp-btn-secondary">
+                    <?php _e('Cancel', 'work-copilot-theme'); ?>
+                </button>
                 <span class="wcp-form-status"></span>
             </div>
         </form>
-    </section>
-
-    <!-- Child Pages -->
-    <?php
-    $child_pages = wcp_theme_get_page_tree($page_id);
-    if (!empty($child_pages)) :
-    ?>
-    <section class="wcp-child-pages-section">
-        <h2><?php _e('Sub-Pages', 'work-copilot-theme'); ?> (<?php echo count($child_pages); ?>)</h2>
-        <div class="wcp-child-pages-list">
-            <?php foreach ($child_pages as $child_page) : ?>
-                <a href="<?php echo get_permalink($child_page->ID); ?>" class="wcp-child-page-link">
-                    <span class="wcp-child-page-icon">📄</span>
-                    <?php echo esc_html($child_page->post_title); ?>
-                </a>
-            <?php endforeach; ?>
-        </div>
-    </section>
-    <?php endif; ?>
-
-    <!-- ItemPosts List -->
-    <section class="wcp-items-section">
-        <h2><?php _e('Items', 'work-copilot-theme'); ?> (<?php echo count($items); ?>)</h2>
-
-        <!-- Filters -->
-        <div class="wcp-items-filters">
-            <select id="wcp-filter-type" class="wcp-filter-control">
-                <option value=""><?php _e('All Types', 'work-copilot-theme'); ?></option>
-                <option value="task"><?php _e('Tasks', 'work-copilot-theme'); ?></option>
-                <option value="info"><?php _e('Info', 'work-copilot-theme'); ?></option>
-                <option value="learning"><?php _e('Learnings', 'work-copilot-theme'); ?></option>
-            </select>
-
-            <select id="wcp-filter-priority" class="wcp-filter-control">
-                <option value=""><?php _e('All Priorities', 'work-copilot-theme'); ?></option>
-                <option value="high"><?php _e('High', 'work-copilot-theme'); ?></option>
-                <option value="medium"><?php _e('Medium', 'work-copilot-theme'); ?></option>
-                <option value="low"><?php _e('Low', 'work-copilot-theme'); ?></option>
-            </select>
-        </div>
-
-        <div id="wcp-items-list" class="wcp-items-list">
-            <?php if (empty($items)) : ?>
-                <p class="wcp-no-items"><?php _e('No items yet. Create your first item above!', 'work-copilot-theme'); ?></p>
-            <?php else : ?>
-                <?php foreach ($items as $item) :
-                    $item_types = wp_get_post_terms($item->ID, 'item_type', array('fields' => 'names'));
-                    $priorities = wp_get_post_terms($item->ID, 'priority', array('fields' => 'names'));
-                    $pinned = wp_get_post_terms($item->ID, 'pinned', array('fields' => 'names'));
-                    $is_pinned = in_array('yes', $pinned);
-                ?>
-                <article class="wcp-item <?php echo $is_pinned ? 'wcp-item-pinned' : ''; ?>">
-                    <div class="wcp-item-meta">
-                        <?php if (!empty($item_types)) : ?>
-                            <span class="wcp-badge wcp-type-<?php echo esc_attr($item_types[0]); ?>">
-                                <?php echo esc_html($item_types[0]); ?>
-                            </span>
-                        <?php endif; ?>
-
-                        <?php if (!empty($priorities)) : ?>
-                            <span class="wcp-badge wcp-priority-<?php echo esc_attr($priorities[0]); ?>">
-                                <?php echo esc_html($priorities[0]); ?>
-                            </span>
-                        <?php endif; ?>
-
-                        <?php if ($is_pinned) : ?>
-                            <span class="wcp-badge wcp-pinned-badge">📌</span>
-                        <?php endif; ?>
-                    </div>
-
-                    <h3 class="wcp-item-title">
-                        <a href="<?php echo get_permalink($item->ID); ?>"><?php echo esc_html($item->post_title); ?></a>
-                    </h3>
-
-                    <div class="wcp-item-excerpt">
-                        <?php echo wp_trim_words($item->post_content, 30); ?>
-                    </div>
-
-                    <span class="wcp-item-date"><?php echo get_the_date('M j', $item->ID); ?></span>
-                </article>
-                <?php endforeach; ?>
-            <?php endif; ?>
-        </div>
     </section>
 
 </div><!-- .wcp-page-content -->

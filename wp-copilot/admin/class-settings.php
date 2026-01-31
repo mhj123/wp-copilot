@@ -60,6 +60,12 @@ class WCP_Settings {
             'default' => '',
         ));
 
+        register_setting('wcp_settings', 'wcp_ai_global_mission', array(
+            'type' => 'string',
+            'sanitize_callback' => 'wp_kses_post',
+            'default' => '',
+        ));
+
         // Embeddings/RAG Settings
         register_setting('wcp_settings', 'wcp_openai_api_key', array(
             'type' => 'string',
@@ -108,6 +114,14 @@ class WCP_Settings {
             'wcp_ai_global_instructions',
             __('Global AI Instructions', 'work-copilot'),
             array($this, 'render_global_instructions_field'),
+            'work-copilot-settings',
+            'wcp_ai_section'
+        );
+
+        add_settings_field(
+            'wcp_ai_global_mission',
+            __('Global Agent Mission', 'work-copilot'),
+            array($this, 'render_global_mission_field'),
             'work-copilot-settings',
             'wcp_ai_section'
         );
@@ -297,12 +311,13 @@ class WCP_Settings {
     }
 
     public function render_model_field() {
-        $model = get_option('wcp_ai_model', 'claude-3-5-sonnet-20241022');
+        $model = get_option('wcp_ai_model', 'claude-sonnet-4-20250514');
         $models = array(
-            'claude-3-5-sonnet-20241022' => 'Claude 3.5 Sonnet (Recommended)',
-            'claude-3-opus-20240229' => 'Claude 3 Opus (Most Capable)',
-            'claude-3-sonnet-20240229' => 'Claude 3 Sonnet',
-            'claude-3-haiku-20240307' => 'Claude 3 Haiku (Fastest)',
+            'claude-sonnet-4-20250514' => 'Claude Sonnet 4 (Recommended)',
+            'claude-opus-4-20250514' => 'Claude Opus 4 (Most Capable)',
+            'claude-3-5-sonnet-20241022' => 'Claude 3.5 Sonnet',
+            'claude-3-5-haiku-20241022' => 'Claude 3.5 Haiku (Fast)',
+            'claude-3-haiku-20240307' => 'Claude 3 Haiku (Cheapest)',
         );
         ?>
         <select name="wcp_ai_model" class="regular-text">
@@ -351,6 +366,43 @@ class WCP_Settings {
         ?>
         <p class="description" style="margin-top: 10px;">
             <?php _e('These instructions set the overall tone and behavior for all AI interactions in Work Copilot.', 'work-copilot'); ?>
+        </p>
+        <?php
+    }
+
+    public function render_global_mission_field() {
+        $default_mission = "You are a helpful work copilot assisting {user} with {role}. ";
+        $default_mission .= "Your mission is to help them achieve their goals by providing thoughtful advice, ";
+        $default_mission .= "organizing knowledge, and identifying next steps.";
+
+        $mission = get_option('wcp_ai_global_mission', $default_mission);
+        $current_user = wp_get_current_user();
+        $user_name = $current_user->display_name;
+
+        ?>
+        <p class="description" style="margin-bottom: 10px;">
+            <?php _e('Define the personality and mission of your AI agent. This sets the agent\'s character and goals across all interactions.', 'work-copilot'); ?>
+        </p>
+
+        <textarea name="wcp_ai_global_mission" rows="6" class="large-text code"><?php echo esc_textarea($mission); ?></textarea>
+
+        <p class="description" style="margin-top: 10px;">
+            <strong><?php _e('Available variables:', 'work-copilot'); ?></strong><br>
+            <code>{user}</code> - <?php printf(__('Current user name (e.g., %s)', 'work-copilot'), esc_html($user_name)); ?><br>
+            <code>{role}</code> - <?php _e('User role from "Role" page if it exists', 'work-copilot'); ?>
+        </p>
+
+        <p class="description">
+            <strong><?php _e('Advanced:', 'work-copilot'); ?></strong>
+            <?php _e('You can also create a', 'work-copilot'); ?> <code>/wp-copilot/soul.md</code> <?php _e('file to override this setting. Useful for version control.', 'work-copilot'); ?>
+            <?php
+            $soul_file = WP_PLUGIN_DIR . '/wp-copilot/soul.md';
+            if (file_exists($soul_file)) {
+                echo '<br><span style="color: #46b450;">✓ ' . __('soul.md file detected - currently in use', 'work-copilot') . '</span>';
+            } else {
+                echo '<br><span style="color: #999;">○ ' . __('soul.md file not found', 'work-copilot') . '</span>';
+            }
+            ?>
         </p>
         <?php
     }

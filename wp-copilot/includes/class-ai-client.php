@@ -26,7 +26,7 @@ class WCP_AI_Client {
 
     private function __construct() {
         $this->api_key = get_option('wcp_anthropic_api_key', '');
-        $this->model = get_option('wcp_ai_model', 'claude-3-5-sonnet-20241022');
+        $this->model = get_option('wcp_ai_model', 'claude-sonnet-4-20250514');
     }
 
     /**
@@ -278,14 +278,18 @@ class WCP_AI_Client {
         $messages = array();
 
         // Include conversation history (limit to last 10 turns to avoid token limits)
+        // Filter to only include 'user' and 'assistant' roles (Claude API doesn't accept 'system' in messages)
         $history_limit = 10;
         $recent_history = array_slice($conversation_history, -$history_limit);
 
         foreach ($recent_history as $msg) {
-            $messages[] = array(
-                'role' => $msg['role'],
-                'content' => $msg['content']
-            );
+            // Only include user and assistant messages - Claude API doesn't accept 'system' as a message role
+            if (in_array($msg['role'], array('user', 'assistant'))) {
+                $messages[] = array(
+                    'role' => $msg['role'],
+                    'content' => $msg['content']
+                );
+            }
         }
 
         // Add current user message

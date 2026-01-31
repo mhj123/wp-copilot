@@ -1,8 +1,8 @@
 jQuery(document).ready(function($) {
 
     // Load context tree for the form
-    function loadContextTree() {
-        var $container = $('#wcp-item-contexts');
+    function loadContextTree($container, preselectedContextId) {
+        $container = $container || $('#wcp-item-contexts');
         var currentPageId = $('input[name="page_id"]').val();
 
         $.ajax({
@@ -13,7 +13,7 @@ jQuery(document).ready(function($) {
             },
             success: function(response) {
                 if (response.success && response.tree) {
-                    renderContextTree(response.tree, $container, currentPageId);
+                    renderContextTree(response.tree, $container, currentPageId, preselectedContextId);
                 } else {
                     $container.html('<p class="wcp-error">Failed to load contexts.</p>');
                 }
@@ -24,7 +24,7 @@ jQuery(document).ready(function($) {
         });
     }
 
-    function renderContextTree(tree, $container, currentPageId, level) {
+    function renderContextTree(tree, $container, currentPageId, preselectedContextId, level) {
         level = level || 0;
 
         if (level === 0) {
@@ -35,13 +35,14 @@ jQuery(document).ready(function($) {
         tree.forEach(function(node) {
             var $li = $('<li>');
 
-            // Check if this node corresponds to the current page
+            // Check if this node corresponds to the current page or preselected context
             var isCurrentPage = (node.ref_type === 'page' && node.ref_id == currentPageId);
+            var isPreselected = preselectedContextId && (node.term_id == preselectedContextId);
 
             var $label = $('<label>');
             var $checkbox = $('<input type="checkbox" name="contexts[]">')
                 .val(node.term_id)
-                .prop('checked', isCurrentPage); // Pre-select current page
+                .prop('checked', isCurrentPage || isPreselected); // Pre-select current page or heading
 
             var $name = $('<span class="context-name">').text(node.name);
             var $count = $('<span class="context-count">').text('(' + node.count + ')');
@@ -52,17 +53,30 @@ jQuery(document).ready(function($) {
             if (node.children && node.children.length > 0) {
                 var $ul = $('<ul>');
                 $li.append($ul);
-                renderContextTree(node.children, $ul, currentPageId, level + 1);
+                renderContextTree(node.children, $ul, currentPageId, preselectedContextId, level + 1);
             }
 
             $container.append($li);
         });
     }
 
-    // Load context tree on page load
-    if ($('#wcp-create-item-form').length) {
-        loadContextTree();
-    }
+    // Show/hide general item form
+    $(document).on('click', '#wcp-btn-add-item-general', function() {
+        var $form = $('#wcp-create-item-form');
+        var $container = $('#wcp-item-contexts');
+
+        $form.slideToggle();
+
+        // Load context tree if not already loaded and form is now visible
+        if ($form.is(':visible') && $container.find('ul').length === 0) {
+            loadContextTree($container);
+        }
+    });
+
+    $(document).on('click', '#wcp-btn-cancel-general-item', function() {
+        $('#wcp-create-item-form').slideUp();
+        $('#wcp-create-item-form')[0].reset();
+    });
 
     // Create ItemPost form submission
     $('#wcp-create-item-form').on('submit', function(e) {
@@ -292,6 +306,137 @@ jQuery(document).ready(function($) {
             e.preventDefault();
             performSemanticSearch();
         }
+    });
+
+    // ==========================================================================
+    // Heading Management
+    // ==========================================================================
+
+    // Create Heading
+    function createHeading(pageId, title, content) {
+        $.ajax({
+            url: wcpThemeData.restUrl + '/headings/create',
+            method: 'POST',
+            data: {
+                parent_id: pageId,
+                parent_type: 'page',
+                title: title,
+                content: content
+            },
+            beforeSend: function(xhr) {
+                xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce);
+            },
+            success: function(response) {
+                if (response.success) {
+                    location.reload(); // Reload to show new heading
+                }
+            },
+            error: function(xhr) {
+                alert('Error creating heading: ' + (xhr.responseJSON?.message || 'Unknown error'));
+            }
+        });
+    }
+
+    // Toggle Heading creation form
+    $(document).on('click', '#wcp-btn-new-heading', function() {
+        $('#wcp-create-heading-form').slideToggle();
+    });
+
+    $(document).on('click', '#wcp-btn-cancel-heading', function() {
+        $('#wcp-create-heading-form').slideUp();
+        $('#wcp-create-heading-form')[0].reset();
+    });
+
+    // Submit Heading creation form
+    $(document).on('submit', '#wcp-create-heading-form', function(e) {
+        e.preventDefault();
+
+        var pageId = $(this).find('input[name="page_id"]').val();
+        var title = $(this).find('input[name="title"]').val();
+        var content = $(this).find('textarea[name="content"]').val();
+
+        createHeading(pageId, title, content);
+    });
+
+    // Toggle Heading section (expand/collapse)
+    $(document).on('click', '.wcp-heading-title', function() {
+        var $section = $(this).closest('.wcp-heading-section');
+        var $body = $section.find('.wcp-heading-body');
+        var $icon = $section.find('.wcp-toggle-icon');
+
+        $body.slideToggle();
+        $icon.text($icon.text() === '▶' ? '▼' : '▶');
+    });
+
+    // Show/hide Heading item form
+    $(document).on('click', '.wcp-btn-add-item', function() {
+        var headingId = $(this).data('heading-id');
+        var $form = $('.wcp-heading-item-form[data-heading-id="' + headingId + '"]');
+        var $container = $form.find('.wcp-heading-contexts');
+        var contextId = $form.data('context-id');
+
+        // Toggle form
+        $form.slideToggle();
+
+        // Load context tree if not already loaded
+        if ($form.is(':visible') && $container.find('ul').length === 0) {
+            loadContextTree($container, contextId);
+        }
+    });
+
+    $(document).on('click', '.wcp-btn-cancel-item', function() {
+        var $form = $(this).closest('.wcp-heading-item-form');
+        $form.slideUp();
+        $form[0].reset();
+    });
+
+    // Submit Heading item form
+    $(document).on('submit', '.wcp-heading-item-form', function(e) {
+        e.preventDefault();
+
+        var $form = $(this);
+        var $submitBtn = $form.find('button[type="submit"]');
+
+        // Collect form data
+        var data = {
+            title: $form.find('input[name="title"]').val(),
+            content: $form.find('textarea[name="content"]').val(),
+            contexts: [],
+            item_type: $form.find('select[name="item_type"]').val(),
+            priority: $form.find('select[name="priority"]').val(),
+            tags: $form.find('input[name="tags"]').val().split(',').map(function(t) { return t.trim(); }).filter(Boolean)
+        };
+
+        // Collect checked context checkboxes
+        $form.find('.wcp-heading-contexts input[type="checkbox"]:checked').each(function() {
+            data.contexts.push($(this).val());
+        });
+
+        if (data.contexts.length === 0) {
+            alert('Please select at least one context.');
+            return;
+        }
+
+        $submitBtn.prop('disabled', true).text('Creating...');
+
+        // Submit via existing /items/create endpoint
+        $.ajax({
+            url: wcpThemeData.restUrl + '/items/create',
+            method: 'POST',
+            data: data,
+            beforeSend: function(xhr) {
+                xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce);
+            },
+            success: function(response) {
+                if (response.success) {
+                    location.reload(); // Reload to show new item
+                }
+            },
+            error: function(xhr) {
+                alert('Error creating item: ' + (xhr.responseJSON?.message || 'Unknown error'));
+                $submitBtn.prop('disabled', false).text('Create Item');
+            }
+        });
     });
 
 });

@@ -63,6 +63,13 @@ if (empty($saved_prompts)) {
             </button>
         </div>
 
+        <!-- Item count selector (shown only for generate action) -->
+        <div class="wcp-ai-item-count-wrapper" style="display: none;">
+            <label><?php _e('Items:', 'work-copilot'); ?></label>
+            <input type="number" id="wcp-ai-item-count" min="1" max="10" placeholder="3-5" class="wcp-ai-item-count">
+            <span class="wcp-ai-item-count-hint"><?php _e('Leave blank for AI to decide', 'work-copilot'); ?></span>
+        </div>
+
         <!-- Context selector -->
         <div class="wcp-ai-context-selector">
             <label><?php _e('Context:', 'work-copilot'); ?></label>
@@ -84,6 +91,18 @@ if (empty($saved_prompts)) {
             <div class="wcp-ai-selected-pages">
                 <span class="wcp-ai-selected-label"><?php _e('Selected:', 'work-copilot'); ?></span>
                 <span class="wcp-ai-selected-count">0</span>
+            </div>
+        </div>
+
+        <!-- Mission indicator -->
+        <div class="wcp-ai-mission-indicator">
+            <button type="button" class="wcp-mission-toggle">
+                <span class="wcp-mission-label"><?php _e('Mission:', 'work-copilot'); ?></span>
+                <span class="wcp-mission-source"><?php _e('Loading...', 'work-copilot'); ?></span>
+                <span class="dashicons dashicons-arrow-down"></span>
+            </button>
+            <div class="wcp-mission-content" style="display: none;">
+                <div class="wcp-mission-text"></div>
             </div>
         </div>
 
@@ -132,18 +151,28 @@ if (empty($saved_prompts)) {
         <!-- Approval panel (shown when proposals need approval) -->
         <div class="wcp-ai-approval-panel" style="display: none;">
             <div class="wcp-ai-approval-header">
-                <h4><?php _e('Review AI Suggestion', 'work-copilot'); ?></h4>
-                <p class="description"><?php _e('Review the AI-generated item below and decide whether to accept or dismiss it.', 'work-copilot'); ?></p>
+                <h4><?php _e('Review AI Suggestions', 'work-copilot'); ?></h4>
+                <p class="description"><?php _e('Select the items you want to create, then click Create Selected.', 'work-copilot'); ?></p>
             </div>
             <div class="wcp-ai-proposals">
                 <!-- Proposals will be inserted here by JavaScript -->
+                <!-- Each proposal card will have this structure:
+                <div class="wcp-ai-proposal-card selected" data-proposal-id="...">
+                    <label class="wcp-proposal-checkbox">
+                        <input type="checkbox" checked>
+                    </label>
+                    <h5>Item Title</h5>
+                    <div class="wcp-ai-proposal-content">Content...</div>
+                    <div class="wcp-ai-proposal-meta">Type: task</div>
+                </div>
+                -->
             </div>
             <div class="wcp-ai-approval-actions">
                 <button type="button" class="wcp-ai-accept-btn button button-primary">
-                    <?php _e('Accept & Create Item', 'work-copilot'); ?>
+                    <?php _e('Create Selected', 'work-copilot'); ?> (<span class="wcp-ai-selected-count">0</span>)
                 </button>
                 <button type="button" class="wcp-ai-dismiss-btn button">
-                    <?php _e('Dismiss', 'work-copilot'); ?>
+                    <?php _e('Dismiss All', 'work-copilot'); ?>
                 </button>
             </div>
         </div>

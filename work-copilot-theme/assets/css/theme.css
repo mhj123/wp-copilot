@@ -166,9 +166,33 @@
 }
 
 /* ==========================================================================
-   Page Template
+   Page Template - Simplified Layout
    ========================================================================== */
 
+/* Clean page header (outside boxes) */
+.wcp-page-header-clean {
+    margin-bottom: 30px;
+}
+
+.wcp-page-title-clean {
+    margin: 15px 0 0;
+    font-size: 36px;
+    font-weight: 700;
+    color: #1e1e1e;
+    line-height: 1.2;
+}
+
+/* Page content box (only when there's content) */
+.wcp-page-content-box {
+    background: #fff;
+    padding: 30px;
+    border-radius: 6px;
+    margin-bottom: 30px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    line-height: 1.8;
+}
+
+/* Legacy page template styles (kept for backward compatibility) */
 .wcp-page-article {
     background: #fff;
     padding: 30px;
@@ -296,7 +320,7 @@ textarea.wcp-form-control {
 }
 
 /* ==========================================================================
-   Items List
+   Items List (Simplified Layout)
    ========================================================================== */
 
 .wcp-items-section {
@@ -304,13 +328,110 @@ textarea.wcp-form-control {
     padding: 30px;
     border-radius: 6px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-top: 30px;
 }
 
 .wcp-items-section h2 {
     margin-top: 0;
-    margin-bottom: 20px;
+    margin-bottom: 30px;
     font-size: 24px;
     color: #1e1e1e;
+}
+
+/* Heading Group - each heading with its items */
+.wcp-heading-group {
+    margin-bottom: 40px;
+    padding-bottom: 30px;
+    border-bottom: 1px solid #eee;
+}
+
+.wcp-heading-group:last-of-type {
+    border-bottom: none;
+}
+
+.wcp-heading-title-simple {
+    font-size: 20px;
+    font-weight: 600;
+    color: #1e1e1e;
+    margin: 0 0 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.wcp-edit-link {
+    font-size: 13px;
+    font-weight: normal;
+    color: #2271b1;
+    text-decoration: none;
+}
+
+.wcp-edit-link:hover {
+    text-decoration: underline;
+}
+
+/* Item Row - inline display of item with controls */
+.wcp-item-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.wcp-item-row:last-child {
+    border-bottom: none;
+}
+
+.wcp-item-text {
+    flex: 1;
+    font-size: 15px;
+    color: #333;
+}
+
+.wcp-inline-select {
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    font-size: 13px;
+    background: #f8f9fa;
+    color: #666;
+    min-width: 100px;
+}
+
+.wcp-no-items-in-heading {
+    color: #999;
+    font-style: italic;
+    margin: 10px 0 15px;
+    font-size: 14px;
+}
+
+.wcp-btn-add-item-inline {
+    margin-top: 15px;
+    font-size: 14px;
+    padding: 8px 16px;
+}
+
+/* General Add Item section */
+.wcp-add-item-general {
+    margin-top: 30px;
+    padding-top: 30px;
+    border-top: 2px solid #eee;
+}
+
+#wcp-btn-add-item-general {
+    font-size: 16px;
+    padding: 12px 24px;
+}
+
+.wcp-no-headings-message {
+    text-align: center;
+    padding: 40px 20px;
+    color: #999;
+    font-style: italic;
+    background: #f9f9f9;
+    border-radius: 4px;
+    margin: 20px 0;
 }
 
 .wcp-items-filters {
@@ -873,5 +994,435 @@ textarea.wcp-form-control {
 
     .wcp-main-content {
         margin-left: 0;
+    }
+}
+
+/* ==========================================================================
+   Headings Section
+   ========================================================================== */
+
+.wcp-headings-section {
+    background: #fff;
+    padding: 30px;
+    border-radius: 6px;
+    margin-bottom: 30px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.wcp-headings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.wcp-headings-header h2 {
+    margin: 0;
+    font-size: 24px;
+    color: #1e1e1e;
+}
+
+/* Create Heading Form */
+.wcp-create-heading-form {
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+/* No Headings Message */
+.wcp-no-headings {
+    text-align: center;
+    color: #666;
+    padding: 2rem;
+    font-style: italic;
+    background: #fafafa;
+    border: 1px dashed #ddd;
+    border-radius: 4px;
+    margin: 1rem 0;
+}
+
+/* Individual Heading Section */
+.wcp-heading-section {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.wcp-heading-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: #f5f5f5;
+    border-bottom: 1px solid #ddd;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.wcp-heading-header:hover {
+    background: #eee;
+}
+
+.wcp-heading-title {
+    margin: 0;
+    font-size: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.wcp-toggle-icon {
+    font-size: 0.875rem;
+    transition: transform 0.2s;
+    display: inline-block;
+    width: 1rem;
+    text-align: center;
+}
+
+.wcp-item-count {
+    font-size: 0.875rem;
+    color: #666;
+    font-weight: normal;
+    margin-left: 0.5rem;
+}
+
+.wcp-btn-add-item {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+}
+
+.wcp-heading-body {
+    padding: 1rem;
+}
+
+.wcp-heading-content {
+    background: #f9f9f9;
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    line-height: 1.6;
+}
+
+/* Heading Item Form */
+.wcp-heading-item-form {
+    background: #f0f8ff;
+    border: 1px dashed #4a90e2;
+    border-radius: 4px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+/* Heading Items List */
+.wcp-heading-items-list {
+    margin-top: 1rem;
+}
+
+.wcp-heading-items-list .wcp-item {
+    padding: 12px 0;
+    border: none;
+    border-bottom: 1px solid #e8e8e8;
+    border-radius: 0;
+    box-shadow: none;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    width: 100%;
+    background: transparent;
+}
+
+.wcp-heading-items-list .wcp-item:last-child {
+    border-bottom: none;
+}
+
+.wcp-heading-items-list .wcp-item:hover {
+    background: #f9f9f9;
+    padding-left: 8px;
+    padding-right: 8px;
+    margin-left: -8px;
+    margin-right: -8px;
+}
+
+.wcp-heading-items-list .wcp-no-items {
+    text-align: center;
+    color: #999;
+    padding: 2rem;
+    font-style: italic;
+    background: #fafafa;
+    border-radius: 4px;
+    margin: 1rem 0;
+}
+
+/* Page-Level Items Section */
+.wcp-page-items-section {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 2px solid #ddd;
+}
+
+.wcp-page-items-section h2 {
+    margin-top: 0;
+}
+
+/* ==========================================================================
+   Single Post Template
+   ========================================================================== */
+
+.wcp-single-container {
+    display: flex;
+    min-height: 100vh;
+}
+
+.wcp-single-content {
+    margin-left: 280px;
+    flex: 1;
+    padding: 40px;
+    max-width: 900px;
+}
+
+.wcp-single-item {
+    background: #fff;
+    padding: 40px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.wcp-item-header {
+    border-bottom: 2px solid #eee;
+    padding-bottom: 20px;
+    margin-bottom: 30px;
+}
+
+.wcp-single-item .wcp-item-title {
+    margin: 0 0 15px;
+    font-size: 32px;
+    color: #1e1e1e;
+    line-height: 1.3;
+}
+
+.wcp-single-item .wcp-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.wcp-single-item .wcp-item-date {
+    color: #666;
+    font-size: 14px;
+}
+
+.wcp-item-contexts {
+    color: #666;
+    font-size: 14px;
+    margin-top: 10px;
+}
+
+.wcp-item-content {
+    font-size: 16px;
+    line-height: 1.8;
+    color: #333;
+}
+
+.wcp-item-content p {
+    margin-bottom: 1.5em;
+}
+
+.wcp-item-footer {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+}
+
+.wcp-item-tags {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 14px;
+    color: #666;
+}
+
+.wcp-tag {
+    display: inline-block;
+    padding: 4px 10px;
+    background: #f0f0f0;
+    border-radius: 3px;
+    font-size: 13px;
+    color: #555;
+}
+
+.wcp-item-actions {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.wcp-notice {
+    color: #666;
+    font-size: 14px;
+    font-style: italic;
+}
+
+@media (max-width: 768px) {
+    .wcp-single-content {
+        margin-left: 240px;
+        padding: 20px;
+    }
+
+    .wcp-single-item {
+        padding: 25px;
+    }
+
+    .wcp-single-item .wcp-item-title {
+        font-size: 24px;
+    }
+}
+
+@media (max-width: 640px) {
+    .wcp-single-content {
+        margin-left: 0;
+    }
+}
+
+/* ==========================================================================
+   Breadcrumbs
+   ========================================================================== */
+
+.wcp-breadcrumbs {
+    margin-bottom: 20px;
+    padding: 12px 16px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+}
+
+.wcp-breadcrumb-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.wcp-breadcrumb-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.wcp-breadcrumb-separator {
+    color: #999;
+    font-size: 16px;
+    margin: 0 4px;
+    user-select: none;
+}
+
+.wcp-breadcrumb-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: #2271b1;
+    text-decoration: none;
+    transition: all 0.2s;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.wcp-breadcrumb-link:hover {
+    color: #135e96;
+    background: #fff;
+    text-decoration: none;
+}
+
+.wcp-breadcrumb-current-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: #333;
+    font-weight: 600;
+}
+
+.wcp-breadcrumb-text {
+    display: inline-block;
+}
+
+.wcp-breadcrumb-home-icon,
+.wcp-breadcrumb-heading-icon {
+    font-size: 14px;
+    line-height: 1;
+}
+
+/* Breadcrumbs in heading sections - more compact */
+.wcp-heading-body .wcp-breadcrumbs {
+    background: #fff;
+    border: 1px solid #ddd;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+}
+
+.wcp-heading-body .wcp-breadcrumb-item {
+    font-size: 13px;
+}
+
+/* Breadcrumbs in page header */
+.wcp-page-header .wcp-breadcrumbs {
+    margin-bottom: 15px;
+}
+
+/* Breadcrumbs in clean page header */
+.wcp-page-header-clean .wcp-breadcrumbs {
+    margin-bottom: 15px;
+}
+
+/* Breadcrumbs in single item view */
+.wcp-item-header .wcp-breadcrumbs {
+    margin-bottom: 20px;
+}
+
+/* Responsive breadcrumbs */
+@media (max-width: 768px) {
+    .wcp-breadcrumbs {
+        padding: 10px 12px;
+    }
+
+    .wcp-breadcrumb-item {
+        font-size: 13px;
+    }
+
+    .wcp-breadcrumb-separator {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .wcp-breadcrumbs {
+        padding: 8px 10px;
+    }
+
+    .wcp-breadcrumb-item {
+        font-size: 12px;
+    }
+
+    /* Hide home icon on very small screens to save space */
+    .wcp-breadcrumb-home-icon {
+        display: none;
+    }
+
+    /* More compact separators */
+    .wcp-breadcrumb-separator {
+        margin: 0 2px;
     }
 }

@@ -3,7 +3,7 @@
  * Plugin Name: Work Copilot
  * Plugin URI: https://wordpress.org/plugins/work-copilot
  * Description: Personal knowledge and work management system with AI-assisted sensemaking
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: Your Name
  * Author URI: https://yoursite.com
  * License: GPL v2 or later
@@ -16,7 +16,14 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WCP_VERSION', '1.0.0');
+// Debug: Log that plugin is loading
+file_put_contents(
+    __DIR__ . '/plugin-load-log.txt',
+    date('Y-m-d H:i:s') . " - Plugin loading v1.2.1\n",
+    FILE_APPEND
+);
+
+define('WCP_VERSION', '1.2.1');
 define('WCP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WCP_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WCP_PLUGIN_FILE', __FILE__);
@@ -48,10 +55,12 @@ class Work_Copilot {
         require_once WCP_PLUGIN_DIR . 'includes/class-embeddings-manager.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-conversations-manager.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-context-builder.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-mission-loader.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-prompt-builder.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-ai-actions.php';
         require_once WCP_PLUGIN_DIR . 'admin/class-admin.php';
         require_once WCP_PLUGIN_DIR . 'admin/class-settings.php';
+        require_once WCP_PLUGIN_DIR . 'admin/class-page-mission-metabox.php';
         require_once WCP_PLUGIN_DIR . 'public/class-public.php';
     }
 
@@ -73,6 +82,7 @@ class Work_Copilot {
         if (is_admin()) {
             WCP_Admin::instance();
             WCP_Settings::instance();
+            WCP_Page_Mission_Metabox::instance();
         } else {
             WCP_Public::instance();
         }
