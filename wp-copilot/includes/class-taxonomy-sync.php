@@ -240,6 +240,42 @@ class WCP_Taxonomy_Sync {
     }
 
     /**
+     * Sync all published pages and headings to wcp_context taxonomy.
+     * Used for bulk repair when pages were created before the plugin was active.
+     *
+     * @return array ['pages' => int, 'headings' => int]
+     */
+    public function sync_all_to_taxonomy() {
+        $counts = array('pages' => 0, 'headings' => 0);
+
+        // Pages first (headings depend on their parent page terms existing)
+        $pages = get_posts(array(
+            'post_type'      => 'page',
+            'post_status'    => 'publish',
+            'posts_per_page' => -1,
+        ));
+
+        foreach ($pages as $post) {
+            $this->sync_page_to_taxonomy($post->ID, $post, true);
+            $counts['pages']++;
+        }
+
+        // Headings second
+        $headings = get_posts(array(
+            'post_type'      => 'wcp_heading',
+            'post_status'    => 'publish',
+            'posts_per_page' => -1,
+        ));
+
+        foreach ($headings as $post) {
+            $this->sync_heading_to_taxonomy($post->ID, $post, true);
+            $counts['headings']++;
+        }
+
+        return $counts;
+    }
+
+    /**
      * Utility: Get all context terms for display
      */
     public static function get_all_contexts($include_trashed = false) {

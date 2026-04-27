@@ -34,6 +34,7 @@ class WCP_Context_Builder {
      *   - use_rag: bool - Use semantic search
      *   - query: string - RAG search query
      *   - rag_limit: int - Max RAG items
+     *   - limits: array - Character limits (max_chars_per_item, max_chars_page_summary)
      * @return array Context data structure
      */
     public function build_hierarchical_context($page_id, $options = array()) {
@@ -42,15 +43,27 @@ class WCP_Context_Builder {
             'item_limit' => 20,
             'use_rag' => false,
             'query' => '',
-            'rag_limit' => 10
+            'rag_limit' => 10,
+            'limits' => array(
+                'max_chars_per_item' => 500,
+                'max_chars_page_summary' => 1000
+            )
         );
 
         $options = wp_parse_args($options, $defaults);
 
+        // Ensure limits is an array with defaults
+        if (!isset($options['limits']) || !is_array($options['limits'])) {
+            $options['limits'] = $defaults['limits'];
+        } else {
+            $options['limits'] = array_merge($defaults['limits'], $options['limits']);
+        }
+
         $context = array(
             'pages' => array(),
             'items' => array(),
-            'rag_items' => array()
+            'rag_items' => array(),
+            'limits' => $options['limits'] // Store limits in context data
         );
 
         // Walk up page hierarchy
@@ -76,6 +89,30 @@ class WCP_Context_Builder {
     }
 
     /**
+     * Truncate content to max characters, preserving word boundaries
+     *
+     * @param string $content Content to truncate
+     * @param int $max_chars Maximum characters
+     * @return string Truncated content
+     */
+    private function truncate_content($content, $max_chars) {
+        if (strlen($content) <= $max_chars) {
+            return $content;
+        }
+
+        // Truncate to max_chars - 3 (for ellipsis)
+        $truncated = substr($content, 0, $max_chars - 3);
+
+        // Find last space to preserve word boundary
+        $last_space = strrpos($truncated, ' ');
+        if ($last_space !== false && $last_space > $max_chars * 0.8) {
+            $truncated = substr($truncated, 0, $last_space);
+        }
+
+        return $truncated . '...';
+    }
+
+    /**
      * Build context based on mode selection
      *
      * @param int $page_id The current page ID (for 'page' mode)
@@ -85,6 +122,7 @@ class WCP_Context_Builder {
      *   - query: string for RAG search (for 'corpus' mode)
      *   - include_items: bool - Include items from pages
      *   - item_limit: int - Max items per page
+     *   - limits: array - Character limits (max_chars_per_item, max_chars_page_summary)
      * @return array Context data structure
      */
     public function build_context_by_mode($page_id, $context_mode = 'page', $options = array()) {
@@ -92,16 +130,28 @@ class WCP_Context_Builder {
             'selected_pages' => array(),
             'query' => '',
             'include_items' => true,
-            'item_limit' => 20
+            'item_limit' => 20,
+            'limits' => array(
+                'max_chars_per_item' => 500,
+                'max_chars_page_summary' => 1000
+            )
         );
 
         $options = wp_parse_args($options, $defaults);
+
+        // Ensure limits is an array with defaults
+        if (!isset($options['limits']) || !is_array($options['limits'])) {
+            $options['limits'] = $defaults['limits'];
+        } else {
+            $options['limits'] = array_merge($defaults['limits'], $options['limits']);
+        }
 
         $context = array(
             'pages' => array(),
             'items' => array(),
             'rag_items' => array(),
-            'memories' => array()
+            'memories' => array(),
+            'limits' => $options['limits'] // Store limits in context data
         );
 
         // Fetch relevant memories if RAG is enabled and query provided
@@ -122,10 +172,23 @@ class WCP_Context_Builder {
                 if ($page_id) {
                     $page = get_post($page_id);
                     if ($page && $page->post_type === 'page') {
+                        // Get summary for current page
+                        $summary = get_post_meta($page->ID, '_wcp_page_compact_summary', true);
+                        $summary_age = null;
+                        if ($summary) {
+                            $generated_at = get_post_meta($page->ID, '_wcp_summary_generated_at', true);
+                            if ($generated_at) {
+                                $generated_time = strtotime($generated_at);
+                                $summary_age = floor((time() - $generated_time) / DAY_IN_SECONDS);
+                            }
+                        }
+
                         $context['pages'][] = array(
                             'id' => $page->ID,
                             'title' => $page->post_title,
-                            'content' => $page->post_content,
+                            'content' => $summary ? $summary : $page->post_content,
+                            'is_summary' => !empty($summary),
+                            'summary_age_days' => $summary_age,
                             'level' => 0
                         );
                     }
@@ -156,10 +219,23 @@ class WCP_Context_Builder {
                     if ($include_children) {
                         $descendants = $this->get_descendant_pages($page_id_to_process);
                         foreach ($descendants as $desc_page) {
+                            // Get summary for descendant page
+                            $summary = get_post_meta($desc_page->ID, '_wcp_page_compact_summary', true);
+                            $summary_age = null;
+                            if ($summary) {
+                                $generated_at = get_post_meta($desc_page->ID, '_wcp_summary_generated_at', true);
+                                if ($generated_at) {
+                                    $generated_time = strtotime($generated_at);
+                                    $summary_age = floor((time() - $generated_time) / DAY_IN_SECONDS);
+                                }
+                            }
+
                             $context['pages'][] = array(
                                 'id' => $desc_page->ID,
                                 'title' => $desc_page->post_title,
-                                'content' => $desc_page->post_content,
+                                'content' => $summary ? $summary : $desc_page->post_content,
+                                'is_summary' => !empty($summary),
+                                'summary_age_days' => $summary_age,
                                 'level' => 0
                             );
                         }
@@ -212,10 +288,24 @@ class WCP_Context_Builder {
                 break;
             }
 
+            // Prefer compact summary over full content
+            $summary = get_post_meta($page->ID, '_wcp_page_compact_summary', true);
+            $summary_age = null;
+
+            if ($summary) {
+                $generated_at = get_post_meta($page->ID, '_wcp_summary_generated_at', true);
+                if ($generated_at) {
+                    $generated_time = strtotime($generated_at);
+                    $summary_age = floor((time() - $generated_time) / DAY_IN_SECONDS);
+                }
+            }
+
             $pages[] = array(
                 'id' => $page->ID,
                 'title' => $page->post_title,
-                'content' => $page->post_content,
+                'content' => $summary ? $summary : $page->post_content,
+                'is_summary' => !empty($summary),
+                'summary_age_days' => $summary_age,
                 'level' => $depth
             );
 
@@ -224,6 +314,86 @@ class WCP_Context_Builder {
         }
 
         return $pages;
+    }
+
+    /**
+     * Get page heading outline
+     *
+     * @param int $page_id The page ID
+     * @return array Array of heading data
+     */
+    private function get_page_heading_outline($page_id) {
+        // Check cache first to avoid repeated queries
+        $cache_key = 'wcp_headings_' . $page_id;
+        $cached = wp_cache_get($cache_key, 'wcp_context');
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        try {
+            // Query headings that belong to this page with timeout protection
+            $headings = get_posts(array(
+                'post_type' => 'wcp_heading',
+                'post_status' => 'publish',
+                'posts_per_page' => 50, // Limit to prevent excessive results
+                'meta_query' => array(
+                    'relation' => 'AND',
+                    array('key' => '_wcp_parent_id', 'value' => $page_id, 'compare' => '='),
+                    array('key' => '_wcp_parent_type', 'value' => 'page', 'compare' => '=')
+                ),
+                'orderby' => 'menu_order',
+                'order' => 'ASC',
+                'fields' => 'ids', // Only get IDs first for faster query
+                'suppress_filters' => true
+            ));
+
+            if (empty($headings) || is_wp_error($headings)) {
+                wp_cache_set($cache_key, array(), 'wcp_context', 300); // Cache empty result for 5 min
+                return array();
+            }
+
+            // Now get full post objects only for found IDs
+            $heading_data = array();
+            foreach ($headings as $heading_id) {
+                $heading = get_post($heading_id);
+                if ($heading) {
+                    $heading_data[] = array(
+                        'id' => $heading->ID,
+                        'title' => $heading->post_title,
+                        'menu_order' => $heading->menu_order
+                    );
+                }
+            }
+
+            // Cache for 5 minutes
+            wp_cache_set($cache_key, $heading_data, 'wcp_context', 300);
+
+            return $heading_data;
+        } catch (Exception $e) {
+            // Silently fail and return empty array
+            error_log('WCP: Error getting heading outline for page ' . $page_id . ': ' . $e->getMessage());
+            return array();
+        }
+    }
+
+    /**
+     * Format heading outline as markdown
+     *
+     * @param array $headings Array of heading data
+     * @return string Formatted outline
+     */
+    private function format_heading_outline($headings) {
+        if (empty($headings)) {
+            return '';
+        }
+
+        $outline = "## Page Structure:\n\n";
+        foreach ($headings as $heading) {
+            $outline .= "- {$heading['title']}\n";
+        }
+        $outline .= "\n";
+
+        return $outline;
     }
 
     /**
@@ -343,9 +513,23 @@ class WCP_Context_Builder {
      * Format context data for AI prompt
      *
      * @param array $context_data Context data from build_hierarchical_context() or build_context_by_mode()
+     * @param array $limits Optional character limits (max_chars_per_item, max_chars_page_summary)
      * @return string Formatted context string
      */
-    public function format_for_prompt($context_data) {
+    public function format_for_prompt($context_data, $limits = array()) {
+        // Set default limits
+        $defaults = array(
+            'max_chars_per_item' => 500,
+            'max_chars_page_summary' => 1000
+        );
+
+        // Check if limits are stored in context data (preferred method)
+        if (isset($context_data['limits']) && is_array($context_data['limits'])) {
+            $limits = array_merge($defaults, $context_data['limits'], $limits);
+        } else {
+            $limits = array_merge($defaults, $limits);
+        }
+
         $prompt = '';
 
         // Add page hierarchy
@@ -359,8 +543,50 @@ class WCP_Context_Builder {
                 $prompt .= "{$indent}Page: {$page['title']}\n";
 
                 if (!empty($page['content'])) {
-                    $content_preview = wp_trim_words(wp_strip_all_tags($page['content']), 100, '...');
-                    $prompt .= "{$indent}Content: {$content_preview}\n";
+                    $is_summary = isset($page['is_summary']) && $page['is_summary'];
+                    $summary_age = isset($page['summary_age_days']) ? $page['summary_age_days'] : null;
+                    $original_length = strlen($page['content']);
+
+                    // Use summary if available, otherwise preview full content
+                    if ($is_summary) {
+                        $label = 'Summary';
+                        if ($summary_age !== null && $summary_age > 7) {
+                            $label .= " (from {$summary_age} days ago)";
+                        }
+
+                        // Apply character limit to summaries
+                        $content = $page['content'];
+                        $truncated = false;
+                        if ($original_length > $limits['max_chars_page_summary']) {
+                            $content = $this->truncate_content($content, $limits['max_chars_page_summary']);
+                            $truncated = true;
+                        }
+
+                        $prompt .= "{$indent}{$label}: {$content}";
+                        if ($truncated) {
+                            $prompt .= " [truncated from {$original_length} chars]";
+                        }
+                        $prompt .= "\n";
+                    } else {
+                        $content_preview = wp_trim_words(wp_strip_all_tags($page['content']), 100, '...');
+                        $prompt .= "{$indent}Description: {$content_preview}\n";
+                    }
+                }
+
+                // Add heading outline for this page if it's depth 0 (current page)
+                if ($level === 0 && isset($page['id']) && is_numeric($page['id'])) {
+                    try {
+                        $headings = $this->get_page_heading_outline($page['id']);
+                        if (!empty($headings) && is_array($headings)) {
+                            $outline = $this->format_heading_outline($headings);
+                            if (!empty($outline)) {
+                                $prompt .= "\n" . $outline;
+                            }
+                        }
+                    } catch (Exception $e) {
+                        // Silently skip headings if there's an error
+                        error_log('WCP: Error formatting heading outline: ' . $e->getMessage());
+                    }
                 }
 
                 $prompt .= "\n";
@@ -372,8 +598,21 @@ class WCP_Context_Builder {
             $prompt .= "## Recent Items:\n\n";
 
             foreach ($context_data['items'] as $item) {
-                $content_preview = wp_trim_words($item['content'], 50, '...');
-                $prompt .= "- {$item['title']}: {$content_preview}\n";
+                $content = wp_strip_all_tags($item['content']);
+                $original_length = strlen($content);
+                $truncated = false;
+
+                // Apply character limit to items
+                if ($original_length > $limits['max_chars_per_item']) {
+                    $content = $this->truncate_content($content, $limits['max_chars_per_item']);
+                    $truncated = true;
+                }
+
+                $prompt .= "- {$item['title']}: {$content}";
+                if ($truncated) {
+                    $prompt .= " [truncated from {$original_length} chars]";
+                }
+                $prompt .= "\n";
             }
 
             $prompt .= "\n";
@@ -385,8 +624,21 @@ class WCP_Context_Builder {
 
             foreach ($context_data['rag_items'] as $item) {
                 $similarity_pct = round($item['similarity'] * 100);
-                $content_preview = wp_trim_words($item['content'], 50, '...');
-                $prompt .= "- [{$similarity_pct}% match] {$item['title']}: {$content_preview}\n";
+                $content = wp_strip_all_tags($item['content']);
+                $original_length = strlen($content);
+                $truncated = false;
+
+                // Apply character limit to RAG items
+                if ($original_length > $limits['max_chars_per_item']) {
+                    $content = $this->truncate_content($content, $limits['max_chars_per_item']);
+                    $truncated = true;
+                }
+
+                $prompt .= "- [{$similarity_pct}% match] {$item['title']}: {$content}";
+                if ($truncated) {
+                    $prompt .= " [truncated from {$original_length} chars]";
+                }
+                $prompt .= "\n";
             }
 
             $prompt .= "\n";

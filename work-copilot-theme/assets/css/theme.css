@@ -389,6 +389,33 @@ textarea.wcp-form-control {
     color: #333;
 }
 
+/* Meta pills: context and tags displayed inline on item rows */
+.wcp-item-meta-pills {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.wcp-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    line-height: 1.5;
+}
+
+.wcp-pill-context {
+    background: #e8f0fe;
+    color: #3c4db5;
+}
+
+.wcp-pill-tag {
+    background: #f0f0f0;
+    color: #555;
+}
+
 .wcp-inline-select {
     padding: 4px 8px;
     border: 1px solid #ddd;
@@ -412,16 +439,83 @@ textarea.wcp-form-control {
     padding: 8px 16px;
 }
 
-/* General Add Item section */
-.wcp-add-item-general {
-    margin-top: 30px;
-    padding-top: 30px;
-    border-top: 2px solid #eee;
+/* Quick-add item inline form */
+.wcp-quick-add-wrap {
+    margin-top: 8px;
+    padding: 4px 0;
 }
 
-#wcp-btn-add-item-general {
-    font-size: 16px;
-    padding: 12px 24px;
+.wcp-btn-quick-add-item {
+    font-size: 12px;
+    opacity: 0.6;
+}
+
+.wcp-btn-quick-add-item:hover {
+    opacity: 1;
+}
+
+.wcp-quick-item-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: #f9f9f9;
+    border-radius: 4px;
+    border: 1px solid #e8e8e8;
+}
+
+.wcp-quick-title {
+    flex: 1;
+    min-width: 200px;
+    padding: 5px 8px;
+    font-size: 14px;
+}
+
+.wcp-quick-tags {
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    font-size: 13px;
+    width: 110px;
+}
+
+.wcp-btn-sm {
+    padding: 5px 12px;
+    font-size: 13px;
+}
+
+.wcp-quick-status {
+    font-size: 12px;
+    color: #c00;
+}
+
+/* Add heading section */
+.wcp-add-heading-wrap {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px dashed #ddd;
+}
+
+.wcp-add-heading-wrap > button {
+    font-size: 12px;
+    opacity: 0.6;
+}
+
+.wcp-add-heading-wrap > button:hover {
+    opacity: 1;
+}
+
+#wcp-create-heading-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: #f9f9f9;
+    border-radius: 4px;
+    border: 1px solid #e8e8e8;
 }
 
 .wcp-no-headings-message {
@@ -1425,4 +1519,42 @@ textarea.wcp-form-control {
     .wcp-breadcrumb-separator {
         margin: 0 2px;
     }
+}
+
+/* ==========================================================================
+   Drag-to-reorder
+   ========================================================================== */
+
+.wcp-drag-handle {
+    cursor: grab;
+    color: #ccc;
+    font-size: 18px;
+    padding: 0 6px 0 0;
+    user-select: none;
+    flex-shrink: 0;
+    line-height: 1;
+    transition: color 0.1s;
+}
+
+.wcp-drag-handle:hover {
+    color: #999;
+}
+
+.wcp-drag-handle:active {
+    cursor: grabbing;
+}
+
+.wcp-item-row.wcp-dragging {
+    opacity: 0.4;
+}
+
+.wcp-item-row.wcp-drag-ghost {
+    background: #f0f4ff;
+    border: 1px dashed #6c8ebf;
+    opacity: 0.8;
+}
+
+/* Ensure empty lists have enough height to accept drops */
+.wcp-items-list {
+    min-height: 32px;
 }

@@ -39,7 +39,7 @@ class WCP_AI_Client {
     /**
      * Make a request to Claude API
      */
-    private function request($messages, $max_tokens = 1024, $system = null) {
+    private function request($messages, $max_tokens = 1024, $system = null, $timeout = 30) {
         if (!$this->is_configured()) {
             return new WP_Error('not_configured', 'AI API key not configured');
         }
@@ -61,7 +61,7 @@ class WCP_AI_Client {
                 'anthropic-version' => '2023-06-01',
             ),
             'body' => wp_json_encode($body),
-            'timeout' => 30,
+            'timeout' => $timeout,
         ));
 
         if (is_wp_error($response)) {
@@ -269,7 +269,7 @@ class WCP_AI_Client {
      * @param int $max_tokens Maximum tokens for response
      * @return array|WP_Error Response with content, model, and usage
      */
-    public function request_with_conversation($system_prompt, $user_message, $conversation_history = array(), $max_tokens = 4096) {
+    public function request_with_conversation($system_prompt, $user_message, $conversation_history = array(), $max_tokens = 4096, $timeout = 30) {
         if (!$this->is_configured()) {
             return new WP_Error('not_configured', 'AI API key not configured');
         }
@@ -299,7 +299,7 @@ class WCP_AI_Client {
         );
 
         // Make request with system prompt
-        $response = $this->request($messages, $max_tokens, $system_prompt);
+        $response = $this->request($messages, $max_tokens, $system_prompt, $timeout);
 
         if (is_wp_error($response)) {
             return $response;

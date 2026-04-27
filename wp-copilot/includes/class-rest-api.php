@@ -46,10 +46,31 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // Update item (title, item_type, priority)
+        register_rest_route($namespace, '/items/(?P<id>\d+)/update', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'update_item'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Delete item (trash)
+        register_rest_route($namespace, '/items/(?P<id>\d+)/delete', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'delete_item'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // Quick create item
         register_rest_route($namespace, '/items/create', array(
             'methods' => 'POST',
             'callback' => array($this, 'create_item'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Reorder items (drag-and-drop)
+        register_rest_route($namespace, '/items/reorder', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'reorder_items'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
@@ -184,6 +205,20 @@ class WCP_REST_API {
             'methods' => 'POST',
             'callback' => array($this, 'create_heading'),
             'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // NEW: Refresh page summary
+        register_rest_route($namespace, '/page/refresh-summary', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'refresh_page_summary'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Tools: Bulk sync all pages/headings to wcp_context taxonomy
+        register_rest_route($namespace, '/taxonomy/sync-all', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'taxonomy_sync_all'),
+            'permission_callback' => function() { return current_user_can('manage_options'); },
         ));
     }
 
@@ -349,7 +384,7 @@ class WCP_REST_API {
      */
     public function create_item($request) {
         $title = $request->get_param('title');
-        $content = $request->get_param('content');
+        $content = (string) $request->get_param('content');
         $contexts = $request->get_param('contexts');
         $item_type = $request->get_param('item_type');
         $priority = $request->get_param('priority');
@@ -357,10 +392,10 @@ class WCP_REST_API {
         $tags = $request->get_param('tags');
 
         $post_id = wp_insert_post(array(
-            'post_type' => 'post',
-            'post_title' => $title,
-            'post_content' => $content,
-            'post_status' => 'publish',
+            'post_type'    => 'post',
+            'post_title'   => $title,
+            'post_content' => isset($content) && $content !== null ? $content : '',
+            'post_status'  => 'publish',
         ));
 
         if (is_wp_error($post_id)) {
@@ -370,9 +405,10 @@ class WCP_REST_API {
             ));
         }
 
-        // Set taxonomies
+        // Set taxonomies — accept single ID or array
         if (!empty($contexts)) {
-            wp_set_post_terms($post_id, $contexts, 'wcp_context');
+            $contexts = is_array($contexts) ? $contexts : array($contexts);
+            wp_set_post_terms($post_id, array_map('intval', $contexts), 'wcp_context');
         }
 
         if (!empty($item_type)) {
@@ -391,11 +427,67 @@ class WCP_REST_API {
             wp_set_post_terms($post_id, $tags, 'post_tag');
         }
 
+        // Immediately embed the new item (bypasses save_post throttle)
+        if (get_option('wcp_ai_enabled', false)) {
+            WCP_Embeddings_Manager::instance()->generate_embedding($post_id);
+        }
+
         return rest_ensure_response(array(
             'success' => true,
             'post_id' => $post_id,
             'edit_url' => get_edit_post_link($post_id, 'raw'),
         ));
+    }
+
+    /**
+     * Reorder items via drag-and-drop.
+     * Accepts one or two lists (source + destination) with their full ordered item IDs.
+     * Updates menu_order for each item and reassigns wcp_context if the item moved lists.
+     */
+    public function reorder_items($request) {
+        global $wpdb;
+
+        $lists = $request->get_param('lists');
+
+        if (!is_array($lists) || empty($lists)) {
+            return new WP_Error('invalid_payload', 'lists parameter required', array('status' => 400));
+        }
+
+        foreach ($lists as $list) {
+            $context_id = intval($list['context_id']);
+            $item_ids   = array_map('intval', (array) $list['item_ids']);
+
+            foreach ($item_ids as $index => $post_id) {
+                $post = get_post($post_id);
+                if (!$post || $post->post_type !== 'post') {
+                    continue;
+                }
+
+                if (!current_user_can('edit_post', $post_id)) {
+                    continue;
+                }
+
+                // Update menu_order directly to avoid triggering save_post hooks
+                // (which would queue unnecessary embedding regeneration on every reorder).
+                $wpdb->update(
+                    $wpdb->posts,
+                    array('menu_order' => $index * 10),
+                    array('ID' => $post_id),
+                    array('%d'),
+                    array('%d')
+                );
+                clean_post_cache($post_id);
+
+                // If this item doesn't already belong to this context, reassign it.
+                // This handles cross-list drags (item moved from one heading to another).
+                $current_context_ids = wp_get_post_terms($post_id, 'wcp_context', array('fields' => 'ids'));
+                if (!is_wp_error($current_context_ids) && !in_array($context_id, $current_context_ids)) {
+                    wp_set_post_terms($post_id, array($context_id), 'wcp_context');
+                }
+            }
+        }
+
+        return rest_ensure_response(array('success' => true));
     }
 
     /**
@@ -1226,6 +1318,20 @@ class WCP_REST_API {
             ));
         }
 
+        // Add size validation and truncation
+        $max_draft_chars = 15000; // ~3,750 tokens (conservative limit)
+
+        if (strlen($draft_content) > $max_draft_chars) {
+            // Truncate and notify user
+            $original_length = strlen($draft_content);
+            $draft_content = mb_substr($draft_content, 0, $max_draft_chars);
+
+            // Add warning to draft content
+            $draft_content .= "\n\n[...CONTENT TRUNCATED FOR PROCESSING - Original: " . number_format($original_length) . " chars, Truncated to: " . number_format($max_draft_chars) . " chars...]";
+
+            error_log("WCP: Draft content truncated from {$original_length} to {$max_draft_chars} chars for post {$post_id}");
+        }
+
         // Check if AI is enabled
         if (!get_option('wcp_ai_enabled', false)) {
             return rest_ensure_response(array(
@@ -1509,6 +1615,143 @@ class WCP_REST_API {
             'proposals' => isset($result['proposals']) ? $result['proposals'] : array(),
             'batch_id' => isset($result['batch_id']) ? $result['batch_id'] : null,
             'message' => isset($result['message']) ? $result['message'] : null
+        ));
+    }
+
+    /**
+     * Refresh page summary
+     *
+     * POST /work-copilot/v1/page/refresh-summary
+     *
+     * @param WP_REST_Request $request Request object
+     * @return WP_REST_Response Response with summary
+     */
+    public function refresh_page_summary($request) {
+        $page_id = intval($request->get_param('page_id'));
+
+        if (!$page_id) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'Missing page_id parameter'
+            ));
+        }
+
+        // Check permission - user must be able to edit this page
+        if (!current_user_can('edit_post', $page_id)) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'Permission denied'
+            ));
+        }
+
+        // Check if AI is enabled
+        if (!get_option('wcp_ai_enabled', false)) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'AI features are not enabled'
+            ));
+        }
+
+        $ai_client = WCP_AI_Client::instance();
+        if (!$ai_client->is_configured()) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => 'AI is not configured'
+            ));
+        }
+
+        // Generate summary
+        $ai_actions = WCP_AI_Actions::instance();
+        $result = $ai_actions->summarize_page($page_id);
+
+        if (is_wp_error($result)) {
+            return rest_ensure_response(array(
+                'success' => false,
+                'message' => $result->get_error_message()
+            ));
+        }
+
+        return rest_ensure_response($result);
+    }
+
+    public function update_item($request) {
+        $item_id = intval($request->get_param('id'));
+        $post = get_post($item_id);
+
+        if (!$post || $post->post_type !== 'post') {
+            return new WP_Error('not_found', 'Item not found', array('status' => 404));
+        }
+
+        if (!current_user_can('edit_post', $item_id)) {
+            return new WP_Error('forbidden', 'Permission denied', array('status' => 403));
+        }
+
+        $updated = array('ID' => $item_id);
+
+        $title = $request->get_param('title');
+        if ($title !== null) {
+            $updated['post_title'] = sanitize_text_field($title);
+        }
+
+        if (count($updated) > 1) {
+            wp_update_post($updated);
+        }
+
+        $item_type = $request->get_param('item_type');
+        if ($item_type !== null) {
+            $terms = $item_type ? array(sanitize_key($item_type)) : array();
+            wp_set_post_terms($item_id, $terms, 'item_type');
+        }
+
+        $priority = $request->get_param('priority');
+        if ($priority !== null) {
+            $terms = $priority ? array(sanitize_key($priority)) : array();
+            wp_set_post_terms($item_id, $terms, 'priority');
+        }
+
+        // Re-embed immediately, bypassing the 60-second save_post throttle
+        if (get_option('wcp_ai_enabled', false)) {
+            WCP_Embeddings_Manager::instance()->generate_embedding($item_id);
+        }
+
+        return rest_ensure_response(array('success' => true));
+    }
+
+    public function delete_item($request) {
+        $item_id = intval($request->get_param('id'));
+        $post = get_post($item_id);
+
+        if (!$post || $post->post_type !== 'post') {
+            return new WP_Error('not_found', 'Item not found', array('status' => 404));
+        }
+
+        if (!current_user_can('delete_post', $item_id)) {
+            return new WP_Error('forbidden', 'Permission denied', array('status' => 403));
+        }
+
+        // Delete embedding before trashing — wp_trash_post fires trashed_post not delete_post,
+        // so the delete_post hook in WCP_Embeddings_Manager would never fire.
+        if (get_option('wcp_ai_enabled', false)) {
+            WCP_Embeddings_Manager::instance()->delete_embedding($item_id);
+        }
+
+        wp_trash_post($item_id);
+
+        return rest_ensure_response(array('success' => true));
+    }
+
+    public function taxonomy_sync_all($request) {
+        $taxonomy_sync = WCP_Taxonomy_Sync::instance();
+        $counts = $taxonomy_sync->sync_all_to_taxonomy();
+
+        return rest_ensure_response(array(
+            'success'  => true,
+            'message'  => sprintf(
+                'Synced %d pages and %d headings.',
+                $counts['pages'],
+                $counts['headings']
+            ),
+            'counts'   => $counts,
         ));
     }
 }

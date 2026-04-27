@@ -41,11 +41,20 @@ class WCP_Page_Mission_Metabox {
 
         $page_mission = get_post_meta($post->ID, '_wcp_ai_page_mission', true);
         $inherit_from_parent = get_post_meta($post->ID, '_wcp_ai_mission_inherit_parent', true);
+        $page_summary = get_post_meta($post->ID, '_wcp_page_compact_summary', true);
+        $summary_generated_at = get_post_meta($post->ID, '_wcp_summary_generated_at', true);
 
         // Get parent page mission if exists
         $parent_mission = '';
         if ($post->post_parent) {
             $parent_mission = get_post_meta($post->post_parent, '_wcp_ai_page_mission', true);
+        }
+
+        // Calculate summary age
+        $summary_age_days = null;
+        if ($summary_generated_at) {
+            $generated_time = strtotime($summary_generated_at);
+            $summary_age_days = floor((time() - $generated_time) / DAY_IN_SECONDS);
         }
 
         ?>
@@ -97,6 +106,41 @@ class WCP_Page_Mission_Metabox {
                     <?php _e('Settings', 'work-copilot'); ?>
                 </a>
             </p>
+
+            <!-- Page Summary Section -->
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
+                <h4 style="margin: 0 0 10px 0;"><?php _e('Page Summary for AI Context', 'work-copilot'); ?></h4>
+                <p class="description">
+                    <?php _e('A compact summary of this page is used in AI context to reduce token usage. Refresh when page content changes significantly.', 'work-copilot'); ?>
+                </p>
+
+                <?php if ($page_summary): ?>
+                    <div id="wcp-page-summary-display" style="margin-top: 10px; padding: 12px; background: #f9f9f9; border-left: 3px solid #2271b1;">
+                        <div style="margin-bottom: 8px;">
+                            <strong><?php _e('Current Summary:', 'work-copilot'); ?></strong>
+                            <?php if ($summary_age_days !== null): ?>
+                                <span style="color: <?php echo $summary_age_days > 7 ? '#d63638' : '#666'; ?>; font-size: 12px; margin-left: 8px;">
+                                    (<?php printf(__('Generated %d days ago', 'work-copilot'), $summary_age_days); ?>)
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        <p id="wcp-summary-text" style="margin: 0; font-style: italic; color: #666;"><?php echo esc_html($page_summary); ?></p>
+                    </div>
+                <?php else: ?>
+                    <div id="wcp-page-summary-display" style="margin-top: 10px; padding: 12px; background: #fff3cd; border-left: 3px solid #ffc107;">
+                        <p style="margin: 0; color: #856404;">
+                            <?php _e('No summary generated yet. Click "Refresh Summary" to generate one.', 'work-copilot'); ?>
+                        </p>
+                    </div>
+                <?php endif; ?>
+
+                <p style="margin-top: 10px;">
+                    <button type="button" id="wcp-refresh-summary" class="button" data-page-id="<?php echo esc_attr($post->ID); ?>">
+                        <?php _e('Refresh Summary', 'work-copilot'); ?>
+                    </button>
+                    <span id="wcp-summary-status" style="margin-left: 10px; color: #666;"></span>
+                </p>
+            </div>
         </div>
 
         <style>
@@ -126,6 +170,51 @@ class WCP_Page_Mission_Metabox {
             if ($('input[name="wcp_ai_mission_inherit_parent"]').is(':checked')) {
                 $('#wcp-ai-page-mission').prop('disabled', true).css('opacity', '0.5');
             }
+
+            // Refresh summary button
+            $('#wcp-refresh-summary').on('click', function() {
+                var $button = $(this);
+                var $status = $('#wcp-summary-status');
+                var pageId = $button.data('page-id');
+
+                $button.prop('disabled', true).text('<?php _e('Generating...', 'work-copilot'); ?>');
+                $status.text('<?php _e('Please wait...', 'work-copilot'); ?>').css('color', '#2271b1');
+
+                $.ajax({
+                    url: '<?php echo esc_url(rest_url('work-copilot/v1/page/refresh-summary')); ?>',
+                    method: 'POST',
+                    data: { page_id: pageId },
+                    beforeSend: function(xhr) {
+                        xhr.setRequestHeader('X-WP-Nonce', '<?php echo wp_create_nonce('wp_rest'); ?>');
+                    },
+                    success: function(response) {
+                        if (response.success && response.summary) {
+                            $('#wcp-summary-text').text(response.summary);
+                            $('#wcp-page-summary-display').removeClass('notice-warning').css({
+                                'background': '#f9f9f9',
+                                'border-left-color': '#2271b1'
+                            });
+                            $status.text('<?php _e('Summary updated successfully!', 'work-copilot'); ?>').css('color', '#2ecc71');
+
+                            // Update age display
+                            var ageSpan = $('#wcp-page-summary-display').find('span[style*="color"]');
+                            if (ageSpan.length) {
+                                ageSpan.text('<?php _e('(Generated just now)', 'work-copilot'); ?>').css('color', '#666');
+                            } else {
+                                $('#wcp-page-summary-display strong').after(' <span style="color: #666; font-size: 12px; margin-left: 8px;"><?php _e('(Generated just now)', 'work-copilot'); ?></span>');
+                            }
+                        } else {
+                            $status.text('<?php _e('Error: ', 'work-copilot'); ?>' + (response.message || '<?php _e('Unknown error', 'work-copilot'); ?>')).css('color', '#d63638');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        $status.text('<?php _e('Request failed: ', 'work-copilot'); ?>' + error).css('color', '#d63638');
+                    },
+                    complete: function() {
+                        $button.prop('disabled', false).text('<?php _e('Refresh Summary', 'work-copilot'); ?>');
+                    }
+                });
+            });
         });
         </script>
         <?php

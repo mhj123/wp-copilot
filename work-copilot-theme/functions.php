@@ -32,16 +32,20 @@ function wcp_theme_setup() {
 }
 add_action('after_setup_theme', 'wcp_theme_setup');
 
+
 // Enqueue scripts and styles
 function wcp_theme_scripts() {
     // Main theme stylesheet
     wp_enqueue_style('wcp-theme-style', get_stylesheet_uri(), array(), '1.2.0');
 
     // Custom theme styles
-    wp_enqueue_style('wcp-theme-custom', get_template_directory_uri() . '/assets/css/theme.css', array(), '1.2.0');
+    wp_enqueue_style('wcp-theme-custom', get_template_directory_uri() . '/assets/css/theme.css', array(), '1.5.0');
+
+    // SortableJS for drag-to-reorder
+    wp_enqueue_script('sortablejs', 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js', array(), '1.15.2', true);
 
     // Theme JavaScript
-    wp_enqueue_script('wcp-theme-js', get_template_directory_uri() . '/assets/js/theme.js', array('jquery'), '1.2.0', true);
+    wp_enqueue_script('wcp-theme-js', get_template_directory_uri() . '/assets/js/theme.js', array('jquery', 'sortablejs'), '1.5.2', true);
 
     // Localize script with data
     wp_localize_script('wcp-theme-js', 'wcpThemeData', array(
@@ -171,7 +175,7 @@ function wcp_theme_enqueue_ai_widget() {
     }
 
     // Version for cache busting - update with each change
-    $widget_version = '1.2.0';
+    $widget_version = '1.3.0';
 
     // Enqueue widget CSS
     wp_enqueue_style(
@@ -259,49 +263,75 @@ function wcp_theme_get_heading_items($heading_id) {
                 'terms' => $heading_term->term_id,
             ),
         ),
-        'orderby' => 'date',
-        'order' => 'DESC',
+        'orderby' => array('menu_order' => 'ASC', 'date' => 'DESC'),
     ));
 }
 
-// Get items for Page ONLY (exclude descendant Heading items)
+// Get items belonging directly to a page — excludes items in child page contexts
+// and items in live heading contexts (those render under their heading).
+// Items in orphaned heading contexts (heading term exists, heading post doesn't) are included.
 function wcp_theme_get_page_only_items($page_id) {
     $page_term = wcp_theme_get_page_context_term($page_id);
     if (!$page_term) return array();
 
-    // Get all Heading terms under this page
+    // Terms to include: the page's own term + any orphaned heading terms
+    $include_term_ids = array($page_term->term_id);
+
+    // Terms to always exclude: live heading terms (rendered in headings loop)
     $headings = wcp_theme_get_page_headings($page_id);
-    $heading_term_ids = array();
+    $live_heading_term_ids = array();
     foreach ($headings as $heading) {
         $term = wcp_theme_get_heading_context_term($heading->ID);
-        if ($term) $heading_term_ids[] = $term->term_id;
+        if ($term) $live_heading_term_ids[] = $term->term_id;
+    }
+
+    // Terms to always exclude: child page context terms (items belong to those pages)
+    $child_page_term_ids = array();
+    $child_pages = get_pages(array('parent' => $page_id, 'post_status' => 'publish'));
+    foreach ($child_pages as $child) {
+        $child_term = wcp_theme_get_page_context_term($child->ID);
+        if ($child_term) $child_page_term_ids[] = $child_term->term_id;
+    }
+
+    // Collect orphaned heading terms: direct children of page term that are
+    // neither a live heading term nor a child page term
+    $always_exclude = array_merge($live_heading_term_ids, $child_page_term_ids);
+    $direct_children = get_terms(array(
+        'taxonomy'   => 'wcp_context',
+        'parent'     => $page_term->term_id,
+        'hide_empty' => false,
+    ));
+    if (!is_wp_error($direct_children)) {
+        foreach ($direct_children as $child_term) {
+            if (!in_array($child_term->term_id, $always_exclude)) {
+                $include_term_ids[] = $child_term->term_id;
+            }
+        }
     }
 
     $tax_query = array(
         'relation' => 'AND',
         array(
             'taxonomy' => 'wcp_context',
-            'field' => 'term_id',
-            'terms' => $page_term->term_id,
+            'field'    => 'term_id',
+            'terms'    => $include_term_ids,
         ),
     );
 
-    // Exclude items in Heading contexts
-    if (!empty($heading_term_ids)) {
+    if (!empty($always_exclude)) {
         $tax_query[] = array(
             'taxonomy' => 'wcp_context',
-            'field' => 'term_id',
-            'terms' => $heading_term_ids,
+            'field'    => 'term_id',
+            'terms'    => $always_exclude,
             'operator' => 'NOT IN',
         );
     }
 
     return get_posts(array(
-        'post_type' => 'post',
+        'post_type'      => 'post',
         'posts_per_page' => -1,
-        'tax_query' => $tax_query,
-        'orderby' => 'date',
-        'order' => 'DESC',
+        'tax_query'      => $tax_query,
+        'orderby'        => array('menu_order' => 'ASC', 'date' => 'DESC'),
     ));
 }
 

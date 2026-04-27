@@ -19,7 +19,6 @@ class WCP_Public {
     }
 
     private function __construct() {
-        add_filter('the_content', array($this, 'enhance_page_content'));
         add_filter('the_content', array($this, 'enhance_heading_content'));
         add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));
     }

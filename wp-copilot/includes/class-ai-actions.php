@@ -40,14 +40,18 @@ class WCP_AI_Actions {
             return new WP_Error('auth_error', 'User not authenticated');
         }
 
-        // Build context
+        // Build context with character limits
         $context_builder = WCP_Context_Builder::instance();
         $context_data = $context_builder->build_hierarchical_context($page_id, array(
             'include_items' => true,
             'item_limit' => 20,
             'use_rag' => $use_rag,
             'query' => $prompt,
-            'rag_limit' => 10
+            'rag_limit' => 10,
+            'limits' => array(
+                'max_chars_per_item' => 500,
+                'max_chars_page_summary' => 1000
+            )
         ));
 
         // Build system prompt (4 layers)
@@ -129,14 +133,18 @@ class WCP_AI_Actions {
             return new WP_Error('auth_error', 'User not authenticated');
         }
 
-        // Build context
+        // Build context with character limits
         $context_builder = WCP_Context_Builder::instance();
         $context_data = $context_builder->build_hierarchical_context($page_id, array(
             'include_items' => true,
             'item_limit' => 20,
             'use_rag' => $use_rag,
             'query' => $prompt,
-            'rag_limit' => 10
+            'rag_limit' => 10,
+            'limits' => array(
+                'max_chars_per_item' => 500,
+                'max_chars_page_summary' => 1000
+            )
         ));
 
         // Build system prompt (4 layers)
@@ -257,20 +265,24 @@ class WCP_AI_Actions {
             return new WP_Error('auth_error', 'User not authenticated');
         }
 
-        // Build context based on mode
+        // Build context based on mode with character limits
         $context_builder = WCP_Context_Builder::instance();
         $context_data = $context_builder->build_context_by_mode($page_id, $context_mode, array(
             'selected_pages' => $selected_pages,
             'query' => $prompt,
             'include_items' => true,
-            'item_limit' => 20
+            'item_limit' => 20,
+            'limits' => array(
+                'max_chars_per_item' => 500,
+                'max_chars_page_summary' => 1000
+            )
         ));
 
         // Build system prompt (4 layers)
         $prompt_builder = WCP_Prompt_Builder::instance();
         $system_prompt = $prompt_builder->build_system_prompt('chat', $page_id);
 
-        // Build user message with context
+        // Build user message with context (limits are already in context_data)
         $user_message = $prompt_builder->build_user_message($prompt, $context_data);
 
         // Get conversation history if provided
@@ -348,6 +360,16 @@ class WCP_AI_Actions {
             return new WP_Error('auth_error', 'User not authenticated');
         }
 
+        // Validate draft content
+        if (empty($draft_content)) {
+            return new WP_Error('empty_draft', 'Draft content is empty. Please add some content first.');
+        }
+
+        $draft_length = strlen($draft_content);
+        if ($draft_length > 20000) {
+            return new WP_Error('draft_too_large', 'Draft content is too large (' . number_format($draft_length) . ' chars). Maximum is 15,000 characters. Please reduce content size or work in sections.');
+        }
+
         // Get the post to determine page context
         $post = get_post($post_id);
         $page_id = null;
@@ -368,13 +390,17 @@ class WCP_AI_Actions {
             }
         }
 
-        // Build context based on mode
+        // Build context based on mode with character limits
         $context_builder = WCP_Context_Builder::instance();
         $context_data = $context_builder->build_context_by_mode($page_id, $context_mode, array(
             'selected_pages' => $selected_pages,
             'query' => $prompt,
             'include_items' => true,
-            'item_limit' => 10
+            'item_limit' => 10,
+            'limits' => array(
+                'max_chars_per_item' => 500,
+                'max_chars_page_summary' => 1000
+            )
         ));
 
         // Build system prompt (4 layers)
@@ -385,23 +411,42 @@ class WCP_AI_Actions {
         $user_message = "User Instruction:\n{$prompt}\n\n";
         $user_message .= "Current Draft:\n{$draft_content}\n\n";
 
-        // Add context
-        $formatted_context = $context_builder->format_for_prompt($context_data);
+        // Add context with character limits applied
+        $formatted_context = $context_builder->format_for_prompt($context_data, array(
+            'max_chars_per_item' => 500,
+            'max_chars_page_summary' => 1000
+        ));
         if (!empty($formatted_context)) {
             $user_message .= $formatted_context;
         }
 
-        // Call AI (no conversation history for draft expansion)
-        $ai_client = WCP_AI_Client::instance();
-        $response = $ai_client->request_with_conversation(
-            $system_prompt,
-            $user_message,
-            array(),
-            4096
-        );
+        // Call AI with longer timeout for expand operations
+        try {
+            $ai_client = WCP_AI_Client::instance();
+            $response = $ai_client->request_with_conversation(
+                $system_prompt,
+                $user_message,
+                array(), // No conversation history for expand
+                4096,    // max_tokens for response
+                60       // 60-second timeout for expand operations
+            );
 
-        if (is_wp_error($response)) {
-            return $response;
+            if (is_wp_error($response)) {
+                // Log specific error
+                error_log('WCP Expand Draft Error: ' . $response->get_error_message());
+
+                // Return user-friendly error
+                if (strpos($response->get_error_message(), 'timeout') !== false) {
+                    return new WP_Error('timeout', 'AI request timed out. Try reducing the content size or try again.');
+                } elseif (strpos($response->get_error_message(), 'token') !== false) {
+                    return new WP_Error('token_limit', 'Content is too large for AI processing. Please reduce content size and try again.');
+                } else {
+                    return $response; // Return original error
+                }
+            }
+        } catch (Exception $e) {
+            error_log('WCP Expand Draft Exception: ' . $e->getMessage());
+            return new WP_Error('api_error', 'AI API error: ' . $e->getMessage());
         }
 
         // Log AI action
@@ -450,13 +495,17 @@ class WCP_AI_Actions {
             return new WP_Error('auth_error', 'User not authenticated');
         }
 
-        // Build context based on mode
+        // Build context based on mode with character limits
         $context_builder = WCP_Context_Builder::instance();
         $context_data = $context_builder->build_context_by_mode($page_id, $context_mode, array(
             'selected_pages' => $selected_pages,
             'query' => $prompt,
             'include_items' => true,
-            'item_limit' => 20
+            'item_limit' => 20,
+            'limits' => array(
+                'max_chars_per_item' => 500,
+                'max_chars_page_summary' => 1000
+            )
         ));
 
         // Build system prompt (4 layers) - use generate-multiple
@@ -812,6 +861,120 @@ class WCP_AI_Actions {
     public function extract_memories_action($conversation_id) {
         $memory_manager = WCP_Memory_Manager::instance();
         return $memory_manager->extract_memories($conversation_id);
+    }
+
+    /**
+     * Summarize page content for compact context representation
+     *
+     * @param int $page_id Page ID to summarize
+     * @return array|WP_Error Result with summary or error
+     */
+    public function summarize_page($page_id) {
+        // Get current user
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new WP_Error('auth_error', 'User not authenticated');
+        }
+
+        // Get page
+        $page = get_post($page_id);
+        if (!$page || $page->post_type !== 'page') {
+            return new WP_Error('invalid_page', 'Invalid page ID');
+        }
+
+        // Get page headings for structural context (with error handling)
+        $heading_titles = array();
+        try {
+            $headings_query = new WP_Query(array(
+                'post_type' => 'wcp_heading',
+                'post_status' => 'publish',
+                'posts_per_page' => 20, // Limit for performance
+                'meta_query' => array(
+                    'relation' => 'AND',
+                    array('key' => '_wcp_parent_id', 'value' => $page_id, 'compare' => '='),
+                    array('key' => '_wcp_parent_type', 'value' => 'page', 'compare' => '=')
+                ),
+                'orderby' => 'menu_order',
+                'order' => 'ASC',
+                'fields' => 'ids'
+            ));
+
+            if (!is_wp_error($headings_query) && !empty($headings_query->posts)) {
+                foreach ($headings_query->posts as $heading_id) {
+                    $heading = get_post($heading_id);
+                    if ($heading) {
+                        $heading_titles[] = $heading->post_title;
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            error_log('WCP: Error getting headings for summarization: ' . $e->getMessage());
+        }
+
+        // Build prompt
+        $prompt_builder = WCP_Prompt_Builder::instance();
+        $system_prompt = "You are a summarization assistant. Create a concise summary (500-1000 characters) that captures the key themes, objectives, and purpose of the page content. Focus on what's important for understanding the context, not every detail.";
+
+        $user_message = "Page Title: {$page->post_title}\n\n";
+        if (!empty($heading_titles)) {
+            $user_message .= "Page Structure (Headings):\n- " . implode("\n- ", $heading_titles) . "\n\n";
+        }
+        $user_message .= "Page Content:\n{$page->post_content}\n\n";
+        $user_message .= "Please provide a 500-1000 character summary of this page.";
+
+        // Call AI
+        $ai_client = WCP_AI_Client::instance();
+        $response = $ai_client->request_with_conversation(
+            $system_prompt,
+            $user_message,
+            array(), // No conversation history
+            1000     // Max tokens for summary
+        );
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $summary = trim($response['content']);
+
+        // Enforce max length
+        if (strlen($summary) > 1000) {
+            $summary = substr($summary, 0, 997) . '...';
+        }
+
+        // Save summary to page meta
+        update_post_meta($page_id, '_wcp_page_compact_summary', $summary);
+        update_post_meta($page_id, '_wcp_summary_generated_at', current_time('mysql'));
+
+        // Log AI action
+        $logger = WCP_AI_Logger::instance();
+        $logger->log_action(array(
+            'action_type' => 'summarize_page',
+            'user_id' => $user_id,
+            'model' => $response['model'],
+            'prompt' => 'Summarize page: ' . $page->post_title,
+            'input_context' => json_encode(array(
+                'page_title' => $page->post_title,
+                'content_length' => strlen($page->post_content),
+                'heading_count' => count($heading_titles)
+            )),
+            'output_snapshot' => $summary,
+            'context_post_id' => $page_id,
+            'accepted_items' => array(),
+            'dismissed_items' => array()
+        ));
+
+        return array(
+            'success' => true,
+            'summary' => $summary,
+            'generated_at' => current_time('mysql'),
+            'metadata' => array(
+                'model' => $response['model'],
+                'tokens' => $response['usage'] ?? null,
+                'original_length' => strlen($page->post_content),
+                'summary_length' => strlen($summary)
+            )
+        );
     }
 
     /**

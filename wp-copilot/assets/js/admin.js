@@ -352,6 +352,38 @@ jQuery(document).ready(function($) {
         });
     });
 
+    // Sync all pages/headings to wcp_context taxonomy
+    $('#wcp-sync-taxonomy').on('click', function(e) {
+        e.preventDefault();
+
+        var $button = $(this);
+        var $status = $('#wcp-sync-taxonomy-status');
+
+        $button.prop('disabled', true).text('Syncing...');
+        $status.html('<span style="color: #2271b1;">Running sync...</span>');
+
+        $.ajax({
+            url: wcpData.restUrl + '/taxonomy/sync-all',
+            method: 'POST',
+            beforeSend: function(xhr) {
+                xhr.setRequestHeader('X-WP-Nonce', wcpData.nonce);
+            },
+            success: function(response) {
+                if (response.success) {
+                    $status.html('<span style="color: #46b450;">✓ ' + response.message + '</span>');
+                } else {
+                    $status.html('<span style="color: #d63638;">Error: ' + (response.message || 'Unknown error') + '</span>');
+                }
+            },
+            error: function(xhr) {
+                $status.html('<span style="color: #d63638;">Request failed.</span>');
+            },
+            complete: function() {
+                $button.prop('disabled', false).text('Sync All Pages & Headings');
+            }
+        });
+    });
+
     // Batch generate embeddings
     $('#wcp-batch-generate').on('click', function(e) {
         e.preventDefault();
@@ -533,6 +565,20 @@ jQuery(document).ready(function($) {
             var contextMode = $('#wcp-editor-context-mode').val();
             var draftContent = this.getEditorContent();
 
+            // Add size validation with warning
+            var maxChars = 15000;
+            var contentLength = draftContent.length;
+
+            if (contentLength > maxChars) {
+                var warningMsg = 'Your content is ' + contentLength.toLocaleString() + ' characters, which exceeds the ' + maxChars.toLocaleString() + ' character limit. ';
+                warningMsg += 'The content will be automatically truncated to the first ' + maxChars.toLocaleString() + ' characters for processing. ';
+                warningMsg += 'For best results, consider working on smaller sections at a time.';
+
+                if (!confirm(warningMsg + '\n\nDo you want to continue?')) {
+                    return; // User cancelled
+                }
+            }
+
             // Show loading
             $('.wcp-editor-ai-loading').show();
             $('#wcp-editor-ai-generate').prop('disabled', true);
@@ -547,6 +593,7 @@ jQuery(document).ready(function($) {
                     post_id: postId,
                     context_mode: contextMode
                 },
+                timeout: 90000, // 90 seconds
                 beforeSend: function(xhr) {
                     xhr.setRequestHeader('X-WP-Nonce', wcpData.nonce);
                 },
@@ -559,13 +606,35 @@ jQuery(document).ready(function($) {
                         $('.wcp-editor-ai-response-content').text(response.result.content);
                         $('.wcp-editor-ai-response').show();
                     } else {
-                        alert('Error: ' + (response.message || 'Unknown error'));
+                        var errorMsg = response.message || 'Unknown error';
+                        var errorHtml = '<p><strong>Error:</strong> ' + errorMsg + '</p>';
+
+                        // Add helpful tips based on error type
+                        if (errorMsg.indexOf('too large') !== -1 || errorMsg.indexOf('token') !== -1) {
+                            errorHtml += '<p><strong>Tip:</strong> Try reducing the content size or working on smaller sections.</p>';
+                        } else if (errorMsg.indexOf('timeout') !== -1) {
+                            errorHtml += '<p><strong>Tip:</strong> The content may be too large. Try again with less content.</p>';
+                        }
+
+                        alert('AI Assistant Error\n\n' + errorMsg);
                     }
                 },
                 error: function(xhr, status, error) {
                     $('.wcp-editor-ai-loading').hide();
                     $('#wcp-editor-ai-generate').prop('disabled', false);
-                    alert('Error: ' + error);
+
+                    var errorMsg = 'Request failed: ';
+                    if (status === 'timeout') {
+                        errorMsg += 'The request took too long. Your content may be too large. Try reducing the content size.';
+                    } else if (xhr.status === 500) {
+                        errorMsg += 'Internal server error. This usually happens when content is too large. Try working on smaller sections.';
+                    } else if (xhr.status === 413) {
+                        errorMsg += 'Content too large (413). Please reduce the content size significantly.';
+                    } else {
+                        errorMsg += error + ' (Status: ' + xhr.status + ')';
+                    }
+
+                    alert('AI Assistant Error\n\n' + errorMsg);
                 }
             });
         },

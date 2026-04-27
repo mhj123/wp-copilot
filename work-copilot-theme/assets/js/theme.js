@@ -60,65 +60,52 @@ jQuery(document).ready(function($) {
         });
     }
 
-    // Show/hide general item form
-    $(document).on('click', '#wcp-btn-add-item-general', function() {
-        var $form = $('#wcp-create-item-form');
-        var $container = $('#wcp-item-contexts');
+    // ==========================================================================
+    // Quick-add item forms (page-level and per-heading)
+    // ==========================================================================
 
-        $form.slideToggle();
-
-        // Load context tree if not already loaded and form is now visible
-        if ($form.is(':visible') && $container.find('ul').length === 0) {
-            loadContextTree($container);
-        }
-    });
-
-    $(document).on('click', '#wcp-btn-cancel-general-item', function() {
-        $('#wcp-create-item-form').slideUp();
-        $('#wcp-create-item-form')[0].reset();
-    });
-
-    // Create ItemPost form submission
-    $('#wcp-create-item-form').on('submit', function(e) {
-        e.preventDefault();
-
-        var $form = $(this);
-        var $status = $('.wcp-form-status');
-        var $submitBtn = $form.find('button[type="submit"]');
-
-        // Get form data
-        var title = $('#wcp-item-title').val();
-        var content = $('#wcp-item-content').val();
-        var itemType = $('#wcp-item-type').val();
-        var priority = $('#wcp-item-priority').val();
-        var tagsInput = $('#wcp-item-tags').val();
-        var tags = tagsInput ? tagsInput.split(',').map(function(tag) {
-            return tag.trim();
-        }) : [];
-
-        // Get selected contexts
-        var contexts = [];
-        $('#wcp-item-contexts input[name="contexts[]"]:checked').each(function() {
-            contexts.push($(this).val());
+    // Toggle quick-add form visibility
+    $(document).on('click', '.wcp-btn-quick-add-item', function() {
+        var $wrap = $(this).closest('.wcp-quick-add-wrap');
+        var $form = $wrap.find('.wcp-quick-item-form');
+        $form.slideToggle(150, function() {
+            if ($form.is(':visible')) $form.find('.wcp-quick-title').focus();
         });
+    });
 
-        if (contexts.length === 0) {
-            $status.addClass('error').text('Please select at least one context.');
-            return;
-        }
+    // Cancel quick-add
+    $(document).on('click', '.wcp-btn-cancel-quick', function() {
+        var $form = $(this).closest('.wcp-quick-item-form');
+        $form.slideUp(150)[0].reset();
+        $form.find('.wcp-quick-status').text('');
+    });
 
-        $submitBtn.prop('disabled', true).text('Creating...');
-        $status.removeClass('success error').text('');
+    // Submit quick-add item form
+    $(document).on('submit', '.wcp-quick-item-form', function(e) {
+        e.preventDefault();
+        var $form = $(this);
+        var $btn = $form.find('button[type="submit"]');
+        var $status = $form.find('.wcp-quick-status');
+        var contextId = $form.data('context-id');
+        var title = $form.find('input[name="title"]').val().trim();
 
-        // Create the item
+        if (!title) return;
+
+        var tagsRaw = $form.find('input[name="tags"]').val().trim();
+        var tags = tagsRaw ? tagsRaw.split(',').map(function(t) { return t.trim(); }).filter(Boolean) : [];
+
+        // Build data object — send context_ids as a comma-joined string to avoid
+        // jQuery array serialization issues with the WP REST API
         var data = {
             title: title,
-            content: content,
-            contexts: contexts,
-            item_type: itemType,
-            priority: priority,
-            tags: tags
+            contexts: contextId,   // single ID; REST handler wraps in array below
+            item_type: $form.find('select[name="item_type"]').val(),
+            priority: $form.find('select[name="priority"]').val()
         };
+        if (tags.length) data.tags = tags;
+
+        $btn.prop('disabled', true).text('Adding...');
+        $status.removeClass('error').text('');
 
         $.ajax({
             url: wcpThemeData.restUrl + '/items/create',
@@ -129,21 +116,19 @@ jQuery(document).ready(function($) {
             },
             success: function(response) {
                 if (response.success) {
-                    $status.addClass('success').text('Item created successfully!');
-                    $form[0].reset();
-
-                    // Reload context tree and page after 1 second
-                    setTimeout(function() {
-                        location.reload();
-                    }, 1000);
+                    location.reload();
                 } else {
-                    $status.addClass('error').text('Error: ' + response.message);
-                    $submitBtn.prop('disabled', false).text('Create Item');
+                    $status.addClass('error').text(response.message || 'Error');
+                    $btn.prop('disabled', false).text('Add');
                 }
             },
-            error: function() {
-                $status.addClass('error').text('Error creating item. Please try again.');
-                $submitBtn.prop('disabled', false).text('Create Item');
+            error: function(xhr) {
+                var msg = 'Error';
+                if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                else if (xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.status) msg += ' ' + xhr.responseJSON.data.status;
+                console.error('Quick-add error:', xhr.status, xhr.responseText);
+                $status.addClass('error').text(msg);
+                $btn.prop('disabled', false).text('Add');
             }
         });
     });
@@ -309,6 +294,104 @@ jQuery(document).ready(function($) {
     });
 
     // ==========================================================================
+    // Inline Item Editing
+    // ==========================================================================
+
+    function updateItem(itemId, data) {
+        return $.ajax({
+            url: wcpThemeData.restUrl + '/items/' + itemId + '/update',
+            method: 'POST',
+            data: data,
+            beforeSend: function(xhr) {
+                xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce);
+            }
+        });
+    }
+
+    // Click title to edit inline
+    $(document).on('click', '.wcp-item-title', function() {
+        var $title = $(this);
+        var $row = $title.closest('.wcp-item-row');
+        var $input = $row.find('.wcp-item-title-input');
+
+        $title.hide();
+        $input.show().focus().select();
+    });
+
+    // Save on Enter, cancel on Escape
+    $(document).on('keydown', '.wcp-item-title-input', function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            $(this).blur();
+        } else if (e.which === 27) {
+            var $input = $(this);
+            var $row = $input.closest('.wcp-item-row');
+            var $title = $row.find('.wcp-item-title');
+            $input.val($title.text()).hide();
+            $title.show();
+        }
+    });
+
+    // Save on blur
+    $(document).on('blur', '.wcp-item-title-input', function() {
+        var $input = $(this);
+        var $row = $input.closest('.wcp-item-row');
+        var $title = $row.find('.wcp-item-title');
+        var itemId = $row.data('item-id');
+        var newTitle = $input.val().trim();
+
+        if (!newTitle || newTitle === $title.text()) {
+            $input.val($title.text()).hide();
+            $title.show();
+            return;
+        }
+
+        updateItem(itemId, { title: newTitle })
+            .done(function(response) {
+                if (response.success) {
+                    $title.text(newTitle);
+                }
+            })
+            .always(function() {
+                $input.hide();
+                $title.show();
+            });
+    });
+
+    // Dropdown changes — save immediately
+    $(document).on('change', '.wcp-type-select', function() {
+        var itemId = $(this).data('item-id');
+        updateItem(itemId, { item_type: $(this).val() });
+    });
+
+    $(document).on('change', '.wcp-priority-select', function() {
+        var itemId = $(this).data('item-id');
+        updateItem(itemId, { priority: $(this).val() });
+    });
+
+    // Delete item
+    $(document).on('click', '.wcp-item-delete', function() {
+        var $btn = $(this);
+        var $row = $btn.closest('.wcp-item-row');
+        var itemId = $btn.data('item-id');
+
+        if (!confirm('Delete this item?')) return;
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/items/' + itemId + '/delete',
+            method: 'POST',
+            beforeSend: function(xhr) {
+                xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce);
+            },
+            success: function(response) {
+                if (response.success) {
+                    $row.fadeOut(200, function() { $(this).remove(); });
+                }
+            }
+        });
+    });
+
+    // ==========================================================================
     // Heading Management
     // ==========================================================================
 
@@ -337,104 +420,90 @@ jQuery(document).ready(function($) {
         });
     }
 
-    // Toggle Heading creation form
+    // ==========================================================================
+    // Heading creation form
+    // ==========================================================================
+
     $(document).on('click', '#wcp-btn-new-heading', function() {
-        $('#wcp-create-heading-form').slideToggle();
+        var $form = $('#wcp-create-heading-form');
+        $form.slideToggle(150, function() {
+            if ($form.is(':visible')) $form.find('.wcp-quick-title').focus();
+        });
     });
 
     $(document).on('click', '#wcp-btn-cancel-heading', function() {
-        $('#wcp-create-heading-form').slideUp();
-        $('#wcp-create-heading-form')[0].reset();
+        var $form = $('#wcp-create-heading-form');
+        $form.slideUp(150);
+        $form[0].reset();
+        $form.find('.wcp-quick-status').text('');
     });
 
-    // Submit Heading creation form
     $(document).on('submit', '#wcp-create-heading-form', function(e) {
         e.preventDefault();
-
-        var pageId = $(this).find('input[name="page_id"]').val();
-        var title = $(this).find('input[name="title"]').val();
-        var content = $(this).find('textarea[name="content"]').val();
-
-        createHeading(pageId, title, content);
-    });
-
-    // Toggle Heading section (expand/collapse)
-    $(document).on('click', '.wcp-heading-title', function() {
-        var $section = $(this).closest('.wcp-heading-section');
-        var $body = $section.find('.wcp-heading-body');
-        var $icon = $section.find('.wcp-toggle-icon');
-
-        $body.slideToggle();
-        $icon.text($icon.text() === '▶' ? '▼' : '▶');
-    });
-
-    // Show/hide Heading item form
-    $(document).on('click', '.wcp-btn-add-item', function() {
-        var headingId = $(this).data('heading-id');
-        var $form = $('.wcp-heading-item-form[data-heading-id="' + headingId + '"]');
-        var $container = $form.find('.wcp-heading-contexts');
-        var contextId = $form.data('context-id');
-
-        // Toggle form
-        $form.slideToggle();
-
-        // Load context tree if not already loaded
-        if ($form.is(':visible') && $container.find('ul').length === 0) {
-            loadContextTree($container, contextId);
-        }
-    });
-
-    $(document).on('click', '.wcp-btn-cancel-item', function() {
-        var $form = $(this).closest('.wcp-heading-item-form');
-        $form.slideUp();
-        $form[0].reset();
-    });
-
-    // Submit Heading item form
-    $(document).on('submit', '.wcp-heading-item-form', function(e) {
-        e.preventDefault();
-
         var $form = $(this);
-        var $submitBtn = $form.find('button[type="submit"]');
+        var $btn = $form.find('button[type="submit"]');
+        var $status = $form.find('.wcp-quick-status');
+        var pageId = $form.find('input[name="page_id"]').val();
+        var title = $form.find('input[name="title"]').val().trim();
 
-        // Collect form data
-        var data = {
-            title: $form.find('input[name="title"]').val(),
-            content: $form.find('textarea[name="content"]').val(),
-            contexts: [],
-            item_type: $form.find('select[name="item_type"]').val(),
-            priority: $form.find('select[name="priority"]').val(),
-            tags: $form.find('input[name="tags"]').val().split(',').map(function(t) { return t.trim(); }).filter(Boolean)
-        };
+        if (!title) return;
 
-        // Collect checked context checkboxes
-        $form.find('.wcp-heading-contexts input[type="checkbox"]:checked').each(function() {
-            data.contexts.push($(this).val());
-        });
+        $btn.prop('disabled', true).text('Creating...');
+        $status.removeClass('error').text('');
 
-        if (data.contexts.length === 0) {
-            alert('Please select at least one context.');
-            return;
-        }
+        createHeading(pageId, title, '');
+    });
 
-        $submitBtn.prop('disabled', true).text('Creating...');
+    // ==========================================================================
+    // Drag-to-reorder items
+    // ==========================================================================
 
-        // Submit via existing /items/create endpoint
+    function saveItemOrder(lists) {
         $.ajax({
-            url: wcpThemeData.restUrl + '/items/create',
+            url: wcpThemeData.restUrl + '/items/reorder',
             method: 'POST',
-            data: data,
+            contentType: 'application/json',
+            data: JSON.stringify({ lists: lists }),
             beforeSend: function(xhr) {
                 xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce);
             },
-            success: function(response) {
-                if (response.success) {
-                    location.reload(); // Reload to show new item
-                }
-            },
             error: function(xhr) {
-                alert('Error creating item: ' + (xhr.responseJSON?.message || 'Unknown error'));
-                $submitBtn.prop('disabled', false).text('Create Item');
+                console.error('Reorder failed:', xhr.responseText);
+            }
+        });
+    }
+
+    function getListState(el) {
+        return {
+            context_id: parseInt(el.dataset.contextId, 10),
+            item_ids: Array.from(el.querySelectorAll('.wcp-item-row')).map(function(row) {
+                return parseInt(row.dataset.itemId, 10);
+            })
+        };
+    }
+
+    document.querySelectorAll('.wcp-items-list').forEach(function(list) {
+        Sortable.create(list, {
+            group: 'wcp-items',
+            handle: '.wcp-drag-handle',
+            animation: 150,
+            ghostClass: 'wcp-drag-ghost',
+            dragClass: 'wcp-dragging',
+            onEnd: function(evt) {
+                // Skip if dropped back in the same position
+                if (evt.from === evt.to && evt.oldIndex === evt.newIndex) return;
+
+                var lists = [];
+                var seen = new Set();
+
+                [evt.from, evt.to].forEach(function(el) {
+                    if (!seen.has(el)) {
+                        seen.add(el);
+                        lists.push(getListState(el));
+                    }
+                });
+
+                saveItemOrder(lists);
             }
         });
     });

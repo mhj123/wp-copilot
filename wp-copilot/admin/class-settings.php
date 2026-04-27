@@ -188,6 +188,25 @@ class WCP_Settings {
                         <input type="submit" name="wcp_test_connection" class="button button-secondary" value="<?php esc_attr_e('Test Connection', 'work-copilot'); ?>">
                     </form>
                     <?php endif; ?>
+
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+                        <h2><?php _e('Tools', 'work-copilot'); ?></h2>
+
+                        <table class="form-table" role="presentation">
+                            <tr>
+                                <th scope="row"><?php _e('Sync Context Taxonomy', 'work-copilot'); ?></th>
+                                <td>
+                                    <button type="button" id="wcp-sync-taxonomy" class="button button-secondary">
+                                        <?php _e('Sync All Pages &amp; Headings', 'work-copilot'); ?>
+                                    </button>
+                                    <span id="wcp-sync-taxonomy-status" style="margin-left: 10px;"></span>
+                                    <p class="description">
+                                        <?php _e('Creates missing <code>wcp_context</code> taxonomy terms for any pages or headings that were added before the plugin was active, or whose sync failed. Safe to run at any time.', 'work-copilot'); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
                 </div>
 
                 <div class="wcp-settings-sidebar">
