@@ -28,6 +28,10 @@ package-lock.json
 *.log
 npm-debug.log*
 error_log
+wp-copilot/plugin-load-log.txt
+
+# Debug files
+wp-copilot/debug-test.php
 
 # Environment files
 .env

@@ -25,6 +25,10 @@ if (!defined('ABSPATH')) exit;
         <input type="text" name="tags" class="wcp-quick-tags" placeholder="<?php esc_attr_e('tags...', 'work-copilot-theme'); ?>">
         <button type="submit" class="wcp-btn wcp-btn-primary wcp-btn-sm"><?php _e('Add', 'work-copilot-theme'); ?></button>
         <button type="button" class="wcp-btn-cancel-quick wcp-edit-link"><?php _e('cancel', 'work-copilot-theme'); ?></button>
+        <div class="wcp-form-context-section">
+            <button type="button" class="wcp-toggle-form-contexts wcp-edit-link"><?php _e('+ pages...', 'work-copilot-theme'); ?></button>
+            <div class="wcp-form-contexts" style="display:none;"></div>
+        </div>
         <span class="wcp-quick-status"></span>
     </form>
 </div>

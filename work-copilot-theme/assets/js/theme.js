@@ -69,8 +69,20 @@ jQuery(document).ready(function($) {
         var $wrap = $(this).closest('.wcp-quick-add-wrap');
         var $form = $wrap.find('.wcp-quick-item-form');
         $form.slideToggle(150, function() {
-            if ($form.is(':visible')) $form.find('.wcp-quick-title').focus();
+            if ($form.is(':visible')) {
+                $form.find('.wcp-quick-title').focus();
+                // Lazy-load the context tree (once per form)
+                var $ctx = $form.find('.wcp-form-contexts');
+                if ($ctx.find('ul').length === 0) {
+                    loadContextTree($ctx, $form.data('context-id'));
+                }
+            }
         });
+    });
+
+    // Toggle the page-association tree inside a quick-add form
+    $(document).on('click', '.wcp-toggle-form-contexts', function() {
+        $(this).next('.wcp-form-contexts').slideToggle(150);
     });
 
     // Cancel quick-add
@@ -94,11 +106,15 @@ jQuery(document).ready(function($) {
         var tagsRaw = $form.find('input[name="tags"]').val().trim();
         var tags = tagsRaw ? tagsRaw.split(',').map(function(t) { return t.trim(); }).filter(Boolean) : [];
 
-        // Build data object — send context_ids as a comma-joined string to avoid
-        // jQuery array serialization issues with the WP REST API
+        // Collect checked contexts from the page-association tree; fall back to primary context
+        var checkedContexts = $form.find('.wcp-form-contexts input[type="checkbox"]:checked').map(function() {
+            return parseInt($(this).val(), 10);
+        }).get();
+        var contexts = checkedContexts.length > 0 ? checkedContexts : [parseInt(contextId, 10)];
+
         var data = {
             title: title,
-            contexts: contextId,   // single ID; REST handler wraps in array below
+            contexts: contexts,
             item_type: $form.find('select[name="item_type"]').val(),
             priority: $form.find('select[name="priority"]').val()
         };
@@ -110,7 +126,8 @@ jQuery(document).ready(function($) {
         $.ajax({
             url: wcpThemeData.restUrl + '/items/create',
             method: 'POST',
-            data: data,
+            contentType: 'application/json',
+            data: JSON.stringify(data),
             beforeSend: function(xhr) {
                 xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce);
             },

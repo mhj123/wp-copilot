@@ -34,6 +34,15 @@ get_header();
     </div>
     <?php endif; ?>
 
+    <!-- Page Notes -->
+    <?php
+    $page_notes = get_post_meta(get_the_ID(), '_wcp_page_notes', true);
+    if ($page_notes) : ?>
+    <div class="wcp-page-notes">
+        <?php echo wp_kses_post($page_notes); ?>
+    </div>
+    <?php endif; ?>
+
     <?php
     endwhile;
 

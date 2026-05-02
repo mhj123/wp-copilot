@@ -8,6 +8,7 @@ if (!defined('ABSPATH')) exit;
 <div class="wcp-item-row" data-item-id="<?php echo esc_attr($item->ID); ?>">
     <span class="wcp-drag-handle" title="Drag to reorder">&#8942;</span>
     <span class="wcp-item-title"><?php echo esc_html($item->post_title); ?></span>
+    <a href="<?php echo esc_url(get_permalink($item->ID)); ?>" class="wcp-item-view-link wcp-edit-link" title="View item">[view]</a>
     <input type="text" class="wcp-item-title-input" style="display:none;" value="<?php echo esc_attr($item->post_title); ?>">
 
     <?php if (!empty($item_contexts)) : ?>

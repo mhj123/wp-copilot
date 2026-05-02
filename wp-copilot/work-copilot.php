@@ -62,6 +62,7 @@ class Work_Copilot {
         require_once WCP_PLUGIN_DIR . 'admin/class-admin.php';
         require_once WCP_PLUGIN_DIR . 'admin/class-settings.php';
         require_once WCP_PLUGIN_DIR . 'admin/class-page-mission-metabox.php';
+        require_once WCP_PLUGIN_DIR . 'admin/class-page-notes-metabox.php';
         require_once WCP_PLUGIN_DIR . 'public/class-public.php';
     }
 
@@ -84,6 +85,7 @@ class Work_Copilot {
             WCP_Admin::instance();
             WCP_Settings::instance();
             WCP_Page_Mission_Metabox::instance();
+            WCP_Page_Notes_Metabox::instance();
         } else {
             WCP_Public::instance();
         }

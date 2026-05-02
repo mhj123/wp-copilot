@@ -192,6 +192,17 @@
     line-height: 1.8;
 }
 
+.wcp-page-notes {
+    background: #fff;
+    padding: 30px;
+    border-radius: 6px;
+    margin-bottom: 30px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    line-height: 1.8;
+}
+
+.wcp-page-notes p:last-child { margin-bottom: 0; }
+
 /* Legacy page template styles (kept for backward compatibility) */
 .wcp-page-article {
     background: #fff;
@@ -464,6 +475,28 @@ textarea.wcp-form-control {
     background: #f9f9f9;
     border-radius: 4px;
     border: 1px solid #e8e8e8;
+}
+
+.wcp-form-context-section {
+    flex-basis: 100%;
+    padding-top: 4px;
+    border-top: 1px solid #eee;
+    margin-top: 2px;
+}
+
+.wcp-toggle-form-contexts {
+    font-size: 11px;
+    opacity: 0.6;
+}
+
+.wcp-toggle-form-contexts:hover {
+    opacity: 1;
+}
+
+.wcp-form-contexts {
+    margin-top: 6px;
+    max-height: 200px;
+    overflow-y: auto;
 }
 
 .wcp-quick-title {
