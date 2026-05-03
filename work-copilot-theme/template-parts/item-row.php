@@ -1,7 +1,7 @@
 <?php
 /**
  * Partial: single item row
- * Expects: $item, $item_types, $priorities, $item_tags, $item_contexts
+ * Expects: $item, $item_types, $priorities, $task_statuses, $item_tags, $item_contexts
  */
 if (!defined('ABSPATH')) exit;
 ?>
@@ -38,6 +38,16 @@ if (!defined('ABSPATH')) exit;
         <option value=""><?php _e('prio', 'work-copilot-theme'); ?></option>
         <?php foreach (array('high', 'medium', 'low') as $prio) : ?>
             <option value="<?php echo $prio; ?>" <?php selected(!empty($priorities) && $priorities[0] === $prio); ?>><?php echo $prio; ?></option>
+        <?php endforeach; ?>
+    </select>
+
+    <?php $current_status = !empty($task_statuses) ? $task_statuses[0] : ''; ?>
+    <select class="wcp-inline-select wcp-status-select"
+            data-item-id="<?php echo esc_attr($item->ID); ?>"
+            style="<?php echo (!empty($item_types) && $item_types[0] === 'task') ? '' : 'display:none;'; ?>">
+        <option value=""><?php _e('status', 'work-copilot-theme'); ?></option>
+        <?php foreach (array('to-do' => 'to do', 'in-progress' => 'in progress', 'done' => 'done') as $slug => $label) : ?>
+            <option value="<?php echo $slug; ?>" <?php selected($current_status, $slug); ?>><?php echo $label; ?></option>
         <?php endforeach; ?>
     </select>
 

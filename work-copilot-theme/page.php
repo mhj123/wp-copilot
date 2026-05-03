@@ -86,9 +86,10 @@ get_header();
         <!-- Page-level items (not under any heading) -->
         <div class="wcp-items-list" data-context-id="<?php echo esc_attr($page_context_id); ?>">
             <?php foreach ($page_only_items as $item) :
-                $item_types   = wp_get_post_terms($item->ID, 'item_type', array('fields' => 'names'));
-                $priorities   = wp_get_post_terms($item->ID, 'priority', array('fields' => 'names'));
-                $item_tags    = wp_get_post_terms($item->ID, 'post_tag', array('fields' => 'names'));
+                $item_types    = wp_get_post_terms($item->ID, 'item_type', array('fields' => 'names'));
+                $priorities    = wp_get_post_terms($item->ID, 'priority', array('fields' => 'names'));
+                $task_statuses = wp_get_post_terms($item->ID, 'task_status', array('fields' => 'slugs'));
+                $item_tags     = wp_get_post_terms($item->ID, 'post_tag', array('fields' => 'names'));
                 $item_contexts = wp_get_post_terms($item->ID, 'wcp_context', array('fields' => 'names'));
             ?>
                 <?php include(locate_template('template-parts/item-row.php')); ?>
@@ -117,6 +118,7 @@ get_header();
                     <?php foreach ($items as $item) :
                         $item_types    = wp_get_post_terms($item->ID, 'item_type', array('fields' => 'names'));
                         $priorities    = wp_get_post_terms($item->ID, 'priority', array('fields' => 'names'));
+                        $task_statuses = wp_get_post_terms($item->ID, 'task_status', array('fields' => 'slugs'));
                         $item_tags     = wp_get_post_terms($item->ID, 'post_tag', array('fields' => 'names'));
                         $item_contexts = wp_get_post_terms($item->ID, 'wcp_context', array('fields' => 'names'));
                     ?>

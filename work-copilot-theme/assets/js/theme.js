@@ -378,12 +378,26 @@ jQuery(document).ready(function($) {
     // Dropdown changes — save immediately
     $(document).on('change', '.wcp-type-select', function() {
         var itemId = $(this).data('item-id');
-        updateItem(itemId, { item_type: $(this).val() });
+        var type = $(this).val();
+        updateItem(itemId, { item_type: type });
+        // Show/hide status dropdown based on whether type is task
+        var $statusSelect = $(this).closest('.wcp-item-row').find('.wcp-status-select');
+        if (type === 'task') {
+            $statusSelect.show();
+        } else {
+            $statusSelect.hide().val('');
+            updateItem(itemId, { task_status: '' });
+        }
     });
 
     $(document).on('change', '.wcp-priority-select', function() {
         var itemId = $(this).data('item-id');
         updateItem(itemId, { priority: $(this).val() });
+    });
+
+    $(document).on('change', '.wcp-status-select', function() {
+        var itemId = $(this).data('item-id');
+        updateItem(itemId, { task_status: $(this).val() });
     });
 
     // Delete item

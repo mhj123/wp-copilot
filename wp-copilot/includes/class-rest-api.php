@@ -1714,6 +1714,12 @@ class WCP_REST_API {
             wp_set_post_terms($item_id, $terms, 'priority');
         }
 
+        $task_status = $request->get_param('task_status');
+        if ($task_status !== null) {
+            $terms = $task_status ? array(sanitize_key($task_status)) : array();
+            wp_set_post_terms($item_id, $terms, 'task_status');
+        }
+
         // Re-embed immediately, bypassing the 60-second save_post throttle
         if (get_option('wcp_ai_enabled', false)) {
             WCP_Embeddings_Manager::instance()->generate_embedding($item_id);

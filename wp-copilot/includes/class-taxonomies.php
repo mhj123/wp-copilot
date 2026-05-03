@@ -21,6 +21,7 @@ class WCP_Taxonomies {
     private function __construct() {
         add_action('init', array($this, 'register_taxonomies'));
         add_action('init', array($this, 'populate_default_terms'), 20);
+        add_action('init', array($this, 'populate_task_status_terms'), 21);
     }
 
     public function register_taxonomies() {
@@ -95,6 +96,22 @@ class WCP_Taxonomies {
             'has_archive' => true,
         ));
 
+        // Task status taxonomy (visible only when item_type = task)
+        register_taxonomy('task_status', array('post'), array(
+            'labels' => array(
+                'name'          => __('Task Status', 'work-copilot'),
+                'singular_name' => __('Task Status', 'work-copilot'),
+                'menu_name'     => __('Task Status', 'work-copilot'),
+            ),
+            'hierarchical'     => false,
+            'show_ui'          => true,
+            'show_admin_column' => true,
+            'query_var'        => true,
+            'rewrite'          => array('slug' => 'task-status'),
+            'show_in_rest'     => true,
+            'public'           => true,
+        ));
+
         // Pinned taxonomy
         register_taxonomy('pinned', array('post'), array(
             'labels' => array(
@@ -156,5 +173,20 @@ class WCP_Taxonomies {
         }
 
         update_option('wcp_default_terms_created', true);
+    }
+
+    public function populate_task_status_terms() {
+        if (get_option('wcp_task_status_terms_created')) {
+            return;
+        }
+
+        $task_statuses = array('to-do' => 'To Do', 'in-progress' => 'In Progress', 'done' => 'Done');
+        foreach ($task_statuses as $slug => $label) {
+            if (!term_exists($slug, 'task_status')) {
+                wp_insert_term($label, 'task_status', array('slug' => $slug));
+            }
+        }
+
+        update_option('wcp_task_status_terms_created', true);
     }
 }
