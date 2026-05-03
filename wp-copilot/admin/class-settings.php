@@ -330,13 +330,11 @@ class WCP_Settings {
     }
 
     public function render_model_field() {
-        $model = get_option('wcp_ai_model', 'claude-sonnet-4-20250514');
+        $model = get_option('wcp_ai_model', 'claude-sonnet-4-6');
         $models = array(
-            'claude-sonnet-4-20250514' => 'Claude Sonnet 4 (Recommended)',
-            'claude-opus-4-20250514' => 'Claude Opus 4 (Most Capable)',
-            'claude-3-5-sonnet-20241022' => 'Claude 3.5 Sonnet',
-            'claude-3-5-haiku-20241022' => 'Claude 3.5 Haiku (Fast)',
-            'claude-3-haiku-20240307' => 'Claude 3 Haiku (Cheapest)',
+            'claude-sonnet-4-6' => 'Claude Sonnet 4.6 (Recommended)',
+            'claude-opus-4-7' => 'Claude Opus 4.7 (Most Capable)',
+            'claude-haiku-4-5-20251001' => 'Claude Haiku 4.5 (Fast)',
         );
         ?>
         <select name="wcp_ai_model" class="regular-text">

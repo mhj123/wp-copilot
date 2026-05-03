@@ -535,7 +535,7 @@ class WCP_REST_API {
         // Log AI action
         $logger = WCP_AI_Logger::instance();
         $action_id = $logger->log_action('tagging', array(
-            'model' => get_option('wcp_ai_model', 'claude-3-5-sonnet-20241022'),
+            'model' => get_option('wcp_ai_model', 'claude-sonnet-4-6'),
             'prompt' => 'Suggest tags for: ' . $title,
             'input_context' => array(
                 'title' => $title,

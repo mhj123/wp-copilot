@@ -26,7 +26,7 @@ class WCP_AI_Client {
 
     private function __construct() {
         $this->api_key = get_option('wcp_anthropic_api_key', '');
-        $this->model = get_option('wcp_ai_model', 'claude-sonnet-4-20250514');
+        $this->model = get_option('wcp_ai_model', 'claude-sonnet-4-6');
     }
 
     /**

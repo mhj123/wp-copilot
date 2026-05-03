@@ -447,14 +447,17 @@
             const $container = $('.wcp-ai-messages');
             const className = 'wcp-ai-message-' + role;
 
+            const $bubble = $('<div>').addClass('wcp-ai-message-content');
+            if (role === 'assistant' && typeof marked !== 'undefined') {
+                $bubble.html(marked.parse(content));
+            } else {
+                $bubble.text(content);
+            }
+
             const $message = $('<div>')
                 .addClass('wcp-ai-message')
                 .addClass(className)
-                .append(
-                    $('<div>')
-                        .addClass('wcp-ai-message-content')
-                        .text(content)
-                );
+                .append($bubble);
 
             $container.append($message);
             this.scrollToBottom();
@@ -742,14 +745,17 @@
          */
         openWidget: function() {
             $('#wcp-ai-widget').removeClass('minimized closed');
+            $('body').addClass('wcp-ai-panel-open');
         },
 
         minimizeWidget: function() {
             $('#wcp-ai-widget').addClass('minimized').removeClass('closed');
+            $('body').removeClass('wcp-ai-panel-open');
         },
 
         closeWidget: function() {
             $('#wcp-ai-widget').addClass('closed').removeClass('minimized');
+            $('body').removeClass('wcp-ai-panel-open');
         },
 
         /**
