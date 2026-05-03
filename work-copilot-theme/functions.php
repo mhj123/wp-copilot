@@ -32,6 +32,14 @@ function wcp_theme_setup() {
 }
 add_action('after_setup_theme', 'wcp_theme_setup');
 
+add_filter('document_title_parts', function($title) {
+    if (is_page()) {
+        $title['title'] = 'Page ' . get_the_ID();
+        unset($title['tagline']);
+    }
+    return $title;
+});
+
 
 // Enqueue scripts and styles
 function wcp_theme_scripts() {
