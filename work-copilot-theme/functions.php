@@ -183,7 +183,7 @@ function wcp_theme_enqueue_ai_widget() {
     }
 
     // Version for cache busting - update with each change
-    $widget_version = '1.5.0';
+    $widget_version = '1.6.0';
 
     // Enqueue widget CSS
     wp_enqueue_style(

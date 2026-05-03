@@ -115,6 +115,12 @@ class WCP_Prompt_Builder {
                 . '[{"title": "Item title", "content": "Detailed content", "item_type": "task"}]\n\n'
                 . "Valid item_type values: task, info, learning. Start your response with [ and end with ].",
 
+            'generate-headings' => "Generate headings to structure the current page based on the user's request and context. "
+                . "Headings are section titles that organise items within a page — keep them short, clear, and noun-phrase style.\n\n"
+                . "IMPORTANT: Respond with ONLY a valid JSON array of heading objects. No text before or after. Example:\n"
+                . '[{"title": "Key Outcomes"}, {"title": "Open Questions"}, {"title": "Next Steps"}]\n\n'
+                . "Start your response with [ and end with ].",
+
             // Editor sidebar action - expand/modify draft content
             'expand_draft' => "You are helping the user expand and improve their draft content. "
                 . "Based on their instructions, modify or expand the draft they provide. "

@@ -647,6 +647,127 @@ class WCP_AI_Actions {
     }
 
     /**
+     * Generate heading proposals for a page.
+     * AI guardrail: headings are proposals only — never written directly.
+     */
+    public function generate_headings($prompt, $page_id, $context_mode = 'page', $selected_pages = array(), $conversation_id = null, $item_count = 0) {
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new WP_Error('auth_error', 'User not authenticated');
+        }
+
+        $context_builder = WCP_Context_Builder::instance();
+        $context_data = $context_builder->build_context_by_mode($page_id, $context_mode, array(
+            'selected_pages' => $selected_pages,
+            'query' => $prompt,
+            'include_items' => true,
+            'item_limit' => 20,
+            'limits' => array(
+                'max_chars_per_item' => 500,
+                'max_chars_page_summary' => 1000
+            )
+        ));
+
+        $prompt_builder = WCP_Prompt_Builder::instance();
+        $system_prompt = $prompt_builder->build_system_prompt('generate-headings', $page_id, $item_count);
+        $user_message = $prompt_builder->build_user_message($prompt, $context_data);
+
+        $conversation_history = array();
+        if ($conversation_id) {
+            $conversations_manager = WCP_Conversations_Manager::instance();
+            $messages = $conversations_manager->get_messages($conversation_id, 10);
+            foreach ($messages as $msg) {
+                $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
+            }
+        }
+
+        $ai_client = WCP_AI_Client::instance();
+        $response = $ai_client->request_with_conversation($system_prompt, $user_message, $conversation_history, 2048);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        if ($conversation_id) {
+            $conversations_manager = WCP_Conversations_Manager::instance();
+            $conversations_manager->add_message($conversation_id, 'user', $prompt);
+        }
+
+        $parsed = $this->parse_json_response($response['content']);
+        if (is_wp_error($parsed)) {
+            return $parsed;
+        }
+
+        // Normalise single object to array
+        if (isset($parsed['title'])) {
+            $parsed = array($parsed);
+        }
+
+        if (empty($parsed) || !is_array($parsed)) {
+            return new WP_Error('invalid_response', 'AI did not return any headings');
+        }
+
+        $proposals = array();
+        $batch_id = wp_generate_uuid4();
+
+        foreach ($parsed as $index => $heading) {
+            if (empty($heading['title'])) {
+                continue;
+            }
+
+            $proposal_id = wp_generate_uuid4();
+            $proposal = array(
+                'proposal_id' => $proposal_id,
+                'batch_id'    => $batch_id,
+                'index'       => $index,
+                'action_type' => 'generate_headings',
+                'item'        => array('title' => sanitize_text_field($heading['title'])),
+                'conversation_id' => $conversation_id,
+                'page_id'     => $page_id,
+                'created_at'  => current_time('mysql'),
+            );
+
+            set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
+            $proposals[] = $proposal;
+        }
+
+        set_transient('wcp_batch_' . $batch_id, array(
+            'proposal_ids'    => array_column($proposals, 'proposal_id'),
+            'page_id'         => $page_id,
+            'conversation_id' => $conversation_id,
+        ), HOUR_IN_SECONDS);
+
+        if ($conversation_id) {
+            $conversations_manager = WCP_Conversations_Manager::instance();
+            $count = count($proposals);
+            $conversations_manager->add_message($conversation_id, 'assistant',
+                "Generated {$count} heading(s) for your review",
+                array('batch_id' => $batch_id)
+            );
+        }
+
+        $logger = WCP_AI_Logger::instance();
+        $logger->log_action(array(
+            'action_type'    => 'generate_headings',
+            'user_id'        => $user_id,
+            'model'          => $response['model'],
+            'prompt'         => $prompt,
+            'input_context'  => json_encode(array('context_mode' => $context_mode, 'page_id' => $page_id)),
+            'output_snapshot' => json_encode($parsed),
+            'context_post_id' => $page_id,
+            'accepted_items' => array(),
+            'dismissed_items' => array(),
+        ));
+
+        return array(
+            'outcome'   => 'create_items',
+            'proposals' => $proposals,
+            'batch_id'  => $batch_id,
+            'metadata'  => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null),
+        );
+    }
+
+    /**
      * Execute proposal (accept items and create posts)
      *
      * @param string $proposal_id Proposal ID
@@ -707,6 +828,40 @@ class WCP_AI_Actions {
                 'created_posts' => $created_posts,
                 'message' => 'Memory saved successfully',
                 'debug' => array('memory_id' => $post_id)
+            );
+        }
+
+        // Handle heading proposals
+        if (isset($proposal['action_type']) && $proposal['action_type'] === 'generate_headings') {
+            $heading_title = $proposal['item']['title'] ?? '';
+            if (empty($heading_title)) {
+                return new WP_Error('invalid_proposal', 'Heading proposal is missing a title');
+            }
+
+            $heading_id = wp_insert_post(array(
+                'post_type'    => 'wcp_heading',
+                'post_title'   => sanitize_text_field($heading_title),
+                'post_content' => '',
+                'post_status'  => 'publish',
+                'post_author'  => $user_id,
+            ));
+
+            if (is_wp_error($heading_id)) {
+                return $heading_id;
+            }
+
+            // Link heading to its parent page
+            update_post_meta($heading_id, '_wcp_parent_type', 'page');
+            update_post_meta($heading_id, '_wcp_parent_id', $page_id);
+
+            // Taxonomy sync fires automatically via save_post hook
+
+            delete_transient('wcp_proposal_' . $proposal_id);
+
+            return array(
+                'created_posts' => array($heading_id),
+                'message'       => 'Heading created successfully',
+                'debug'         => array('heading_id' => $heading_id),
             );
         }
 

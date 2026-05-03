@@ -155,13 +155,16 @@
             $('.wcp-ai-action-btn').removeClass('active');
             $(`.wcp-ai-action-btn[data-action="${action}"]`).addClass('active');
 
-            // Show/hide item count wrapper
+            // Show/hide item count wrapper and update placeholder
             if (action === 'generate') {
                 $('.wcp-ai-item-count-wrapper').css('display', 'flex');
                 $('#wcp-ai-prompt').attr('placeholder', 'Describe the items you want to create...');
+            } else if (action === 'generate_headings') {
+                $('.wcp-ai-item-count-wrapper').css('display', 'flex');
+                $('#wcp-ai-prompt').attr('placeholder', 'Describe the headings you want to create...');
             } else {
                 $('.wcp-ai-item-count-wrapper').css('display', 'none');
-                $('#wcp-ai-prompt').attr('placeholder', 'Ask a question about your work...');
+                $('#wcp-ai-prompt').attr('placeholder', 'Ask a question or describe what you need...');
             }
         },
 
@@ -494,8 +497,8 @@
                 data.selected_pages = this.selectedPages;
             }
 
-            // Add item count for generate action
-            if (this.currentAction === 'generate') {
+            // Add item count for generate actions
+            if (this.currentAction === 'generate' || this.currentAction === 'generate_headings') {
                 const itemCount = parseInt($('#wcp-ai-item-count').val()) || 0;
                 if (itemCount > 0) {
                     data.item_count = itemCount;
