@@ -50,7 +50,7 @@ class WCP_AI_Actions {
             'rag_limit' => 10,
             'limits' => array(
                 'max_chars_per_item' => 500,
-                'max_chars_page_summary' => 1000
+                'max_chars_page_summary' => 8000
             )
         ));
 
@@ -143,7 +143,7 @@ class WCP_AI_Actions {
             'rag_limit' => 10,
             'limits' => array(
                 'max_chars_per_item' => 500,
-                'max_chars_page_summary' => 1000
+                'max_chars_page_summary' => 8000
             )
         ));
 
@@ -274,7 +274,7 @@ class WCP_AI_Actions {
             'item_limit' => 20,
             'limits' => array(
                 'max_chars_per_item' => 500,
-                'max_chars_page_summary' => 1000
+                'max_chars_page_summary' => 8000
             )
         ));
 
@@ -399,7 +399,7 @@ class WCP_AI_Actions {
             'item_limit' => 10,
             'limits' => array(
                 'max_chars_per_item' => 500,
-                'max_chars_page_summary' => 1000
+                'max_chars_page_summary' => 8000
             )
         ));
 
@@ -414,7 +414,7 @@ class WCP_AI_Actions {
         // Add context with character limits applied
         $formatted_context = $context_builder->format_for_prompt($context_data, array(
             'max_chars_per_item' => 500,
-            'max_chars_page_summary' => 1000
+            'max_chars_page_summary' => 8000
         ));
         if (!empty($formatted_context)) {
             $user_message .= $formatted_context;
@@ -489,6 +489,8 @@ class WCP_AI_Actions {
      * @return array|WP_Error Response with proposals requiring approval
      */
     public function generate_items($prompt, $page_id, $context_mode = 'page', $selected_pages = array(), $conversation_id = null, $item_count = 0) {
+        set_time_limit(120);
+
         // Get current user
         $user_id = get_current_user_id();
         if (!$user_id) {
@@ -496,6 +498,7 @@ class WCP_AI_Actions {
         }
 
         // Build context based on mode with character limits
+        // Page summary limit is raised so the full page content (e.g. a list of items to process) is visible to the AI
         $context_builder = WCP_Context_Builder::instance();
         $context_data = $context_builder->build_context_by_mode($page_id, $context_mode, array(
             'selected_pages' => $selected_pages,
@@ -504,7 +507,7 @@ class WCP_AI_Actions {
             'item_limit' => 20,
             'limits' => array(
                 'max_chars_per_item' => 500,
-                'max_chars_page_summary' => 1000
+                'max_chars_page_summary' => 8000
             )
         ));
 
@@ -514,6 +517,7 @@ class WCP_AI_Actions {
 
         // Build user message with context
         $user_message = $prompt_builder->build_user_message($prompt, $context_data);
+
 
         // Get conversation history if provided
         $conversation_history = array();
@@ -529,13 +533,14 @@ class WCP_AI_Actions {
             }
         }
 
-        // Call AI
+        // Call AI with extended timeout — generating multiple items can take >30s
         $ai_client = WCP_AI_Client::instance();
         $response = $ai_client->request_with_conversation(
             $system_prompt,
             $user_message,
             $conversation_history,
-            4096
+            4096,
+            90
         );
 
         if (is_wp_error($response)) {
@@ -664,7 +669,7 @@ class WCP_AI_Actions {
             'item_limit' => 20,
             'limits' => array(
                 'max_chars_per_item' => 500,
-                'max_chars_page_summary' => 1000
+                'max_chars_page_summary' => 8000
             )
         ));
 
@@ -682,7 +687,7 @@ class WCP_AI_Actions {
         }
 
         $ai_client = WCP_AI_Client::instance();
-        $response = $ai_client->request_with_conversation($system_prompt, $user_message, $conversation_history, 2048);
+        $response = $ai_client->request_with_conversation($system_prompt, $user_message, $conversation_history, 2048, 90);
 
         if (is_wp_error($response)) {
             return $response;
@@ -756,6 +761,129 @@ class WCP_AI_Actions {
             'output_snapshot' => json_encode($parsed),
             'context_post_id' => $page_id,
             'accepted_items' => array(),
+            'dismissed_items' => array(),
+        ));
+
+        return array(
+            'outcome'   => 'create_items',
+            'proposals' => $proposals,
+            'batch_id'  => $batch_id,
+            'metadata'  => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null),
+        );
+    }
+
+    /**
+     * Generate sub-page proposals under the current page.
+     * AI guardrail: pages are proposals only — never written directly.
+     */
+    public function generate_pages($prompt, $page_id, $context_mode = 'page', $selected_pages = array(), $conversation_id = null, $item_count = 0) {
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new WP_Error('auth_error', 'User not authenticated');
+        }
+
+        $context_builder = WCP_Context_Builder::instance();
+        $context_data = $context_builder->build_context_by_mode($page_id, $context_mode, array(
+            'selected_pages' => $selected_pages,
+            'query' => $prompt,
+            'include_items' => false,
+            'item_limit' => 0,
+            'limits' => array(
+                'max_chars_per_item' => 500,
+                'max_chars_page_summary' => 8000
+            )
+        ));
+
+        $prompt_builder = WCP_Prompt_Builder::instance();
+        $system_prompt = $prompt_builder->build_system_prompt('generate-pages', $page_id, $item_count);
+        $user_message = $prompt_builder->build_user_message($prompt, $context_data);
+
+        $conversation_history = array();
+        if ($conversation_id) {
+            $conversations_manager = WCP_Conversations_Manager::instance();
+            $messages = $conversations_manager->get_messages($conversation_id, 10);
+            foreach ($messages as $msg) {
+                $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
+            }
+        }
+
+        $ai_client = WCP_AI_Client::instance();
+        $response = $ai_client->request_with_conversation($system_prompt, $user_message, $conversation_history, 2048, 90);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        if ($conversation_id) {
+            $conversations_manager = WCP_Conversations_Manager::instance();
+            $conversations_manager->add_message($conversation_id, 'user', $prompt);
+        }
+
+        $parsed = $this->parse_json_response($response['content']);
+        if (is_wp_error($parsed)) {
+            return $parsed;
+        }
+
+        if (isset($parsed['title'])) {
+            $parsed = array($parsed);
+        }
+
+        if (empty($parsed) || !is_array($parsed)) {
+            return new WP_Error('invalid_response', 'AI did not return any pages');
+        }
+
+        $proposals = array();
+        $batch_id = wp_generate_uuid4();
+
+        foreach ($parsed as $index => $page) {
+            if (empty($page['title'])) {
+                continue;
+            }
+
+            $proposal_id = wp_generate_uuid4();
+            $proposal = array(
+                'proposal_id'    => $proposal_id,
+                'batch_id'       => $batch_id,
+                'index'          => $index,
+                'action_type'    => 'generate_pages',
+                'item'           => array(
+                    'title'   => sanitize_text_field($page['title']),
+                    'content' => isset($page['content']) ? $page['content'] : '',
+                ),
+                'conversation_id' => $conversation_id,
+                'page_id'        => $page_id,
+                'created_at'     => current_time('mysql'),
+            );
+
+            set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
+            $proposals[] = $proposal;
+        }
+
+        set_transient('wcp_batch_' . $batch_id, array(
+            'proposal_ids'    => array_column($proposals, 'proposal_id'),
+            'page_id'         => $page_id,
+            'conversation_id' => $conversation_id,
+        ), HOUR_IN_SECONDS);
+
+        if ($conversation_id) {
+            $conversations_manager = WCP_Conversations_Manager::instance();
+            $count = count($proposals);
+            $conversations_manager->add_message($conversation_id, 'assistant',
+                "Proposed {$count} sub-page(s) for your review",
+                array('batch_id' => $batch_id)
+            );
+        }
+
+        $logger = WCP_AI_Logger::instance();
+        $logger->log_action(array(
+            'action_type'     => 'generate_pages',
+            'user_id'         => $user_id,
+            'model'           => $response['model'],
+            'prompt'          => $prompt,
+            'input_context'   => json_encode(array('context_mode' => $context_mode, 'page_id' => $page_id)),
+            'output_snapshot' => json_encode($parsed),
+            'context_post_id' => $page_id,
+            'accepted_items'  => array(),
             'dismissed_items' => array(),
         ));
 
@@ -862,6 +990,35 @@ class WCP_AI_Actions {
                 'created_posts' => array($heading_id),
                 'message'       => 'Heading created successfully',
                 'debug'         => array('heading_id' => $heading_id),
+            );
+        }
+
+        // Handle page proposals — create as child of the context page
+        if (isset($proposal['action_type']) && $proposal['action_type'] === 'generate_pages') {
+            $page_title = $proposal['item']['title'] ?? '';
+            if (empty($page_title)) {
+                return new WP_Error('invalid_proposal', 'Page proposal is missing a title');
+            }
+
+            $new_page_id = wp_insert_post(array(
+                'post_type'    => 'page',
+                'post_title'   => sanitize_text_field($page_title),
+                'post_content' => wp_kses_post($proposal['item']['content'] ?? ''),
+                'post_status'  => 'publish',
+                'post_author'  => $user_id,
+                'post_parent'  => $page_id,
+            ));
+
+            if (is_wp_error($new_page_id)) {
+                return $new_page_id;
+            }
+
+            delete_transient('wcp_proposal_' . $proposal_id);
+
+            return array(
+                'created_posts' => array($new_page_id),
+                'message'       => 'Page created successfully',
+                'debug'         => array('page_id' => $new_page_id, 'parent_id' => $page_id),
             );
         }
 

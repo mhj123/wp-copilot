@@ -21,6 +21,14 @@ class WCP_Settings {
     private function __construct() {
         add_action('admin_menu', array($this, 'add_settings_page'));
         add_action('admin_init', array($this, 'register_settings'));
+        add_action('wp_ajax_wcp_raindrop_import_now', array($this, 'ajax_raindrop_import_now'));
+        add_action('wp_ajax_wcp_raindrop_refresh_collections', array($this, 'ajax_raindrop_refresh_collections'));
+        add_action('wp_ajax_wcp_raindrop_reset_cursor', array($this, 'ajax_raindrop_reset_cursor'));
+        add_action('update_option_wcp_raindrop_import_frequency', array($this, 'reschedule_raindrop_cron'), 10, 0);
+        // Clear collection cache when API key changes
+        add_action('update_option_wcp_raindrop_api_key', function() {
+            delete_transient('wcp_raindrop_collections_cache');
+        });
     }
 
     public function add_settings_page() {
@@ -148,6 +156,56 @@ class WCP_Settings {
             array($this, 'render_openai_api_key_field'),
             'work-copilot-settings',
             'wcp_embeddings_section'
+        );
+
+        // Raindrop settings
+        register_setting('wcp_settings', 'wcp_raindrop_api_key', array(
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+            'default'           => '',
+        ));
+
+        register_setting('wcp_settings', 'wcp_raindrop_import_frequency', array(
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+            'default'           => 'daily',
+        ));
+
+        register_setting('wcp_settings', 'wcp_raindrop_selected_collections', array(
+            'type'              => 'array',
+            'sanitize_callback' => array($this, 'sanitize_collection_ids'),
+            'default'           => array(),
+        ));
+
+        add_settings_section(
+            'wcp_raindrop_section',
+            __('Raindrop.io Import', 'work-copilot'),
+            array($this, 'render_raindrop_section'),
+            'work-copilot-settings'
+        );
+
+        add_settings_field(
+            'wcp_raindrop_api_key',
+            __('Raindrop API Token', 'work-copilot'),
+            array($this, 'render_raindrop_api_key_field'),
+            'work-copilot-settings',
+            'wcp_raindrop_section'
+        );
+
+        add_settings_field(
+            'wcp_raindrop_import_frequency',
+            __('Import Frequency', 'work-copilot'),
+            array($this, 'render_raindrop_frequency_field'),
+            'work-copilot-settings',
+            'wcp_raindrop_section'
+        );
+
+        add_settings_field(
+            'wcp_raindrop_selected_collections',
+            __('Collections to Import', 'work-copilot'),
+            array($this, 'render_raindrop_collections_field'),
+            'work-copilot-settings',
+            'wcp_raindrop_section'
         );
     }
 
@@ -478,6 +536,218 @@ class WCP_Settings {
             <?php _e('Get your API key from', 'work-copilot'); ?> <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a><br>
             <?php _e('Used for generating embeddings (text-embedding-3-small model). Very affordable (~$0.02 per 1M tokens).', 'work-copilot'); ?>
         </p>
+        <?php
+    }
+
+    public function render_raindrop_section() {
+        $last_import = get_option('wcp_raindrop_last_import', 0);
+        echo '<p>' . __('Import bookmarks from Raindrop.io as WP posts. Each collection becomes a child page under a "Bookmarks" parent page. Tags are imported as WP post tags.', 'work-copilot') . '</p>';
+        if ($last_import) {
+            echo '<p>' . sprintf(__('Last import cursor: %s', 'work-copilot'), esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $last_import)));
+            echo ' &mdash; <a href="#" id="wcp-raindrop-reset-cursor" style="color:#c00;">' . __('Reset cursor (re-import everything)', 'work-copilot') . '</a></p>';
+            echo '<script>
+            document.getElementById("wcp-raindrop-reset-cursor").addEventListener("click", function(e) {
+                e.preventDefault();
+                if (!confirm("' . esc_js(__('This will re-import all items on the next run. Continue?', 'work-copilot')) . '")) return;
+                fetch(ajaxurl, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                    body: "action=wcp_raindrop_reset_cursor&_wpnonce=' . wp_create_nonce('wcp_raindrop_reset_cursor') . '"
+                }).then(function() { location.reload(); });
+            });
+            </script>';
+        }
+    }
+
+    public function render_raindrop_api_key_field() {
+        $api_key = get_option('wcp_raindrop_api_key', '');
+        ?>
+        <input type="password" name="wcp_raindrop_api_key" value="<?php echo esc_attr($api_key); ?>" class="regular-text" placeholder="your-test-token">
+        <p class="description">
+            <?php _e('Create a test token at', 'work-copilot'); ?> <a href="https://app.raindrop.io/settings/integrations" target="_blank">app.raindrop.io/settings/integrations</a>
+        </p>
+        <?php
+    }
+
+    public function render_raindrop_frequency_field() {
+        $frequency = get_option('wcp_raindrop_import_frequency', 'daily');
+        $next      = wp_next_scheduled('wcp_raindrop_import');
+        ?>
+        <select name="wcp_raindrop_import_frequency">
+            <option value="twicedaily" <?php selected($frequency, 'twicedaily'); ?>><?php _e('Twice Daily', 'work-copilot'); ?></option>
+            <option value="daily"      <?php selected($frequency, 'daily'); ?>><?php _e('Once Daily', 'work-copilot'); ?></option>
+            <option value="disabled"   <?php selected($frequency, 'disabled'); ?>><?php _e('Disabled (manual only)', 'work-copilot'); ?></option>
+        </select>
+        <?php if ($next) : ?>
+            <p class="description"><?php printf(__('Next scheduled run: %s', 'work-copilot'), esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $next))); ?></p>
+        <?php endif; ?>
+
+        <?php if (get_option('wcp_raindrop_api_key')) : ?>
+        <p style="margin-top: 10px;">
+            <button type="button" id="wcp-raindrop-import-now" class="button button-secondary">
+                <?php _e('Import Now', 'work-copilot'); ?>
+            </button>
+            <input type="number" id="wcp-raindrop-import-limit" min="0" placeholder="<?php esc_attr_e('limit (optional)', 'work-copilot'); ?>" style="width:140px; margin-left:8px;">
+            <span id="wcp-raindrop-import-status" style="margin-left: 10px;"></span>
+        </p>
+        <script>
+        document.getElementById('wcp-raindrop-import-now').addEventListener('click', function() {
+            var btn    = this;
+            var status = document.getElementById('wcp-raindrop-import-status');
+            var limit  = document.getElementById('wcp-raindrop-import-limit').value || 0;
+            btn.disabled = true;
+            status.textContent = '<?php echo esc_js(__('Importing...', 'work-copilot')); ?>';
+            fetch(ajaxurl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'action=wcp_raindrop_import_now&limit=' + encodeURIComponent(limit) + '&_wpnonce=<?php echo wp_create_nonce('wcp_raindrop_import_now'); ?>'
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                btn.disabled = false;
+                if (data.success) {
+                    status.textContent = data.data.message;
+                } else {
+                    status.textContent = '<?php echo esc_js(__('Error: ', 'work-copilot')); ?>' + (data.data || '<?php echo esc_js(__('Unknown error', 'work-copilot')); ?>');
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                status.textContent = '<?php echo esc_js(__('Request failed', 'work-copilot')); ?>';
+            });
+        });
+        </script>
+        <?php endif; ?>
+        <?php
+    }
+
+    public function ajax_raindrop_import_now() {
+        check_ajax_referer('wcp_raindrop_import_now');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+
+        $limit  = intval($_POST['limit'] ?? 0);
+        $result = WCP_Raindrop_Importer::instance()->run($limit);
+
+        if (is_wp_error($result)) {
+            wp_send_json_error($result->get_error_message());
+        }
+
+        $message = sprintf(
+            __('Done. Imported: %d, Skipped (duplicates): %d, Errors: %d', 'work-copilot'),
+            $result['imported'],
+            $result['skipped'],
+            $result['errors']
+        );
+        wp_send_json_success(array('message' => $message, 'stats' => $result));
+    }
+
+    public function ajax_raindrop_reset_cursor() {
+        check_ajax_referer('wcp_raindrop_reset_cursor');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        update_option('wcp_raindrop_last_import', 0);
+        wp_send_json_success();
+    }
+
+    public function ajax_raindrop_refresh_collections() {
+        check_ajax_referer('wcp_raindrop_refresh_collections');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        delete_transient('wcp_raindrop_collections_cache');
+        wp_send_json_success();
+    }
+
+    public function reschedule_raindrop_cron() {
+        wcp_schedule_raindrop_import();
+    }
+
+    public function sanitize_collection_ids($value) {
+        if (!is_array($value)) {
+            return array();
+        }
+        return array_map('intval', $value);
+    }
+
+    public function render_raindrop_collections_field() {
+        $api_key = get_option('wcp_raindrop_api_key', '');
+        if (empty($api_key)) {
+            echo '<p class="description">' . __('Save your API token first to load collections.', 'work-copilot') . '</p>';
+            return;
+        }
+
+        // Cache collections for 24h to avoid hitting the API on every settings page load
+        $collections = get_transient('wcp_raindrop_collections_cache');
+        if ($collections === false) {
+            $response = wp_remote_get('https://api.raindrop.io/rest/v1/collections', array(
+                'headers' => array('Authorization' => 'Bearer ' . $api_key),
+                'timeout' => 15,
+            ));
+            if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200) {
+                $body = json_decode(wp_remote_retrieve_body($response), true);
+                $collections = $body['items'] ?? array();
+                set_transient('wcp_raindrop_collections_cache', $collections, DAY_IN_SECONDS);
+            } else {
+                echo '<p class="description" style="color:#c00;">' . __('Could not fetch collections — check your API token.', 'work-copilot') . '</p>';
+                return;
+            }
+        }
+
+        if (empty($collections)) {
+            echo '<p class="description">' . __('No collections found in your Raindrop account.', 'work-copilot') . '</p>';
+            return;
+        }
+
+        $selected = get_option('wcp_raindrop_selected_collections', array());
+        ?>
+        <p class="description" style="margin-bottom:8px;">
+            <?php _e('Check the collections you want to import. Leave all unchecked to import everything.', 'work-copilot'); ?>
+            <br><a href="#" id="wcp-rd-select-all" style="margin-right:8px;"><?php _e('Select all', 'work-copilot'); ?></a>
+            <a href="#" id="wcp-rd-deselect-all"><?php _e('Deselect all', 'work-copilot'); ?></a>
+        </p>
+        <ul id="wcp-raindrop-collections" style="margin:0; column-count:2; column-gap:20px; max-width:500px;">
+            <?php foreach ($collections as $collection) : ?>
+            <li style="list-style:none; margin-bottom:4px;">
+                <label>
+                    <input type="checkbox"
+                           name="wcp_raindrop_selected_collections[]"
+                           value="<?php echo esc_attr($collection['_id']); ?>"
+                           <?php checked(in_array((int) $collection['_id'], array_map('intval', $selected))); ?>>
+                    <?php echo esc_html($collection['title']); ?>
+                    <span style="color:#999; font-size:12px;">(<?php echo intval($collection['count']); ?>)</span>
+                </label>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+        <p style="margin-top:8px;">
+            <a href="#" id="wcp-rd-refresh-collections" class="button button-small"><?php _e('↻ Refresh list', 'work-copilot'); ?></a>
+        </p>
+        <script>
+        (function() {
+            var list = document.getElementById('wcp-raindrop-collections');
+            document.getElementById('wcp-rd-select-all').addEventListener('click', function(e) {
+                e.preventDefault();
+                list.querySelectorAll('input[type=checkbox]').forEach(function(cb) { cb.checked = true; });
+            });
+            document.getElementById('wcp-rd-deselect-all').addEventListener('click', function(e) {
+                e.preventDefault();
+                list.querySelectorAll('input[type=checkbox]').forEach(function(cb) { cb.checked = false; });
+            });
+            document.getElementById('wcp-rd-refresh-collections').addEventListener('click', function(e) {
+                e.preventDefault();
+                var btn = this;
+                btn.textContent = '<?php echo esc_js(__('Refreshing...', 'work-copilot')); ?>';
+                fetch(ajaxurl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'action=wcp_raindrop_refresh_collections&_wpnonce=<?php echo wp_create_nonce('wcp_raindrop_refresh_collections'); ?>'
+                }).then(function() { location.reload(); });
+            });
+        })();
+        </script>
         <?php
     }
 }

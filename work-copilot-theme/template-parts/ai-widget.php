@@ -65,6 +65,10 @@ if (empty($saved_prompts)) {
                 <span class="dashicons dashicons-heading"></span>
                 <?php _e('Generate Headings', 'work-copilot'); ?>
             </button>
+            <button type="button" class="wcp-ai-action-btn" data-action="generate_pages">
+                <span class="dashicons dashicons-admin-page"></span>
+                <?php _e('Create Sub-Pages', 'work-copilot'); ?>
+            </button>
         </div>
 
         <!-- Item count selector (shown only for generate action) -->

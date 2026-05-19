@@ -59,6 +59,7 @@ class Work_Copilot {
         require_once WCP_PLUGIN_DIR . 'includes/class-memory-manager.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-prompt-builder.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-ai-actions.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-raindrop-importer.php';
         require_once WCP_PLUGIN_DIR . 'admin/class-admin.php';
         require_once WCP_PLUGIN_DIR . 'admin/class-settings.php';
         require_once WCP_PLUGIN_DIR . 'admin/class-page-mission-metabox.php';
@@ -72,6 +73,9 @@ class Work_Copilot {
 
         add_action('init', array($this, 'init'), 0);
         add_action('plugins_loaded', array($this, 'load_textdomain'));
+
+        // Raindrop cron hook
+        add_action('wcp_raindrop_import', array('WCP_Raindrop_Importer', 'run_static'));
     }
 
     public function init() {
@@ -105,10 +109,14 @@ class Work_Copilot {
 
         // Ensure Memories page exists
         WCP_Memory_Manager::instance()->ensure_memories_page();
+
+        // Schedule Raindrop import cron
+        wcp_schedule_raindrop_import();
     }
 
     public function deactivate() {
         flush_rewrite_rules();
+        wp_clear_scheduled_hook('wcp_raindrop_import');
     }
 
     private function create_tables() {
@@ -220,6 +228,18 @@ class Work_Copilot {
 
 function WCP() {
     return Work_Copilot::instance();
+}
+
+/**
+ * Schedule (or reschedule) the Raindrop import cron event.
+ * Called on plugin activation and whenever the frequency setting changes.
+ */
+function wcp_schedule_raindrop_import() {
+    wp_clear_scheduled_hook('wcp_raindrop_import');
+    $freq = get_option('wcp_raindrop_import_frequency', 'daily');
+    if ($freq !== 'disabled' && !empty(get_option('wcp_raindrop_api_key', ''))) {
+        wp_schedule_event(time(), $freq, 'wcp_raindrop_import');
+    }
 }
 
 WCP();

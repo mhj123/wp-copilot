@@ -46,7 +46,7 @@ class WCP_Context_Builder {
             'rag_limit' => 10,
             'limits' => array(
                 'max_chars_per_item' => 500,
-                'max_chars_page_summary' => 1000
+                'max_chars_page_summary' => 8000
             )
         );
 
@@ -133,7 +133,7 @@ class WCP_Context_Builder {
             'item_limit' => 20,
             'limits' => array(
                 'max_chars_per_item' => 500,
-                'max_chars_page_summary' => 1000
+                'max_chars_page_summary' => 8000
             )
         );
 
@@ -172,23 +172,10 @@ class WCP_Context_Builder {
                 if ($page_id) {
                     $page = get_post($page_id);
                     if ($page && $page->post_type === 'page') {
-                        // Get summary for current page
-                        $summary = get_post_meta($page->ID, '_wcp_page_compact_summary', true);
-                        $summary_age = null;
-                        if ($summary) {
-                            $generated_at = get_post_meta($page->ID, '_wcp_summary_generated_at', true);
-                            if ($generated_at) {
-                                $generated_time = strtotime($generated_at);
-                                $summary_age = floor((time() - $generated_time) / DAY_IN_SECONDS);
-                            }
-                        }
-
                         $context['pages'][] = array(
                             'id' => $page->ID,
                             'title' => $page->post_title,
-                            'content' => $summary ? $summary : $page->post_content,
-                            'is_summary' => !empty($summary),
-                            'summary_age_days' => $summary_age,
+                            'content' => $page->post_content,
                             'level' => 0
                         );
                     }
@@ -219,23 +206,10 @@ class WCP_Context_Builder {
                     if ($include_children) {
                         $descendants = $this->get_descendant_pages($page_id_to_process);
                         foreach ($descendants as $desc_page) {
-                            // Get summary for descendant page
-                            $summary = get_post_meta($desc_page->ID, '_wcp_page_compact_summary', true);
-                            $summary_age = null;
-                            if ($summary) {
-                                $generated_at = get_post_meta($desc_page->ID, '_wcp_summary_generated_at', true);
-                                if ($generated_at) {
-                                    $generated_time = strtotime($generated_at);
-                                    $summary_age = floor((time() - $generated_time) / DAY_IN_SECONDS);
-                                }
-                            }
-
                             $context['pages'][] = array(
                                 'id' => $desc_page->ID,
                                 'title' => $desc_page->post_title,
-                                'content' => $summary ? $summary : $desc_page->post_content,
-                                'is_summary' => !empty($summary),
-                                'summary_age_days' => $summary_age,
+                                'content' => $desc_page->post_content,
                                 'level' => 0
                             );
                         }
@@ -288,24 +262,10 @@ class WCP_Context_Builder {
                 break;
             }
 
-            // Prefer compact summary over full content
-            $summary = get_post_meta($page->ID, '_wcp_page_compact_summary', true);
-            $summary_age = null;
-
-            if ($summary) {
-                $generated_at = get_post_meta($page->ID, '_wcp_summary_generated_at', true);
-                if ($generated_at) {
-                    $generated_time = strtotime($generated_at);
-                    $summary_age = floor((time() - $generated_time) / DAY_IN_SECONDS);
-                }
-            }
-
             $pages[] = array(
                 'id' => $page->ID,
                 'title' => $page->post_title,
-                'content' => $summary ? $summary : $page->post_content,
-                'is_summary' => !empty($summary),
-                'summary_age_days' => $summary_age,
+                'content' => $page->post_content,
                 'level' => $depth
             );
 
@@ -520,7 +480,7 @@ class WCP_Context_Builder {
         // Set default limits
         $defaults = array(
             'max_chars_per_item' => 500,
-            'max_chars_page_summary' => 1000
+            'max_chars_page_summary' => 8000
         );
 
         // Check if limits are stored in context data (preferred method)
@@ -543,34 +503,18 @@ class WCP_Context_Builder {
                 $prompt .= "{$indent}Page: {$page['title']}\n";
 
                 if (!empty($page['content'])) {
-                    $is_summary = isset($page['is_summary']) && $page['is_summary'];
-                    $summary_age = isset($page['summary_age_days']) ? $page['summary_age_days'] : null;
-                    $original_length = strlen($page['content']);
-
-                    // Use summary if available, otherwise preview full content
-                    if ($is_summary) {
-                        $label = 'Summary';
-                        if ($summary_age !== null && $summary_age > 7) {
-                            $label .= " (from {$summary_age} days ago)";
-                        }
-
-                        // Apply character limit to summaries
-                        $content = $page['content'];
-                        $truncated = false;
-                        if ($original_length > $limits['max_chars_page_summary']) {
-                            $content = $this->truncate_content($content, $limits['max_chars_page_summary']);
-                            $truncated = true;
-                        }
-
-                        $prompt .= "{$indent}{$label}: {$content}";
-                        if ($truncated) {
-                            $prompt .= " [truncated from {$original_length} chars]";
-                        }
-                        $prompt .= "\n";
-                    } else {
-                        $content_preview = wp_trim_words(wp_strip_all_tags($page['content']), 100, '...');
-                        $prompt .= "{$indent}Description: {$content_preview}\n";
+                    $content = wp_strip_all_tags($page['content']);
+                    $original_length = strlen($content);
+                    $truncated = false;
+                    if ($original_length > $limits['max_chars_page_summary']) {
+                        $content = $this->truncate_content($content, $limits['max_chars_page_summary']);
+                        $truncated = true;
                     }
+                    $prompt .= "{$indent}Content: {$content}";
+                    if ($truncated) {
+                        $prompt .= " [truncated from {$original_length} chars]";
+                    }
+                    $prompt .= "\n";
                 }
 
                 // Add heading outline for this page if it's depth 0 (current page)

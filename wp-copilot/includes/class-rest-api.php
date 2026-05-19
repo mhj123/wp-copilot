@@ -1082,6 +1082,11 @@ class WCP_REST_API {
                 $result = $ai_actions->generate_headings($prompt, $page_id, $context_mode, $selected_pages, $conversation_id, $item_count);
                 break;
 
+            case 'generate_pages':
+                $item_count = intval($request->get_param('item_count') ?? 0);
+                $result = $ai_actions->generate_pages($prompt, $page_id, $context_mode, $selected_pages, $conversation_id, $item_count);
+                break;
+
             // Legacy support
             case 'coaching':
             case 'coaching_dialogue':

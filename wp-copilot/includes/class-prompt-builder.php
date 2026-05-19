@@ -121,6 +121,13 @@ class WCP_Prompt_Builder {
                 . '[{"title": "Key Outcomes"}, {"title": "Open Questions"}, {"title": "Next Steps"}]\n\n'
                 . "Start your response with [ and end with ].",
 
+            'generate-pages' => "Generate sub-page proposals to be created as child pages under the current page. "
+                . "Each page should represent a distinct area of work or topic that warrants its own dedicated space. "
+                . "Page titles should be clear and descriptive. Content is optional — a brief description of the page's purpose is ideal.\n\n"
+                . "IMPORTANT: Respond with ONLY a valid JSON array of page objects. No text before or after. Example:\n"
+                . '[{"title": "Q3 Goals", "content": "Tracking goals and progress for Q3."}, {"title": "Team Retros", "content": ""}]\n\n'
+                . "Start your response with [ and end with ].",
+
             // Editor sidebar action - expand/modify draft content
             'expand_draft' => "You are helping the user expand and improve their draft content. "
                 . "Based on their instructions, modify or expand the draft they provide. "

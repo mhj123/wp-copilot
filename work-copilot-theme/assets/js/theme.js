@@ -376,16 +376,30 @@ jQuery(document).ready(function($) {
     });
 
     // Dropdown changes — save immediately
+    $(document).on('change', '.wcp-task-checkbox', function() {
+        var itemId = $(this).data('item-id');
+        var done = $(this).is(':checked');
+        var status = done ? 'done' : 'to-do';
+        var $row = $(this).closest('.wcp-item-row');
+        updateItem(itemId, { task_status: status });
+        $row.find('.wcp-status-select').val(status);
+        $row.toggleClass('wcp-task-done', done);
+    });
+
     $(document).on('change', '.wcp-type-select', function() {
         var itemId = $(this).data('item-id');
         var type = $(this).val();
         updateItem(itemId, { item_type: type });
-        // Show/hide status dropdown based on whether type is task
-        var $statusSelect = $(this).closest('.wcp-item-row').find('.wcp-status-select');
+        var $row = $(this).closest('.wcp-item-row');
+        var $statusSelect = $row.find('.wcp-status-select');
+        var $checkbox = $row.find('.wcp-task-checkbox');
         if (type === 'task') {
             $statusSelect.show();
+            $checkbox.show();
         } else {
             $statusSelect.hide().val('');
+            $checkbox.hide().prop('checked', false);
+            $row.removeClass('wcp-task-done');
             updateItem(itemId, { task_status: '' });
         }
     });
@@ -397,7 +411,12 @@ jQuery(document).ready(function($) {
 
     $(document).on('change', '.wcp-status-select', function() {
         var itemId = $(this).data('item-id');
-        updateItem(itemId, { task_status: $(this).val() });
+        var status = $(this).val();
+        var $row = $(this).closest('.wcp-item-row');
+        updateItem(itemId, { task_status: status });
+        var done = status === 'done';
+        $row.find('.wcp-task-checkbox').prop('checked', done);
+        $row.toggleClass('wcp-task-done', done);
     });
 
     // Delete item

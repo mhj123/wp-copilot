@@ -5,10 +5,23 @@
  */
 if (!defined('ABSPATH')) exit;
 ?>
-<div class="wcp-item-row" data-item-id="<?php echo esc_attr($item->ID); ?>">
+<?php
+$is_task = !empty($item_types) && $item_types[0] === 'task';
+$is_done = !empty($task_statuses) && $task_statuses[0] === 'done';
+?>
+<div class="wcp-item-row<?php echo $is_done ? ' wcp-task-done' : ''; ?>" data-item-id="<?php echo esc_attr($item->ID); ?>">
     <span class="wcp-drag-handle" title="Drag to reorder">&#8942;</span>
+    <input type="checkbox"
+           class="wcp-task-checkbox"
+           data-item-id="<?php echo esc_attr($item->ID); ?>"
+           <?php checked($is_done); ?>
+           style="<?php echo $is_task ? '' : 'display:none;'; ?>">
     <span class="wcp-item-title"><?php echo esc_html($item->post_title); ?></span>
     <a href="<?php echo esc_url(get_permalink($item->ID)); ?>" class="wcp-item-view-link wcp-edit-link" title="View item">[view]</a>
+    <?php $source_url = get_post_meta($item->ID, '_wcp_source_url', true); ?>
+    <?php if ($source_url) : ?>
+        <a href="<?php echo esc_url($source_url); ?>" class="wcp-source-link" target="_blank" rel="noopener" title="<?php echo esc_attr($source_url); ?>">↗</a>
+    <?php endif; ?>
     <input type="text" class="wcp-item-title-input" style="display:none;" value="<?php echo esc_attr($item->post_title); ?>">
 
     <?php if (!empty($item_contexts)) : ?>
