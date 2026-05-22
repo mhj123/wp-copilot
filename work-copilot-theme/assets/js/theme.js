@@ -150,32 +150,35 @@ jQuery(document).ready(function($) {
         });
     });
 
-    // Filtering items
-    $('#wcp-filter-type, #wcp-filter-priority').on('change', function() {
-        var itemType = $('#wcp-filter-type').val();
-        var priority = $('#wcp-filter-priority').val();
+    // Item filtering — All items / All tasks / Open tasks
+    $(document).on('click', '.wcp-filter-btn', function() {
+        var $btn = $(this);
+        var filter = $btn.data('filter');
+        $btn.siblings('.wcp-filter-btn').removeClass('active');
+        $btn.addClass('active');
 
-        // Simple client-side filtering
-        $('.wcp-item').each(function() {
-            var $item = $(this);
-            var show = true;
-
-            if (itemType) {
-                var hasType = $item.find('.wcp-type-' + itemType).length > 0;
-                if (!hasType) show = false;
-            }
-
-            if (priority) {
-                var hasPriority = $item.find('.wcp-priority-' + priority).length > 0;
-                if (!hasPriority) show = false;
-            }
-
-            if (show) {
-                $item.show();
+        $('.wcp-item-row').each(function() {
+            var $row = $(this);
+            var type   = $row.data('item-type');
+            var status = $row.data('task-status');
+            var show;
+            if (filter === 'tasks') {
+                show = type === 'task';
+            } else if (filter === 'open') {
+                show = type === 'task' && status !== 'done';
             } else {
-                $item.hide();
+                show = true;
             }
+            $row.toggle(show);
         });
+    });
+
+    // Toggle description visibility
+    $(document).on('click', '.wcp-toggle-descriptions', function() {
+        var $btn = $(this);
+        var showing = $btn.hasClass('active');
+        $btn.toggleClass('active', !showing);
+        $('.wcp-items-section').toggleClass('wcp-show-descriptions', !showing);
     });
 
     // Toggle semantic search panel
@@ -384,6 +387,7 @@ jQuery(document).ready(function($) {
         updateItem(itemId, { task_status: status });
         $row.find('.wcp-status-select').val(status);
         $row.toggleClass('wcp-task-done', done);
+        $row.data('task-status', status);
     });
 
     $(document).on('change', '.wcp-type-select', function() {
@@ -393,6 +397,7 @@ jQuery(document).ready(function($) {
         var $row = $(this).closest('.wcp-item-row');
         var $statusSelect = $row.find('.wcp-status-select');
         var $checkbox = $row.find('.wcp-task-checkbox');
+        $row.data('item-type', type);
         if (type === 'task') {
             $statusSelect.show();
             $checkbox.show();
@@ -400,6 +405,7 @@ jQuery(document).ready(function($) {
             $statusSelect.hide().val('');
             $checkbox.hide().prop('checked', false);
             $row.removeClass('wcp-task-done');
+            $row.data('task-status', '');
             updateItem(itemId, { task_status: '' });
         }
     });
@@ -417,6 +423,7 @@ jQuery(document).ready(function($) {
         var done = status === 'done';
         $row.find('.wcp-task-checkbox').prop('checked', done);
         $row.toggleClass('wcp-task-done', done);
+        $row.data('task-status', status);
     });
 
     // Delete item

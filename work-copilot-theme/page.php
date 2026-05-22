@@ -77,6 +77,16 @@ get_header();
     <!-- Items Section -->
     <section class="wcp-items-section">
 
+        <!-- Filter toolbar -->
+        <div class="wcp-items-toolbar">
+            <div class="wcp-filter-group" role="group" aria-label="Filter items">
+                <button type="button" class="wcp-filter-btn active" data-filter="all">All items</button>
+                <button type="button" class="wcp-filter-btn" data-filter="tasks">All tasks</button>
+                <button type="button" class="wcp-filter-btn" data-filter="open">Open tasks</button>
+            </div>
+            <button type="button" class="wcp-toggle-descriptions wcp-edit-link" title="Toggle descriptions">descriptions</button>
+        </div>
+
         <?php
         $page_context_term = wcp_theme_get_page_context_term($page_id);
         $page_context_id   = $page_context_term ? $page_context_term->term_id : 0;

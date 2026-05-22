@@ -9,7 +9,14 @@ if (!defined('ABSPATH')) exit;
 $is_task = !empty($item_types) && $item_types[0] === 'task';
 $is_done = !empty($task_statuses) && $task_statuses[0] === 'done';
 ?>
-<div class="wcp-item-row<?php echo $is_done ? ' wcp-task-done' : ''; ?>" data-item-id="<?php echo esc_attr($item->ID); ?>">
+<?php
+$_item_type_slug   = !empty($item_types) ? $item_types[0] : '';
+$_task_status_slug = !empty($task_statuses) ? $task_statuses[0] : '';
+?>
+<div class="wcp-item-row<?php echo $is_done ? ' wcp-task-done' : ''; ?>"
+     data-item-id="<?php echo esc_attr($item->ID); ?>"
+     data-item-type="<?php echo esc_attr($_item_type_slug); ?>"
+     data-task-status="<?php echo esc_attr($_task_status_slug); ?>">
     <span class="wcp-drag-handle" title="Drag to reorder">&#8942;</span>
     <input type="checkbox"
            class="wcp-task-checkbox"
@@ -23,6 +30,10 @@ $is_done = !empty($task_statuses) && $task_statuses[0] === 'done';
         <a href="<?php echo esc_url($source_url); ?>" class="wcp-source-link" target="_blank" rel="noopener" title="<?php echo esc_attr($source_url); ?>">↗</a>
     <?php endif; ?>
     <input type="text" class="wcp-item-title-input" style="display:none;" value="<?php echo esc_attr($item->post_title); ?>">
+
+    <?php if (!empty($item->post_content)) : ?>
+        <span class="wcp-item-description"><?php echo esc_html(wp_strip_all_tags($item->post_content)); ?></span>
+    <?php endif; ?>
 
     <?php if (!empty($item_contexts)) : ?>
         <span class="wcp-item-meta-pills">
