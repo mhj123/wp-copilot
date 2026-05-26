@@ -23,7 +23,7 @@ file_put_contents(
     FILE_APPEND
 );
 
-define('WCP_VERSION', '1.2.1');
+define('WCP_VERSION', '1.2.2');
 define('WCP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WCP_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WCP_PLUGIN_FILE', __FILE__);
@@ -76,6 +76,20 @@ class Work_Copilot {
 
         // Raindrop cron hook
         add_action('wcp_raindrop_import', array('WCP_Raindrop_Importer', 'run_static'));
+
+        // Self-healing: reschedule if the event is missing or overdue by more than 1 hour
+        add_action('init', function() {
+            $freq = get_option('wcp_raindrop_import_frequency', 'daily');
+            if ($freq === 'disabled' || empty(get_option('wcp_raindrop_api_key', ''))) {
+                return;
+            }
+            $next = wp_next_scheduled('wcp_raindrop_import');
+            $overdue = $next && $next < (time() - HOUR_IN_SECONDS);
+            if (!$next || $overdue) {
+                wp_clear_scheduled_hook('wcp_raindrop_import');
+                wp_schedule_event(time(), $freq, 'wcp_raindrop_import');
+            }
+        });
     }
 
     public function init() {

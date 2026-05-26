@@ -56,7 +56,7 @@ class WCP_Admin {
 
     public function enqueue_scripts($hook) {
         // Enqueue on Work Copilot pages
-        if (strpos($hook, 'work-copilot') !== false || $hook === 'post.php' || $hook === 'post-new.php') {
+        if (strpos($hook, 'work-copilot') !== false || in_array($hook, array('post.php', 'post-new.php', 'edit.php'), true)) {
             wp_enqueue_style(
                 'work-copilot-admin',
                 WCP_PLUGIN_URL . 'assets/css/admin.css',

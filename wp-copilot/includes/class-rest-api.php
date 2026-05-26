@@ -478,11 +478,11 @@ class WCP_REST_API {
                 );
                 clean_post_cache($post_id);
 
-                // If this item doesn't already belong to this context, reassign it.
-                // This handles cross-list drags (item moved from one heading to another).
+                // If this item doesn't already belong to this context, add it.
+                // Preserves any other existing context assignments (multi-page items).
                 $current_context_ids = wp_get_post_terms($post_id, 'wcp_context', array('fields' => 'ids'));
                 if (!is_wp_error($current_context_ids) && !in_array($context_id, $current_context_ids)) {
-                    wp_set_post_terms($post_id, array($context_id), 'wcp_context');
+                    wp_set_post_terms($post_id, array_merge($current_context_ids, array($context_id)), 'wcp_context');
                 }
             }
         }

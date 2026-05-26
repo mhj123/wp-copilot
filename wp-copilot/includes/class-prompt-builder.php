@@ -2,11 +2,12 @@
 /**
  * Prompt Builder
  *
- * Builds 4-layer system prompts for AI requests
+ * Builds system prompts for AI requests using the following layers:
  * Layer 1: Global Soul/Mission (WHO the AI is)
- * Layer 2: Page Context + Objectives (WHAT this page is about)
- * Layer 3: General System Instructions (HOW to behave)
- * Layer 4: Action-Specific Instructions (WHAT task to perform)
+ * Layer 2: System Architecture Guide (HOW this system works)
+ * Layer 3: Page Context + Objectives (WHAT this page is about)
+ * Layer 4: General System Instructions (HOW to behave)
+ * Layer 5: Action-Specific Instructions (WHAT task to perform)
  */
 
 if (!defined('ABSPATH')) {
@@ -16,6 +17,35 @@ if (!defined('ABSPATH')) {
 class WCP_Prompt_Builder {
 
     private static $instance = null;
+
+    /**
+     * Static description of WPCopilot's data model and AI interaction contract.
+     * Injected as Layer 2 so the AI understands the system it is operating in.
+     */
+    const SYSTEM_GUIDE = <<<'MD'
+WPCopilot is a personal knowledge and work management system built on WordPress.
+
+**Structure:**
+- **Pages** are context areas — topics, projects, or domains of your work.
+- **Headings** are sub-sections within a page, grouping related items.
+- **Items** are atomic notes attached to pages and/or headings. Each item has a type:
+  `task` (actionable to-do), `info` (reference/factual note), or `learning` (insight to remember).
+- An item can belong to multiple pages simultaneously.
+
+**Your role as AI assistant:**
+- You receive the full content of the current page and its items as context.
+- You propose additions or answers — you never write directly to the database.
+- Every suggestion you make requires the user to explicitly accept it before anything is saved.
+- When generating items, headings, or pages: be specific, concrete, and immediately useful.
+- When chatting: answer from the provided context; be honest when something isn't in it.
+
+**Per-page objectives:** Some pages have a mission/objective defined. When present, use it to
+focus your suggestions on what matters for that area.
+
+**Memories:** A special Memories page stores facts extracted from past conversations —
+user background, preferences, project context. When shown in context, treat them as reliable
+background knowledge about the user.
+MD;
 
     public static function instance() {
         if (null === self::$instance) {
@@ -46,7 +76,10 @@ class WCP_Prompt_Builder {
             $layers[] = "# Your Soul/Mission\n\n" . $global_mission;
         }
 
-        // Layer 2: Page Context + Objectives (WHAT this page is about)
+        // Layer 2: System Architecture Guide (HOW this system works)
+        $layers[] = "# How This System Works\n\n" . self::SYSTEM_GUIDE;
+
+        // Layer 3: Page Context + Objectives (WHAT this page is about)
         if ($page_id) {
             $page_objectives = $mission_loader->get_page_objectives($page_id);
             if (!empty($page_objectives)) {
@@ -56,13 +89,13 @@ class WCP_Prompt_Builder {
             }
         }
 
-        // Layer 3: General System Instructions (HOW to behave)
+        // Layer 4: General System Instructions (HOW to behave)
         $global = $this->get_global_instructions();
         if (!empty($global)) {
             $layers[] = "# System Instructions\n\n" . $global;
         }
 
-        // Layer 4: Action-Specific Instructions (WHAT task to perform)
+        // Layer 5: Action-Specific Instructions (WHAT task to perform)
         $action_instructions = $this->get_action_instructions($action_type, $item_count);
         if (!empty($action_instructions)) {
             $layers[] = "# Current Task\n\n" . $action_instructions;

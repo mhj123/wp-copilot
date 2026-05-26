@@ -310,17 +310,21 @@ function wcp_theme_get_page_only_items($page_id) {
         if ($term) $live_heading_term_ids[] = $term->term_id;
     }
 
-    // Terms to always exclude: child page context terms (items belong to those pages)
-    $child_page_term_ids = array();
+    // Collect orphaned heading terms: direct children of the page's context term
+    // that are not live heading terms. These are items from deleted headings and
+    // should be "adopted" into the page level.
+    // Note: child page terms are intentionally NOT excluded here. An item explicitly
+    // assigned to both a parent page and a child page must appear on both.
+    // The IN check on include_term_ids already ensures items appear only on pages
+    // they were explicitly assigned to — no child-page NOT IN needed.
+    $child_page_term_ids = array(); // still needed to detect orphaned vs child-page terms
     $child_pages = get_pages(array('parent' => $page_id, 'post_status' => 'publish'));
     foreach ($child_pages as $child) {
         $child_term = wcp_theme_get_page_context_term($child->ID);
         if ($child_term) $child_page_term_ids[] = $child_term->term_id;
     }
 
-    // Collect orphaned heading terms: direct children of page term that are
-    // neither a live heading term nor a child page term
-    $always_exclude = array_merge($live_heading_term_ids, $child_page_term_ids);
+    $not_orphaned = array_merge($live_heading_term_ids, $child_page_term_ids);
     $direct_children = get_terms(array(
         'taxonomy'   => 'wcp_context',
         'parent'     => $page_term->term_id,
@@ -328,12 +332,15 @@ function wcp_theme_get_page_only_items($page_id) {
     ));
     if (!is_wp_error($direct_children)) {
         foreach ($direct_children as $child_term) {
-            if (!in_array($child_term->term_id, $always_exclude)) {
+            if (!in_array($child_term->term_id, $not_orphaned)) {
                 $include_term_ids[] = $child_term->term_id;
             }
         }
     }
 
+    // Only exclude items that have a live heading term — those belong under their
+    // heading section, not at page level. Child page terms are NOT excluded so that
+    // items assigned to multiple pages all appear where they were assigned.
     $tax_query = array(
         'relation' => 'AND',
         array(
@@ -343,11 +350,11 @@ function wcp_theme_get_page_only_items($page_id) {
         ),
     );
 
-    if (!empty($always_exclude)) {
+    if (!empty($live_heading_term_ids)) {
         $tax_query[] = array(
             'taxonomy' => 'wcp_context',
             'field'    => 'term_id',
-            'terms'    => $always_exclude,
+            'terms'    => $live_heading_term_ids,
             'operator' => 'NOT IN',
         );
     }
