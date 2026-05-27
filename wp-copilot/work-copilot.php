@@ -64,6 +64,8 @@ class Work_Copilot {
         require_once WCP_PLUGIN_DIR . 'admin/class-settings.php';
         require_once WCP_PLUGIN_DIR . 'admin/class-page-mission-metabox.php';
         require_once WCP_PLUGIN_DIR . 'admin/class-page-notes-metabox.php';
+        require_once WCP_PLUGIN_DIR . 'admin/class-page-template-metabox.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-page-template-manager.php';
         require_once WCP_PLUGIN_DIR . 'public/class-public.php';
     }
 
@@ -98,12 +100,14 @@ class Work_Copilot {
         WCP_Taxonomy_Sync::instance();
         WCP_REST_API::instance();
         WCP_Embeddings_Manager::instance();
+        WCP_Page_Template_Manager::instance();
 
         if (is_admin()) {
             WCP_Admin::instance();
             WCP_Settings::instance();
             WCP_Page_Mission_Metabox::instance();
             WCP_Page_Notes_Metabox::instance();
+            WCP_Page_Template_Metabox::instance();
         } else {
             WCP_Public::instance();
         }

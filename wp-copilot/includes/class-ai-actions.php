@@ -1013,6 +1013,13 @@ class WCP_AI_Actions {
                 return $new_page_id;
             }
 
+            // Apply parent page template if one exists (AI guardrail: template manager owns this)
+            $template_manager = WCP_Page_Template_Manager::instance();
+            $template = $template_manager->get_template($page_id);
+            if ($template) {
+                $template_manager->apply_template($new_page_id, $template);
+            }
+
             delete_transient('wcp_proposal_' . $proposal_id);
 
             return array(
