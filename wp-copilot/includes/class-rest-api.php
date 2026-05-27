@@ -207,6 +207,20 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // Goals: AI planning step (returns understanding + proposed action items)
+        register_rest_route($namespace, '/ai/goals/plan', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'ai_plan_goal'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Goals: Create goal heading + accepted action items
+        register_rest_route($namespace, '/goals/create', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'create_goal'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // NEW: Refresh page summary
         register_rest_route($namespace, '/page/refresh-summary', array(
             'methods' => 'POST',
@@ -1769,5 +1783,134 @@ class WCP_REST_API {
             ),
             'counts'   => $counts,
         ));
+    }
+
+    /**
+     * AI planning step for a new goal.
+     * Returns the AI's understanding of the goal + proposed action items.
+     * Nothing is written to the database at this stage.
+     *
+     * POST /work-copilot/v1/ai/goals/plan
+     * Body: { goal_description, page_id }
+     */
+    public function ai_plan_goal( $request ) {
+        $goal_description = sanitize_textarea_field( $request->get_param( 'goal_description' ) );
+        $page_id          = intval( $request->get_param( 'page_id' ) );
+
+        if ( empty( $goal_description ) || empty( $page_id ) ) {
+            return new WP_Error( 'invalid_params', 'goal_description and page_id are required', array( 'status' => 400 ) );
+        }
+
+        $ai_actions = WCP_AI_Actions::instance();
+        $result     = $ai_actions->plan_goal( $goal_description, $page_id );
+
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+
+        return rest_ensure_response( $result );
+    }
+
+    /**
+     * Create a goal heading and its accepted action items in one step.
+     * Called after the user has reviewed and confirmed the AI's plan.
+     *
+     * POST /work-copilot/v1/goals/create
+     * Body: { title, description, page_id, parent_id, parent_type, action_items, action_id }
+     *   action_items: [{ title, content }, ...]  — only the items the user accepted
+     */
+    public function create_goal( $request ) {
+        $title       = sanitize_text_field( $request->get_param( 'title' ) );
+        $description = wp_kses_post( $request->get_param( 'description' ) );
+        $page_id     = intval( $request->get_param( 'page_id' ) );
+        $parent_id   = intval( $request->get_param( 'parent_id' ) ?: $page_id );
+        $parent_type = sanitize_text_field( $request->get_param( 'parent_type' ) ?: 'page' );
+        $action_items = $request->get_param( 'action_items' ) ?: array();
+        $action_id    = sanitize_text_field( $request->get_param( 'action_id' ) ?: '' );
+
+        if ( empty( $title ) || empty( $page_id ) ) {
+            return new WP_Error( 'invalid_params', 'title and page_id are required', array( 'status' => 400 ) );
+        }
+
+        if ( ! in_array( $parent_type, array( 'page', 'wcp_heading' ), true ) ) {
+            return new WP_Error( 'invalid_parent_type', 'parent_type must be page or wcp_heading', array( 'status' => 400 ) );
+        }
+
+        // Create the goal heading
+        $heading_id = wp_insert_post( array(
+            'post_type'    => 'wcp_heading',
+            'post_title'   => $title,
+            'post_content' => $description,
+            'post_status'  => 'publish',
+            'post_author'  => get_current_user_id(),
+        ) );
+
+        if ( is_wp_error( $heading_id ) ) {
+            return $heading_id;
+        }
+
+        update_post_meta( $heading_id, '_wcp_parent_type', $parent_type );
+        update_post_meta( $heading_id, '_wcp_parent_id', $parent_id );
+        // AI guardrail: flag this as a goal subtype so the UI can render it differently
+        update_post_meta( $heading_id, '_wcp_is_goal', '1' );
+
+        // Taxonomy sync fires automatically via save_post hook; give it a moment
+        sleep( 1 );
+
+        // Resolve context term for the new heading to assign items to it
+        $heading_term = null;
+        $terms = get_terms( array(
+            'taxonomy'   => 'wcp_context',
+            'hide_empty' => false,
+            'meta_query' => array(
+                array( 'key' => 'wcp_ref_type', 'value' => 'wcp_heading' ),
+                array( 'key' => 'wcp_ref_id',   'value' => $heading_id,  'type' => 'NUMERIC' ),
+            ),
+        ) );
+        if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
+            $heading_term = $terms[0];
+        }
+
+        // Create the accepted action items under the goal heading
+        $created_items = array();
+        if ( ! empty( $action_items ) && is_array( $action_items ) && $heading_term ) {
+            foreach ( $action_items as $item_data ) {
+                $item_title   = sanitize_text_field( $item_data['title'] ?? '' );
+                $item_content = sanitize_textarea_field( $item_data['content'] ?? '' );
+
+                if ( empty( $item_title ) ) continue;
+
+                $item_id = wp_insert_post( array(
+                    'post_type'    => 'post',
+                    'post_title'   => $item_title,
+                    'post_content' => $item_content,
+                    'post_status'  => 'publish',
+                    'post_author'  => get_current_user_id(),
+                ) );
+
+                if ( ! is_wp_error( $item_id ) ) {
+                    wp_set_post_terms( $item_id, array( $heading_term->term_id ), 'wcp_context' );
+                    wp_set_post_terms( $item_id, array( 'task' ), 'item_type' );
+                    // AI guardrail audit trail
+                    update_post_meta( $item_id, '_wcp_ai_generated', '1' );
+                    if ( $action_id ) {
+                        update_post_meta( $item_id, '_wcp_ai_action_id', $action_id );
+                    }
+                    $created_items[] = $item_id;
+                }
+            }
+        }
+
+        // Log acceptance decision against the planning action
+        if ( $action_id ) {
+            $logger = WCP_AI_Logger::instance();
+            $logger->log_decisions( $action_id, $created_items, array() );
+        }
+
+        return rest_ensure_response( array(
+            'success'       => true,
+            'heading_id'    => $heading_id,
+            'created_items' => $created_items,
+        ) );
     }
 }

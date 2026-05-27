@@ -512,6 +512,178 @@ jQuery(document).ready(function($) {
     });
 
     // ==========================================================================
+    // Goal creation modal
+    // ==========================================================================
+
+    var goalModal = {
+        pageId: null,
+        actionId: null,
+
+        open: function(pageId) {
+            this.pageId = pageId;
+            this.actionId = null;
+            // Reset to step 1
+            $('#wcp-goal-step-2').hide();
+            $('#wcp-goal-step-1').show();
+            $('#wcp-goal-description').val('');
+            $('.wcp-goal-step1-status').hide().text('');
+            $('#wcp-goal-modal').show();
+            $('#wcp-goal-description').focus();
+        },
+
+        close: function() {
+            $('#wcp-goal-modal').hide();
+        },
+
+        showStep2: function(data) {
+            this.actionId = data.action_id;
+            // Pre-fill title from the first sentence of understanding (user can edit)
+            var understanding = data.understanding || '';
+            var description = $('#wcp-goal-description').val().trim();
+            // Derive a short title suggestion from the user's original description
+            var titleSuggestion = description.length > 60 ? description.substring(0, 57) + '...' : description;
+            $('#wcp-goal-title').val(titleSuggestion);
+            $('#wcp-goal-understanding').val(understanding);
+
+            // Render action item checklist
+            var $list = $('#wcp-goal-action-items').empty();
+            (data.action_items || []).forEach(function(item, idx) {
+                var checkId = 'wcp-goal-item-' + idx;
+                var $li = $('<li class="wcp-goal-item-row">');
+                var $cb = $('<input type="checkbox">').attr('id', checkId).prop('checked', true)
+                    .data('title', item.title).data('content', item.content || '');
+                var $label = $('<label>').attr('for', checkId);
+                var $title = $('<strong>').text(item.title);
+                $label.append($title);
+                if (item.content) {
+                    $label.append($('<span class="wcp-goal-item-desc">').text(' — ' + item.content));
+                }
+                $li.append($cb).append($label);
+                $list.append($li);
+            });
+
+            $('#wcp-goal-step-1').hide();
+            $('.wcp-goal-step2-status').hide().text('');
+            $('#wcp-goal-step-2').show();
+        }
+    };
+
+    // Open modal when "new goal" is clicked
+    $(document).on('click', '#wcp-btn-new-goal', function() {
+        goalModal.open($(this).data('page-id'));
+    });
+
+    // Close modal
+    $(document).on('click', '.wcp-goal-cancel', function() {
+        goalModal.close();
+    });
+
+    // Close on overlay click
+    $(document).on('click', '#wcp-goal-modal .wcp-modal-overlay', function(e) {
+        if ($(e.target).hasClass('wcp-modal-overlay')) {
+            goalModal.close();
+        }
+    });
+
+    // Step 1: Plan with AI
+    $(document).on('click', '#wcp-goal-plan-btn', function() {
+        var description = $('#wcp-goal-description').val().trim();
+        if (!description) {
+            $('#wcp-goal-description').focus();
+            return;
+        }
+
+        var $btn = $(this);
+        var $status = $('.wcp-goal-step1-status');
+        $btn.prop('disabled', true).text('Thinking...');
+        $status.show().removeClass('error').text('Asking AI...');
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/ai/goals/plan',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                goal_description: description,
+                page_id: goalModal.pageId
+            }),
+            beforeSend: function(xhr) {
+                xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce);
+            },
+            success: function(response) {
+                $btn.prop('disabled', false).text('Plan with AI');
+                $status.hide();
+                if (response.success) {
+                    goalModal.showStep2(response);
+                } else {
+                    $status.show().addClass('error').text('Unexpected response from AI.');
+                }
+            },
+            error: function(xhr) {
+                $btn.prop('disabled', false).text('Plan with AI');
+                var msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'AI request failed.';
+                $status.show().addClass('error').text(msg);
+            }
+        });
+    });
+
+    // Step 2: Create Goal
+    $(document).on('click', '#wcp-goal-create-btn', function() {
+        var title = $('#wcp-goal-title').val().trim();
+        var understanding = $('#wcp-goal-understanding').val().trim();
+
+        if (!title) {
+            $('#wcp-goal-title').focus();
+            return;
+        }
+
+        // Collect checked action items
+        var actionItems = [];
+        $('#wcp-goal-action-items input[type="checkbox"]:checked').each(function() {
+            actionItems.push({
+                title:   $(this).data('title'),
+                content: $(this).data('content') || ''
+            });
+        });
+
+        var $btn = $(this);
+        var $status = $('.wcp-goal-step2-status');
+        $btn.prop('disabled', true).text('Creating...');
+        $status.show().removeClass('error').text('Creating goal...');
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/goals/create',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                title:        title,
+                description:  understanding,
+                page_id:      goalModal.pageId,
+                parent_id:    goalModal.pageId,
+                parent_type:  'page',
+                action_items: actionItems,
+                action_id:    goalModal.actionId || ''
+            }),
+            beforeSend: function(xhr) {
+                xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce);
+            },
+            success: function(response) {
+                if (response.success) {
+                    goalModal.close();
+                    location.reload();
+                } else {
+                    $btn.prop('disabled', false).text('Create Goal');
+                    $status.show().addClass('error').text('Failed to create goal.');
+                }
+            },
+            error: function(xhr) {
+                $btn.prop('disabled', false).text('Create Goal');
+                var msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Create failed.';
+                $status.show().addClass('error').text(msg);
+            }
+        });
+    });
+
+    // ==========================================================================
     // Drag-to-reorder items
     // ==========================================================================
 

@@ -1290,6 +1290,70 @@ class WCP_AI_Actions {
     }
 
     /**
+     * Plan a goal: understand the user's intent and propose action items.
+     * AI guardrail: nothing is written to the database here — caller handles creation.
+     *
+     * @param string $goal_description What the user wants to achieve
+     * @param int    $page_id          Page providing context (mission, existing work)
+     * @return array|WP_Error { understanding, action_items, action_id }
+     */
+    public function plan_goal( $goal_description, $page_id ) {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new WP_Error( 'auth_error', 'User not authenticated' );
+        }
+
+        $context_builder = WCP_Context_Builder::instance();
+        $context_data    = $context_builder->build_hierarchical_context( $page_id, array(
+            'include_items' => true,
+            'item_limit'    => 10,
+        ) );
+
+        $prompt_builder = WCP_Prompt_Builder::instance();
+        $system_prompt  = $prompt_builder->build_system_prompt( 'plan-goal', $page_id );
+        $user_message   = $prompt_builder->build_user_message( $goal_description, $context_data );
+
+        $ai_client = WCP_AI_Client::instance();
+        $response  = $ai_client->request_with_conversation( $system_prompt, $user_message, array(), 2048, 60 );
+
+        if ( is_wp_error( $response ) ) {
+            return $response;
+        }
+
+        $parsed = $this->parse_json_response( $response['content'] );
+        if ( is_wp_error( $parsed ) ) {
+            return $parsed;
+        }
+
+        if ( empty( $parsed['understanding'] ) || empty( $parsed['action_items'] ) ) {
+            return new WP_Error( 'invalid_response', 'AI did not return a valid goal plan' );
+        }
+
+        $logger    = WCP_AI_Logger::instance();
+        $action_id = $logger->log_action( 'plan_goal', array(
+            'model'          => $response['model'] ?? get_option( 'wcp_ai_model', 'claude-sonnet-4-6' ),
+            'prompt'         => $goal_description,
+            'input_context'  => $context_data,
+            'output'         => $parsed,
+            'context_post_id' => $page_id,
+        ) );
+
+        return array(
+            'success'       => true,
+            'understanding' => sanitize_textarea_field( $parsed['understanding'] ),
+            'action_items'  => array_values( array_filter( array_map( function( $item ) {
+                $title = sanitize_text_field( $item['title'] ?? '' );
+                if ( empty( $title ) ) return null;
+                return array(
+                    'title'   => $title,
+                    'content' => sanitize_textarea_field( $item['content'] ?? '' ),
+                );
+            }, (array) $parsed['action_items'] ) ) ),
+            'action_id'     => $action_id,
+        );
+    }
+
+    /**
      * Get version for debugging
      */
     public static function get_version() {

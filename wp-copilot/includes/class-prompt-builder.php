@@ -174,6 +174,17 @@ MD;
             // Legacy reframe
             'reframe' => "Rewrite the provided item draft from the requested perspective. "
                 . "Keep it concise and actionable. Maintain the core information while shifting the viewpoint.",
+
+            // Goal planning: understand the goal and propose action items
+            'plan-goal' => "You are helping the user define a goal and create a concrete action plan.\n\n"
+                . "The user has described what they want to achieve. Your task:\n"
+                . "1. Write a clear, concise statement of what you understand they want to achieve — "
+                . "informed by this page's mission and context where relevant.\n"
+                . "2. Propose 3-7 concrete, actionable tasks that would move them toward that goal.\n\n"
+                . "IMPORTANT: Respond with ONLY a valid JSON object. No text before or after. Format:\n"
+                . "{\"understanding\": \"A clear 1-3 sentence statement of what the user wants to achieve and why it matters here.\","
+                . " \"action_items\": [{\"title\": \"Short action title\", \"content\": \"What needs to be done\"}, ...]}\n\n"
+                . "Start your response with { and end with }.",
         );
 
         return isset($instructions[$action_type]) ? $instructions[$action_type] : '';

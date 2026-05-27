@@ -117,12 +117,19 @@ get_header();
             $items           = wcp_theme_get_heading_items($heading_id);
             $heading_term    = wcp_theme_get_heading_context_term($heading_id);
             $heading_context_id = $heading_term ? $heading_term->term_id : 0;
+            $is_goal         = get_post_meta($heading_id, '_wcp_is_goal', true) === '1';
         ?>
-            <div class="wcp-heading-group">
+            <div class="wcp-heading-group<?php echo $is_goal ? ' wcp-goal-group' : ''; ?>">
                 <h3 class="wcp-heading-title-simple">
+                    <?php if ($is_goal) : ?>
+                        <span class="wcp-goal-badge">Goal</span>
+                    <?php endif; ?>
                     <?php echo esc_html($heading->post_title); ?>
                     <a href="<?php echo get_edit_post_link($heading_id); ?>" class="wcp-edit-link">[edit]</a>
                 </h3>
+                <?php if ($is_goal && !empty($heading->post_content)) : ?>
+                    <div class="wcp-goal-description"><?php echo wpautop(esc_html($heading->post_content)); ?></div>
+                <?php endif; ?>
 
                 <div class="wcp-items-list" data-context-id="<?php echo esc_attr($heading_context_id); ?>">
                     <?php foreach ($items as $item) :
@@ -145,9 +152,10 @@ get_header();
             </div>
         <?php endforeach; ?>
 
-        <!-- Add new heading -->
+        <!-- Add new heading / goal -->
         <div class="wcp-add-heading-wrap">
             <button type="button" id="wcp-btn-new-heading" class="wcp-edit-link">+ new heading</button>
+            <button type="button" id="wcp-btn-new-goal" class="wcp-edit-link" data-page-id="<?php echo esc_attr($page_id); ?>">+ new goal</button>
             <form id="wcp-create-heading-form" style="display:none;">
                 <input type="hidden" name="page_id" value="<?php echo esc_attr($page_id); ?>">
                 <input type="text" name="title" required placeholder="<?php esc_attr_e('Heading title...', 'work-copilot-theme'); ?>" class="wcp-form-control wcp-quick-title">
@@ -155,6 +163,53 @@ get_header();
                 <button type="button" id="wcp-btn-cancel-heading" class="wcp-edit-link"><?php _e('cancel', 'work-copilot-theme'); ?></button>
                 <span class="wcp-quick-status"></span>
             </form>
+        </div>
+
+        <!-- Goal creation modal -->
+        <div id="wcp-goal-modal" style="display:none;" aria-modal="true" role="dialog">
+            <div class="wcp-modal-overlay">
+                <div class="wcp-modal-box">
+
+                    <!-- Step 1: describe the goal -->
+                    <div id="wcp-goal-step-1">
+                        <h2><?php _e('Create a Goal', 'work-copilot-theme'); ?></h2>
+                        <p><?php _e('Describe what you want to achieve:', 'work-copilot-theme'); ?></p>
+                        <textarea id="wcp-goal-description" rows="4" class="wcp-form-control" placeholder="<?php esc_attr_e('e.g. Launch the new product landing page by end of month', 'work-copilot-theme'); ?>"></textarea>
+                        <div class="wcp-modal-actions">
+                            <button type="button" id="wcp-goal-plan-btn" class="wcp-btn wcp-btn-primary"><?php _e('Plan with AI', 'work-copilot-theme'); ?></button>
+                            <button type="button" class="wcp-goal-cancel wcp-edit-link"><?php _e('Cancel', 'work-copilot-theme'); ?></button>
+                        </div>
+                        <p class="wcp-goal-step1-status" style="display:none;"></p>
+                    </div>
+
+                    <!-- Step 2: review AI plan -->
+                    <div id="wcp-goal-step-2" style="display:none;">
+                        <h2><?php _e('Review Goal Plan', 'work-copilot-theme'); ?></h2>
+
+                        <div class="wcp-form-group">
+                            <label><?php _e('Goal title', 'work-copilot-theme'); ?></label>
+                            <input type="text" id="wcp-goal-title" class="wcp-form-control" placeholder="<?php esc_attr_e('Short goal title', 'work-copilot-theme'); ?>">
+                        </div>
+
+                        <div class="wcp-form-group">
+                            <label><?php _e('AI understanding — edit if needed', 'work-copilot-theme'); ?></label>
+                            <textarea id="wcp-goal-understanding" rows="3" class="wcp-form-control"></textarea>
+                        </div>
+
+                        <div class="wcp-form-group">
+                            <label><?php _e('Action items (uncheck any you don\'t want)', 'work-copilot-theme'); ?></label>
+                            <ul id="wcp-goal-action-items" class="wcp-goal-items-list"></ul>
+                        </div>
+
+                        <div class="wcp-modal-actions">
+                            <button type="button" id="wcp-goal-create-btn" class="wcp-btn wcp-btn-primary"><?php _e('Create Goal', 'work-copilot-theme'); ?></button>
+                            <button type="button" class="wcp-goal-cancel wcp-edit-link"><?php _e('Cancel', 'work-copilot-theme'); ?></button>
+                        </div>
+                        <p class="wcp-goal-step2-status" style="display:none;"></p>
+                    </div>
+
+                </div>
+            </div>
         </div>
 
     </section>
