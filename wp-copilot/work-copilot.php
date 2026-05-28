@@ -66,6 +66,7 @@ class Work_Copilot {
         require_once WCP_PLUGIN_DIR . 'admin/class-page-notes-metabox.php';
         require_once WCP_PLUGIN_DIR . 'admin/class-page-template-metabox.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-page-template-manager.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-page-scheduler.php';
         require_once WCP_PLUGIN_DIR . 'public/class-public.php';
     }
 
@@ -78,6 +79,11 @@ class Work_Copilot {
 
         // Raindrop cron hook
         add_action('wcp_raindrop_import', array('WCP_Raindrop_Importer', 'run_static'));
+
+        // Page scheduler: ensure the 15-min check event is always registered
+        add_action('init', function() {
+            WCP_Page_Scheduler::instance()->ensure_cron_scheduled();
+        }, 5);
 
         // Self-healing: reschedule if the event is missing or overdue by more than 1 hour
         add_action('init', function() {
@@ -101,6 +107,7 @@ class Work_Copilot {
         WCP_REST_API::instance();
         WCP_Embeddings_Manager::instance();
         WCP_Page_Template_Manager::instance();
+        WCP_Page_Scheduler::instance();
 
         if (is_admin()) {
             WCP_Admin::instance();

@@ -207,6 +207,13 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // Create a child page manually (button or external trigger)
+        register_rest_route($namespace, '/pages/create', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'create_subpage'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // Goals: AI planning step (returns understanding + proposed action items)
         register_rest_route($namespace, '/ai/goals/plan', array(
             'methods' => 'POST',
@@ -1768,6 +1775,39 @@ class WCP_REST_API {
         wp_trash_post($item_id);
 
         return rest_ensure_response(array('success' => true));
+    }
+
+    /**
+     * Create a child page under a parent, applying the parent's template.
+     * Used by the manual "Create subpage" button.
+     *
+     * POST /work-copilot/v1/pages/create
+     * Body: { parent_id, title }
+     */
+    public function create_subpage( $request ) {
+        $parent_id = intval( $request->get_param( 'parent_id' ) );
+        $title     = sanitize_text_field( $request->get_param( 'title' ) );
+
+        if ( ! $parent_id || ! $title ) {
+            return new WP_Error( 'invalid_params', 'parent_id and title are required', array( 'status' => 400 ) );
+        }
+
+        $parent = get_post( $parent_id );
+        if ( ! $parent || $parent->post_type !== 'page' ) {
+            return new WP_Error( 'invalid_parent', 'Parent must be a published page', array( 'status' => 400 ) );
+        }
+
+        $result = WCP_Page_Scheduler::create_child_page( $parent_id, $title );
+
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+
+        return rest_ensure_response( array(
+            'success'  => true,
+            'page_id'  => $result['page_id'],
+            'page_url' => $result['page_url'],
+        ) );
     }
 
     public function taxonomy_sync_all($request) {

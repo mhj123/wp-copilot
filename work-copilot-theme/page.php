@@ -152,10 +152,18 @@ get_header();
             </div>
         <?php endforeach; ?>
 
-        <!-- Add new heading / goal -->
+        <!-- Add new heading / goal / subpage -->
         <div class="wcp-add-heading-wrap">
             <button type="button" id="wcp-btn-new-heading" class="wcp-edit-link">+ new heading</button>
             <button type="button" id="wcp-btn-new-goal" class="wcp-edit-link" data-page-id="<?php echo esc_attr($page_id); ?>">+ new goal</button>
+            <button type="button" id="wcp-btn-new-subpage" class="wcp-edit-link" data-page-id="<?php echo esc_attr($page_id); ?>">+ new subpage</button>
+            <form id="wcp-create-subpage-form" style="display:none;">
+                <input type="hidden" name="page_id" value="<?php echo esc_attr($page_id); ?>">
+                <input type="text" name="title" required placeholder="<?php esc_attr_e('Subpage title...', 'work-copilot-theme'); ?>" class="wcp-form-control wcp-quick-title">
+                <button type="submit" class="wcp-btn wcp-btn-primary wcp-btn-sm"><?php _e('Create subpage', 'work-copilot-theme'); ?></button>
+                <button type="button" id="wcp-btn-cancel-subpage" class="wcp-edit-link"><?php _e('cancel', 'work-copilot-theme'); ?></button>
+                <span class="wcp-quick-status"></span>
+            </form>
             <form id="wcp-create-heading-form" style="display:none;">
                 <input type="hidden" name="page_id" value="<?php echo esc_attr($page_id); ?>">
                 <input type="text" name="title" required placeholder="<?php esc_attr_e('Heading title...', 'work-copilot-theme'); ?>" class="wcp-form-control wcp-quick-title">

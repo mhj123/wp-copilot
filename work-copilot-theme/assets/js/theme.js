@@ -449,6 +449,57 @@ jQuery(document).ready(function($) {
     });
 
     // ==========================================================================
+    // Subpage creation
+    // ==========================================================================
+
+    $(document).on('click', '#wcp-btn-new-subpage', function() {
+        var $form = $('#wcp-create-subpage-form');
+        $form.slideToggle(150, function() {
+            if ($form.is(':visible')) $form.find('.wcp-quick-title').focus();
+        });
+    });
+
+    $(document).on('click', '#wcp-btn-cancel-subpage', function() {
+        var $form = $('#wcp-create-subpage-form');
+        $form.slideUp(150);
+        $form[0].reset();
+        $form.find('.wcp-quick-status').text('');
+    });
+
+    $(document).on('submit', '#wcp-create-subpage-form', function(e) {
+        e.preventDefault();
+        var $form   = $(this);
+        var $btn    = $form.find('button[type="submit"]');
+        var $status = $form.find('.wcp-quick-status');
+        var pageId  = $form.find('input[name="page_id"]').val();
+        var title   = $form.find('input[name="title"]').val().trim();
+
+        if (!title) return;
+
+        $btn.prop('disabled', true).text('Creating...');
+        $status.removeClass('error').text('');
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/pages/create',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ parent_id: parseInt(pageId, 10), title: title }),
+            beforeSend: function(xhr) {
+                xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce);
+            },
+            success: function(response) {
+                if (response.success && response.page_url) {
+                    window.location.href = response.page_url;
+                }
+            },
+            error: function(xhr) {
+                $btn.prop('disabled', false).text('Create subpage');
+                $status.addClass('error').text(xhr.responseJSON?.message || 'Error creating subpage.');
+            }
+        });
+    });
+
+    // ==========================================================================
     // Heading Management
     // ==========================================================================
 

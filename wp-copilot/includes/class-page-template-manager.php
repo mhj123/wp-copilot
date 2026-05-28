@@ -31,7 +31,7 @@ class WCP_Page_Template_Manager {
      * Retrieve and decode the template stored on a parent page, or null if none.
      *
      * @param int $parent_page_id
-     * @return array|null { content_blocks: [], headings: [] }
+     * @return array|null { content_blocks: [], headings: [{ title, placeholder, items: [{title}] }] }
      */
     public function get_template( $parent_page_id ) {
         $raw = get_post_meta( $parent_page_id, '_wcp_page_template', true );
@@ -93,7 +93,7 @@ class WCP_Page_Template_Manager {
             }
         }
 
-        // Create wcp_heading posts for each section heading
+        // Create wcp_heading posts and their checklist items for each section heading
         if ( ! empty( $template['headings'] ) ) {
             foreach ( $template['headings'] as $heading ) {
                 $title = sanitize_text_field( $heading['title'] ?? '' );
@@ -107,16 +107,67 @@ class WCP_Page_Template_Manager {
                     'post_author'  => get_current_user_id() ?: 1,
                 ) );
 
-                if ( ! is_wp_error( $heading_id ) ) {
-                    update_post_meta( $heading_id, '_wcp_parent_type', 'page' );
-                    update_post_meta( $heading_id, '_wcp_parent_id', $child_page_id );
-                    // Taxonomy sync fires automatically via save_post hook in class-taxonomy-sync.php
+                if ( is_wp_error( $heading_id ) ) {
+                    continue;
+                }
+
+                update_post_meta( $heading_id, '_wcp_parent_type', 'page' );
+                update_post_meta( $heading_id, '_wcp_parent_id', $child_page_id );
+                // Taxonomy sync fires automatically via save_post hook in class-taxonomy-sync.php
+
+                // Create checklist items under this heading if the template defines any
+                if ( ! empty( $heading['items'] ) && is_array( $heading['items'] ) ) {
+                    $this->create_heading_items( $heading_id, $heading['items'] );
                 }
             }
         }
 
         // Mark as applied so subsequent saves don't re-apply
         update_post_meta( $child_page_id, '_wcp_template_applied', '1' );
+    }
+
+    /**
+     * Create ItemPosts (tasks) under a newly-created heading.
+     * Resolves the heading's wcp_context term (set by taxonomy sync on insert)
+     * and assigns each item to it.
+     *
+     * @param int   $heading_id
+     * @param array $items       Array of { title } from the template definition.
+     */
+    private function create_heading_items( $heading_id, $items ) {
+        // Taxonomy sync runs synchronously on wp_insert_post, so the term exists now
+        $terms = get_terms( array(
+            'taxonomy'   => 'wcp_context',
+            'hide_empty' => false,
+            'meta_query' => array(
+                array( 'key' => 'wcp_ref_type', 'value' => 'wcp_heading' ),
+                array( 'key' => 'wcp_ref_id',   'value' => $heading_id, 'type' => 'NUMERIC' ),
+            ),
+        ) );
+
+        if ( is_wp_error( $terms ) || empty( $terms ) ) {
+            return;
+        }
+
+        $term_id = $terms[0]->term_id;
+        $author  = get_current_user_id() ?: 1;
+
+        foreach ( $items as $item ) {
+            $item_title = sanitize_text_field( $item['title'] ?? '' );
+            if ( empty( $item_title ) ) continue;
+
+            $item_id = wp_insert_post( array(
+                'post_type'   => 'post',
+                'post_title'  => $item_title,
+                'post_status' => 'publish',
+                'post_author' => $author,
+            ) );
+
+            if ( ! is_wp_error( $item_id ) ) {
+                wp_set_post_terms( $item_id, array( $term_id ), 'wcp_context' );
+                wp_set_post_terms( $item_id, array( 'task' ), 'item_type' );
+            }
+        }
     }
 
     /**
