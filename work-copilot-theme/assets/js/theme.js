@@ -142,7 +142,7 @@ jQuery(document).ready(function($) {
         $container.append($ul);
     }
 
-    if ($('#wcp-structure-tree').length) {
+    if ($('#wcp-structure-tree').length && wcpThemeData.isLoggedIn) {
         loadStructureTree();
     }
 
