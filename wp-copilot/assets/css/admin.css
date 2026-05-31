@@ -1,0 +1,175 @@
+/* Work Copilot Admin Styles */
+
+.wcp-dashboard {
+    max-width: 1400px;
+}
+
+.wcp-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.wcp-card {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    padding: 20px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.wcp-card h2 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+#wcp-context-tree {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.wcp-tree {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+}
+
+.wcp-tree ul {
+    list-style: none;
+    padding-left: 20px;
+    margin: 5px 0;
+}
+
+.wcp-tree li {
+    margin: 5px 0;
+}
+
+.wcp-tree-node {
+    text-decoration: none;
+    padding: 5px;
+    display: inline-block;
+    transition: background 0.2s;
+}
+
+.wcp-tree-node:hover {
+    background: #f0f0f1;
+}
+
+#wcp-context-selector {
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+    background: #f9f9f9;
+}
+
+#wcp-context-selector label {
+    margin: 3px 0;
+    font-size: 13px;
+}
+
+/* AI Candidates */
+.wcp-ai-candidates {
+    margin-top: 15px;
+    padding: 15px;
+    background: #f0f6fc;
+    border: 1px solid #0073aa;
+    border-radius: 4px;
+}
+
+.wcp-candidate {
+    background: #fff;
+    padding: 15px;
+    margin: 10px 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.wcp-candidate h5 {
+    margin-top: 0;
+    color: #2271b1;
+}
+
+.wcp-candidate p {
+    margin: 10px 0;
+    color: #50575e;
+}
+
+.wcp-accept-candidate {
+    margin-right: 5px;
+}
+
+.wcp-submit-decisions {
+    margin-right: 10px;
+    margin-top: 10px;
+}
+
+/* AI Assistant Meta Box */
+.wcp-ai-assistant button {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+#wcp-ai-suggestions {
+    padding: 10px;
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    font-size: 13px;
+}
+
+/* Page AI Meta Box */
+.wcp-page-ai button {
+    width: 100%;
+    margin-bottom: 8px;
+    text-align: left;
+}
+
+.wcp-page-ai h4 {
+    margin: 15px 0 10px 0;
+    padding-top: 10px;
+    border-top: 1px solid #ddd;
+    font-size: 13px;
+    text-transform: uppercase;
+    color: #646970;
+}
+
+.wcp-page-ai h4:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+#wcp-ai-response {
+    font-size: 13px;
+}
+
+/* AI Audit Log */
+.wcp-view-action-details {
+    cursor: pointer;
+}
+
+/* Post list column widths — prevent taxonomy columns from crushing the title */
+.post-type-post .column-title,
+.post-type-page .column-title {
+    width: 35% !important;
+    min-width: 200px;
+    white-space: normal;
+    word-break: break-word;
+}
+
+.post-type-post .column-wcp_context,
+.post-type-post .column-item_type,
+.post-type-post .column-priority,
+.post-type-post .column-task_status,
+.post-type-post .column-pinned {
+    width: 10% !important;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .wcp-grid {
+        grid-template-columns: 1fr;
+    }
+}

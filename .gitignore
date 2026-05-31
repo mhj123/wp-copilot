@@ -1,0 +1,46 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Build artifacts
+*.zip
+
+# WordPress
+wp-config.php
+wp-content/uploads/
+wp-content/upgrade/
+wp-content/cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node (if you add build tools later)
+node_modules/
+package-lock.json
+
+# Logs
+*.log
+npm-debug.log*
+error_log
+wp-copilot/plugin-load-log.txt
+
+# Debug files
+wp-copilot/debug-test.php
+
+# Environment files
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*.temp
+.claude/
+
+# RTF files (keep markdown, exclude rich text)
+*.rtf
