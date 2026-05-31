@@ -61,6 +61,92 @@ jQuery(document).ready(function($) {
     }
 
     // ==========================================================================
+    // Homepage structure tree
+    // ==========================================================================
+
+    function loadStructureTree() {
+        var $container = $('#wcp-structure-tree');
+        if (!$container.length) return;
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/contexts/tree',
+            method: 'GET',
+            beforeSend: function(xhr) {
+                xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce);
+            },
+            success: function(response) {
+                $container.empty();
+                if (response.success && response.tree && response.tree.length) {
+                    renderStructureTree(response.tree, $container);
+                } else {
+                    $container.html('<p class="wcp-tree-empty">No pages found. <a href="' + wcpThemeData.adminUrl + 'post-new.php?post_type=page">Create your first page</a>.</p>');
+                }
+            },
+            error: function() {
+                $container.html('<p class="wcp-error">Failed to load structure.</p>');
+            }
+        });
+    }
+
+    function renderStructureTree(nodes, $container, level) {
+        level = level || 0;
+        // Root level should only contain pages — orphaned heading terms have parent=0
+        // in the taxonomy but belong under a page; skip them here.
+        if (level === 0) {
+            nodes = nodes.filter(function(n) { return n.ref_type === 'page'; });
+        }
+        var $ul = $('<ul class="wcp-tree-list">');
+
+        nodes.forEach(function(node) {
+            var hasChildren = node.children && node.children.length > 0;
+            var $li = $('<li>').addClass('wcp-tree-node wcp-tree-node--' + node.ref_type);
+
+            var $row = $('<div class="wcp-tree-row">');
+
+            if (hasChildren) {
+                var $toggle = $('<button class="wcp-tree-toggle" aria-expanded="false" aria-label="Expand">').html('<span class="wcp-tree-arrow">&#9654;</span>');
+                $row.append($toggle);
+            } else {
+                $row.append($('<span class="wcp-tree-toggle-spacer">'));
+            }
+
+            if (node.ref_type === 'page') {
+                var url = wcpThemeData.homeUrl + '/?page_id=' + node.ref_id;
+                $row.append($('<a class="wcp-tree-label">').attr('href', url).text(node.name));
+            } else {
+                $row.append($('<span class="wcp-tree-label wcp-tree-label--heading">').text(node.name));
+            }
+
+            if (node.count > 0) {
+                $row.append($('<span class="wcp-tree-count">').text(node.count));
+            }
+
+            $li.append($row);
+
+            if (hasChildren) {
+                var $children = $('<div class="wcp-tree-children">').hide();
+                renderStructureTree(node.children, $children, level + 1);
+                $li.append($children);
+
+                $row.find('.wcp-tree-toggle').on('click', function() {
+                    var expanded = $children.is(':visible');
+                    $children.toggle();
+                    $(this).attr('aria-expanded', !expanded)
+                           .find('.wcp-tree-arrow').html(expanded ? '&#9654;' : '&#9660;');
+                });
+            }
+
+            $ul.append($li);
+        });
+
+        $container.append($ul);
+    }
+
+    if ($('#wcp-structure-tree').length) {
+        loadStructureTree();
+    }
+
+    // ==========================================================================
     // Quick-add item forms (page-level and per-heading)
     // ==========================================================================
 

@@ -288,20 +288,29 @@ class WCP_Embeddings_Client {
 
     /**
      * Get all embeddings (for batch similarity search)
+     *
+     * @param string|null $post_type Optional post type filter
+     * @param string $fields 'vectors_only' omits embedding_text to reduce memory during similarity search;
+     *                       'full' returns all columns (default, preserves backward compatibility)
      */
-    public function get_all_embeddings($post_type = null) {
+    public function get_all_embeddings($post_type = null, $fields = 'full') {
         global $wpdb;
 
         $table_name = $wpdb->prefix . 'wcp_embeddings';
 
+        // Omit the heavy embedding_text longtext column when only vectors are needed
+        $select = ($fields === 'vectors_only')
+            ? 'post_id, post_type, embedding_vector'
+            : '*';
+
         if ($post_type) {
             $results = $wpdb->get_results($wpdb->prepare(
-                "SELECT * FROM $table_name WHERE post_type = %s ORDER BY updated_at DESC",
+                "SELECT $select FROM $table_name WHERE post_type = %s ORDER BY updated_at DESC",
                 $post_type
             ));
         } else {
             $results = $wpdb->get_results(
-                "SELECT * FROM $table_name ORDER BY updated_at DESC"
+                "SELECT $select FROM $table_name ORDER BY updated_at DESC"
             );
         }
 
@@ -311,17 +320,20 @@ class WCP_Embeddings_Client {
 
         $embeddings = array();
         foreach ($results as $row) {
-            $embeddings[] = array(
-                'id' => $row->id,
+            $embedding = array(
                 'post_id' => $row->post_id,
                 'post_type' => $row->post_type,
-                'text' => $row->embedding_text,
                 'vector' => json_decode($row->embedding_vector, true),
-                'model' => $row->model,
-                'dimensions' => $row->dimensions,
-                'created_at' => $row->created_at,
-                'updated_at' => $row->updated_at,
             );
+            if ($fields !== 'vectors_only') {
+                $embedding['id'] = $row->id;
+                $embedding['text'] = $row->embedding_text;
+                $embedding['model'] = $row->model;
+                $embedding['dimensions'] = $row->dimensions;
+                $embedding['created_at'] = $row->created_at;
+                $embedding['updated_at'] = $row->updated_at;
+            }
+            $embeddings[] = $embedding;
         }
 
         return $embeddings;
@@ -366,8 +378,8 @@ class WCP_Embeddings_Client {
             return $query_embedding;
         }
 
-        // Get all embeddings
-        $all_embeddings = $this->get_all_embeddings($post_type);
+        // Get all embeddings — omit embedding_text to keep memory usage low
+        $all_embeddings = $this->get_all_embeddings($post_type, 'vectors_only');
 
         if (empty($all_embeddings)) {
             return array();

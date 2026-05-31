@@ -1568,14 +1568,12 @@ class WCP_REST_API {
             return $heading_id;
         }
 
-        // Set parent meta
+        // Set parent meta before syncing — the save_post hook fired during wp_insert_post
+        // before this meta existed, so we re-run the sync explicitly now.
         update_post_meta($heading_id, '_wcp_parent_type', $parent_type);
         update_post_meta($heading_id, '_wcp_parent_id', $parent_id);
+        WCP_Taxonomy_Sync::instance()->sync_heading_to_taxonomy($heading_id, get_post($heading_id), true);
 
-        // Taxonomy sync will be triggered automatically by save_post hook
-
-        // Get the context term (wait a moment for taxonomy sync to complete)
-        sleep(1);
         $term = null;
         if (function_exists('wcp_theme_get_heading_context_term')) {
             $term = wcp_theme_get_heading_context_term($heading_id);
@@ -1894,8 +1892,9 @@ class WCP_REST_API {
         // AI guardrail: flag this as a goal subtype so the UI can render it differently
         update_post_meta( $heading_id, '_wcp_is_goal', '1' );
 
-        // Taxonomy sync fires automatically via save_post hook; give it a moment
-        sleep( 1 );
+        // Re-run taxonomy sync now that parent meta is in place (save_post fired
+        // during wp_insert_post before the meta above was written).
+        WCP_Taxonomy_Sync::instance()->sync_heading_to_taxonomy( $heading_id, get_post( $heading_id ), true );
 
         // Resolve context term for the new heading to assign items to it
         $heading_term = null;

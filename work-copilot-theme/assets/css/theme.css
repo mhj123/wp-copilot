@@ -765,6 +765,129 @@ textarea.wcp-form-control {
 }
 
 /* ==========================================================================
+   Homepage Structure Tree
+   ========================================================================== */
+
+.wcp-structure-section {
+    margin-top: 0;
+}
+
+.wcp-structure-section > h2 {
+    margin-top: 0;
+    margin-bottom: 16px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #1e1e1e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.wcp-structure-tree-container {
+    font-size: 14px;
+}
+
+.wcp-tree-loading,
+.wcp-tree-empty {
+    color: #999;
+    font-size: 14px;
+}
+
+.wcp-tree-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.wcp-tree-children > .wcp-tree-list {
+    padding-left: 20px;
+    border-left: 2px solid #eee;
+    margin-left: 11px;
+}
+
+.wcp-tree-children {
+    display: none;
+}
+
+.wcp-tree-children.is-open {
+    display: block;
+}
+
+.wcp-tree-node {
+    margin: 2px 0;
+}
+
+.wcp-tree-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 6px;
+    border-radius: 4px;
+    transition: background 0.15s;
+}
+
+.wcp-tree-row:hover {
+    background: #f5f5f5;
+}
+
+.wcp-tree-toggle {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: #999;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    transition: color 0.15s, background 0.15s;
+}
+
+.wcp-tree-toggle:hover {
+    color: #333;
+    background: #e8e8e8;
+}
+
+.wcp-tree-toggle-spacer {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+}
+
+.wcp-tree-label {
+    flex: 1;
+    color: #1e1e1e;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+a.wcp-tree-label:hover {
+    color: #0066cc;
+    text-decoration: underline;
+}
+
+.wcp-tree-label--heading {
+    color: #555;
+    font-style: italic;
+}
+
+.wcp-tree-count {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: #bbb;
+    background: #f0f0f0;
+    padding: 1px 6px;
+    border-radius: 10px;
+    min-width: 20px;
+    text-align: center;
+}
+
+/* ==========================================================================
    Child Pages Section
    ========================================================================== */
 
