@@ -10,10 +10,11 @@
 
     const AIWidget = {
         conversationId: null,
-        currentProposals: [], // Array of proposals for multi-item support
-        currentBatchId: null, // Batch ID for grouping proposals
-        currentAction: 'chat', // 'chat' or 'generate'
-        contextMode: 'page', // 'page', 'corpus', or 'select'
+        currentProposals: [],
+        currentBatchId: null,
+        currentContentProposal: null,
+        currentAction: 'chat',
+        contextMode: 'page',
         selectedPages: [],
         pagesCache: null,
 
@@ -92,10 +93,19 @@
                 this.updatePageOption(pageId, option, checked);
             });
 
-            // Prompt chips
-            $(document).on('click', '.wcp-ai-chip', (e) => {
-                const prompt = $(e.currentTarget).data('prompt');
-                $('#wcp-ai-prompt').val(prompt);
+            // Action chips — toggle exclusive selection
+            $(document).on('click', '.wcp-ai-action-chip', (e) => {
+                const $chip = $(e.currentTarget);
+                const action = $chip.data('action');
+                if ($chip.hasClass('active')) {
+                    // Deselect → back to plain chat
+                    $chip.removeClass('active');
+                    this.currentAction = 'chat';
+                } else {
+                    $('.wcp-ai-action-chip').removeClass('active');
+                    $chip.addClass('active');
+                    this.currentAction = action;
+                }
             });
 
             // Send message
@@ -133,6 +143,15 @@
                 this.dismissProposals();
             });
 
+            // Content proposal actions
+            $(document).on('click', '.wcp-ai-content-accept-btn', () => {
+                this.acceptContentProposal();
+            });
+
+            $(document).on('click', '.wcp-ai-content-dismiss-btn', () => {
+                this.dismissContentProposal();
+            });
+
             // Proposal checkbox change
             $(document).on('change', '.wcp-proposal-checkbox input', (e) => {
                 this.updateProposalSelection(e.target);
@@ -146,29 +165,10 @@
         },
 
         /**
-         * Set current action (chat or generate)
+         * Set current action — kept for any legacy callers, now always 'auto'
          */
         setAction: function(action) {
-            this.currentAction = action;
-
-            // Update button states
-            $('.wcp-ai-action-btn').removeClass('active');
-            $(`.wcp-ai-action-btn[data-action="${action}"]`).addClass('active');
-
-            // Show/hide item count wrapper and update placeholder
-            if (action === 'generate') {
-                $('.wcp-ai-item-count-wrapper').css('display', 'flex');
-                $('#wcp-ai-prompt').attr('placeholder', 'Describe the items you want to create...');
-            } else if (action === 'generate_headings') {
-                $('.wcp-ai-item-count-wrapper').css('display', 'flex');
-                $('#wcp-ai-prompt').attr('placeholder', 'Describe the headings you want to create...');
-            } else if (action === 'generate_pages') {
-                $('.wcp-ai-item-count-wrapper').css('display', 'flex');
-                $('#wcp-ai-prompt').attr('placeholder', 'Describe the sub-pages you want to create...');
-            } else {
-                $('.wcp-ai-item-count-wrapper').css('display', 'none');
-                $('#wcp-ai-prompt').attr('placeholder', 'Ask a question or describe what you need...');
-            }
+            this.currentAction = 'auto';
         },
 
         /**
@@ -379,21 +379,6 @@
             });
         },
 
-        /**
-         * Refresh prompt chips
-         */
-        refreshPromptChips: function(prompts) {
-            const $container = $('.wcp-ai-prompt-chips');
-            $container.empty();
-
-            prompts.forEach((prompt) => {
-                $container.append(`
-                    <button type="button" class="wcp-ai-chip" data-prompt="${this.escapeHtml(prompt.prompt)}">
-                        ${this.escapeHtml(prompt.label)}
-                    </button>
-                `);
-            });
-        },
 
         /**
          * Initialize conversation
@@ -500,14 +485,6 @@
                 data.selected_pages = this.selectedPages;
             }
 
-            // Add item count for generate actions
-            if (this.currentAction === 'generate' || this.currentAction === 'generate_headings' || this.currentAction === 'generate_pages') {
-                const itemCount = parseInt($('#wcp-ai-item-count').val()) || 0;
-                if (itemCount > 0) {
-                    data.item_count = itemCount;
-                }
-            }
-
             $.ajax({
                 url: wcpAiWidgetData.restUrl + '/ai/actions/execute',
                 method: 'POST',
@@ -518,6 +495,9 @@
                 success: (response) => {
                     this.showLoading(false);
                     $('.wcp-ai-send-btn').prop('disabled', false);
+                    // Reset action chip selection after each send
+                    $('.wcp-ai-action-chip').removeClass('active');
+                    this.currentAction = 'chat';
 
                     if (response.success) {
                         this.handleActionResult(response.result);
@@ -538,22 +518,58 @@
          */
         handleActionResult: function(result) {
             if (result.outcome === 'chat') {
-                // Chat response - just append message
                 this.appendMessage('assistant', result.message);
-
-                // Auto-extract memories for chat actions
-                if (this.currentAction === 'chat' && this.conversationId) {
+                if (this.conversationId) {
                     this.extractMemories();
                 }
             } else if (result.outcome === 'create_items') {
-                // Generate items - show approval panel
                 this.currentBatchId = result.batch_id || null;
                 this.showProposals(result.proposals);
             } else if (result.outcome === 'create_memories') {
-                // Memory proposals - show approval panel
                 this.currentBatchId = result.batch_id || null;
                 this.showMemoryProposals(result.proposals);
+            } else if (result.outcome === 'content_proposal') {
+                this.showContentProposal(result);
             }
+        },
+
+        showContentProposal: function(result) {
+            this.currentContentProposal = result;
+            const label = result.mode === 'rewrite' ? 'Proposed page rewrite' : 'Content to append';
+            $('.wcp-ai-content-proposal-title').text(label);
+            $('.wcp-ai-content-proposal-preview').html(
+                $('<div class="wcp-content-proposal-text">').text(result.content)
+            );
+            $('.wcp-ai-content-proposal-panel').show();
+        },
+
+        acceptContentProposal: function() {
+            if (!this.currentContentProposal) return;
+            const proposal = this.currentContentProposal;
+            const $btn = $('.wcp-ai-content-accept-btn');
+            $btn.prop('disabled', true).text('Saving…');
+
+            $.ajax({
+                url: wcpAiWidgetData.restUrl + '/pages/' + wcpAiWidgetData.pageId + '/content/accept',
+                method: 'POST',
+                beforeSend: (xhr) => { xhr.setRequestHeader('X-WP-Nonce', wcpAiWidgetData.nonce); },
+                data: { proposal_id: proposal.proposal_id },
+                success: () => {
+                    this.dismissContentProposal();
+                    this.appendMessage('assistant', 'Page content updated. Reloading…');
+                    setTimeout(() => window.location.reload(), 1200);
+                },
+                error: () => {
+                    $btn.prop('disabled', false).text('Accept');
+                    this.showError('Could not save — please try again.');
+                }
+            });
+        },
+
+        dismissContentProposal: function() {
+            this.currentContentProposal = null;
+            $('.wcp-ai-content-proposal-panel').hide();
+            $('.wcp-ai-content-proposal-preview').empty();
         },
 
         /**

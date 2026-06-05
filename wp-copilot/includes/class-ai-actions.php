@@ -1361,6 +1361,126 @@ class WCP_AI_Actions {
     }
 
     /**
+     * Route an 'auto' action by detecting intent from the prompt via keyword matching.
+     * Returns an array: ['action' => string, 'item_count' => int]
+     */
+    public function auto_route( $prompt ) {
+        $lower = mb_strtolower( $prompt );
+
+        // Extract explicit item count from prompt ("generate 5 items", "create 3 tasks")
+        $item_count = 0;
+        if ( preg_match( '/\b(\d+)\s+(?:items?|tasks?|headings?|pages?|sub-?pages?)\b/i', $prompt, $m ) ) {
+            $item_count = (int) $m[1];
+        }
+
+        if ( preg_match( '/\b(rewrite|re-write)\b.*\b(page|content)\b|\b(rewrite|re-write)\s+this\b/i', $lower ) ) {
+            return array( 'action' => 'rewrite_content', 'item_count' => 0 );
+        }
+        if ( preg_match( '/\b(append|add to|extend|add content)\b.*\b(page|content)\b/i', $lower ) ) {
+            return array( 'action' => 'append_content', 'item_count' => 0 );
+        }
+        if ( preg_match( '/\b(generate|create|suggest|add|produce)\b.{0,30}\b(headings?|sections?)\b/i', $lower ) ) {
+            return array( 'action' => 'generate_headings', 'item_count' => $item_count );
+        }
+        if ( preg_match( '/\b(generate|create|suggest|add|produce)\b.{0,30}\b(sub-?pages?|child pages?)\b/i', $lower ) ) {
+            return array( 'action' => 'generate_pages', 'item_count' => $item_count );
+        }
+        if ( preg_match( '/\b(generate|create|suggest|add|produce)\b.{0,30}\b(items?|tasks?|notes?|actions?)\b/i', $lower ) ) {
+            return array( 'action' => 'generate_items', 'item_count' => $item_count );
+        }
+
+        return array( 'action' => 'chat', 'item_count' => 0 );
+    }
+
+    /**
+     * Rewrite the page's post_content based on the user's instruction.
+     * Returns a content proposal stored in a transient (human-in-the-loop).
+     */
+    public function rewrite_page_content( $prompt, $page_id, $context_mode = 'page', $selected_pages = array() ) {
+        $page = get_post( $page_id );
+        if ( ! $page ) return new WP_Error( 'not_found', 'Page not found' );
+
+        $context_builder = WCP_Context_Builder::instance();
+        $context_data = $context_builder->build_context_by_mode( $page_id, $context_mode, array(
+            'selected_pages' => $selected_pages,
+            'query' => $prompt,
+            'include_items' => false,
+        ) );
+
+        $prompt_builder = WCP_Prompt_Builder::instance();
+        $system_prompt  = $prompt_builder->build_system_prompt( 'rewrite_content', $page_id );
+
+        $existing = $page->post_content ? "\n\nCurrent page content:\n" . wp_strip_all_tags( $page->post_content ) : '';
+        $user_message = $prompt_builder->build_user_message( $prompt . $existing, $context_data );
+
+        $ai_client = WCP_AI_Client::instance();
+        $response  = $ai_client->request_with_conversation( $system_prompt, $user_message, array(), 4096, 90 );
+        if ( is_wp_error( $response ) ) return $response;
+
+        $proposal_id = wp_generate_uuid4();
+        set_transient( 'wcp_content_proposal_' . $proposal_id, array(
+            'mode'    => 'rewrite',
+            'page_id' => $page_id,
+            'content' => $response['content'],
+        ), HOUR_IN_SECONDS );
+
+        $logger = WCP_AI_Logger::instance();
+        $action_id = $logger->log_action( 'rewrite_content', $prompt, array( 'page_id' => $page_id ), $response['content'] );
+
+        return array(
+            'outcome'     => 'content_proposal',
+            'mode'        => 'rewrite',
+            'proposal_id' => $proposal_id,
+            'content'     => $response['content'],
+            'action_id'   => $action_id,
+        );
+    }
+
+    /**
+     * Generate content to append to the page's post_content.
+     * Returns a content proposal stored in a transient (human-in-the-loop).
+     */
+    public function append_page_content( $prompt, $page_id, $context_mode = 'page', $selected_pages = array() ) {
+        $page = get_post( $page_id );
+        if ( ! $page ) return new WP_Error( 'not_found', 'Page not found' );
+
+        $context_builder = WCP_Context_Builder::instance();
+        $context_data = $context_builder->build_context_by_mode( $page_id, $context_mode, array(
+            'selected_pages' => $selected_pages,
+            'query' => $prompt,
+            'include_items' => false,
+        ) );
+
+        $prompt_builder = WCP_Prompt_Builder::instance();
+        $system_prompt  = $prompt_builder->build_system_prompt( 'append_content', $page_id );
+
+        $existing = $page->post_content ? "\n\nExisting page content:\n" . wp_strip_all_tags( $page->post_content ) : '';
+        $user_message = $prompt_builder->build_user_message( $prompt . $existing, $context_data );
+
+        $ai_client = WCP_AI_Client::instance();
+        $response  = $ai_client->request_with_conversation( $system_prompt, $user_message, array(), 4096, 90 );
+        if ( is_wp_error( $response ) ) return $response;
+
+        $proposal_id = wp_generate_uuid4();
+        set_transient( 'wcp_content_proposal_' . $proposal_id, array(
+            'mode'    => 'append',
+            'page_id' => $page_id,
+            'content' => $response['content'],
+        ), HOUR_IN_SECONDS );
+
+        $logger = WCP_AI_Logger::instance();
+        $action_id = $logger->log_action( 'append_content', $prompt, array( 'page_id' => $page_id ), $response['content'] );
+
+        return array(
+            'outcome'     => 'content_proposal',
+            'mode'        => 'append',
+            'proposal_id' => $proposal_id,
+            'content'     => $response['content'],
+            'action_id'   => $action_id,
+        );
+    }
+
+    /**
      * Get version for debugging
      */
     public static function get_version() {

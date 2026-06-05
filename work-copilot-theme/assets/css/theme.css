@@ -206,16 +206,62 @@ body.wcp-ai-panel-open .wcp-main-content {
     line-height: 1.8;
 }
 
-.wcp-page-notes {
+.wcp-page-notes-wrap {
     background: #fff;
-    padding: 30px;
+    padding: 20px 30px;
     border-radius: 6px;
     margin-bottom: 30px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     line-height: 1.8;
 }
 
-.wcp-page-notes p:last-child { margin-bottom: 0; }
+.wcp-page-notes-display {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.wcp-page-notes-display p:last-child { margin-bottom: 0; }
+
+.wcp-page-notes-empty {
+    color: #aaa;
+}
+
+.wcp-page-notes-placeholder {
+    font-style: italic;
+    cursor: text;
+}
+
+.wcp-page-notes-edit {
+    flex-shrink: 0;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.wcp-page-notes-wrap:hover .wcp-page-notes-edit {
+    opacity: 1;
+}
+
+.wcp-page-notes-textarea {
+    width: 100%;
+    font-size: 14px;
+    line-height: 1.7;
+    resize: vertical;
+}
+
+.wcp-page-notes-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.wcp-page-notes-status {
+    font-size: 13px;
+    color: #c0392b;
+}
 
 /* Legacy page template styles (kept for backward compatibility) */
 .wcp-page-article {
@@ -1738,6 +1784,32 @@ a.wcp-tree-label:hover {
     cursor: grabbing;
 }
 
+.wcp-heading-drag-handle {
+    cursor: grab;
+    color: #ddd;
+    font-size: 16px;
+    padding-right: 8px;
+    user-select: none;
+    transition: color 0.1s;
+}
+
+.wcp-heading-group:hover .wcp-heading-drag-handle {
+    color: #aaa;
+}
+
+.wcp-heading-drag-handle:active {
+    cursor: grabbing;
+}
+
+.wcp-heading-group.wcp-dragging {
+    opacity: 0.4;
+}
+
+.wcp-heading-group.wcp-drag-ghost {
+    background: #f0f4ff;
+    border-radius: 4px;
+}
+
 .wcp-item-row.wcp-dragging {
     opacity: 0.4;
 }
@@ -1750,7 +1822,7 @@ a.wcp-tree-label:hover {
 
 /* Ensure empty lists have enough height to accept drops */
 .wcp-items-list {
-    min-height: 32px;
+    min-height: 4px;
 }
 
 /* ==========================================================================

@@ -35,13 +35,21 @@ get_header();
     <?php endif; ?>
 
     <!-- Page Notes -->
-    <?php
-    $page_notes = get_post_meta(get_the_ID(), '_wcp_page_notes', true);
-    if ($page_notes) : ?>
-    <div class="wcp-page-notes">
-        <?php echo wp_kses_post($page_notes); ?>
+    <?php $page_notes = get_post_meta(get_the_ID(), '_wcp_page_notes', true); ?>
+    <div class="wcp-page-notes-wrap" data-page-id="<?php echo esc_attr(get_the_ID()); ?>">
+        <div class="wcp-page-notes-display<?php echo $page_notes ? '' : ' wcp-page-notes-empty'; ?>">
+            <?php echo $page_notes ? wp_kses_post($page_notes) : '<span class="wcp-page-notes-placeholder">Add notes…</span>'; ?>
+            <button type="button" class="wcp-page-notes-edit wcp-edit-link">[edit]</button>
+        </div>
+        <div class="wcp-page-notes-editor" style="display:none;">
+            <textarea class="wcp-page-notes-textarea wcp-form-control" rows="4"><?php echo esc_textarea($page_notes); ?></textarea>
+            <div class="wcp-page-notes-actions">
+                <button type="button" class="wcp-page-notes-save wcp-btn wcp-btn-primary wcp-btn-sm">Save</button>
+                <button type="button" class="wcp-page-notes-cancel wcp-edit-link">cancel</button>
+                <span class="wcp-page-notes-status"></span>
+            </div>
+        </div>
     </div>
-    <?php endif; ?>
 
     <?php
     endwhile;
@@ -126,6 +134,7 @@ get_header();
         <?php endif; ?>
 
         <!-- Headings with their items -->
+        <div id="wcp-headings-sortable" data-page-id="<?php echo esc_attr($page_id); ?>">
         <?php foreach ($headings as $heading) :
             $heading_id      = $heading->ID;
             $items           = wcp_theme_get_heading_items($heading_id);
@@ -133,13 +142,15 @@ get_header();
             $heading_context_id = $heading_term ? $heading_term->term_id : 0;
             $is_goal         = get_post_meta($heading_id, '_wcp_is_goal', true) === '1';
         ?>
-            <div class="wcp-heading-group<?php echo $is_goal ? ' wcp-goal-group' : ''; ?>">
+            <div class="wcp-heading-group<?php echo $is_goal ? ' wcp-goal-group' : ''; ?>" data-heading-id="<?php echo esc_attr($heading_id); ?>">
                 <h3 class="wcp-heading-title-simple">
+                    <span class="wcp-heading-drag-handle" title="Drag to reorder">⠿</span>
                     <?php if ($is_goal) : ?>
                         <span class="wcp-goal-badge">Goal</span>
                     <?php endif; ?>
                     <?php echo esc_html($heading->post_title); ?>
                     <a href="<?php echo get_edit_post_link($heading_id); ?>" class="wcp-edit-link">[edit]</a>
+                    <button type="button" class="wcp-heading-delete wcp-edit-link" data-heading-id="<?php echo esc_attr($heading_id); ?>">[delete]</button>
                 </h3>
                 <?php if ($is_goal && !empty($heading->post_content)) : ?>
                     <div class="wcp-goal-description"><?php echo wpautop(esc_html($heading->post_content)); ?></div>
@@ -171,6 +182,7 @@ get_header();
                 endif; ?>
             </div>
         <?php endforeach; ?>
+        </div><!-- #wcp-headings-sortable -->
 
         <!-- Dynamic listings -->
         <?php
