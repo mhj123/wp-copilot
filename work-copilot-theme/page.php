@@ -152,11 +152,20 @@ get_header();
             </div>
         <?php endforeach; ?>
 
-        <!-- Add new heading / goal / subpage -->
+        <!-- Dynamic listings -->
+        <?php
+        $dynamic_listings = json_decode(get_post_meta($page_id, '_wcp_dynamic_listings', true) ?: '[]', true);
+        foreach ($dynamic_listings as $listing) :
+            include locate_template('template-parts/dynamic-listing.php');
+        endforeach;
+        ?>
+
+        <!-- Add new heading / goal / subpage / dynamic list -->
         <div class="wcp-add-heading-wrap">
             <button type="button" id="wcp-btn-new-heading" class="wcp-edit-link">+ new heading</button>
             <button type="button" id="wcp-btn-new-goal" class="wcp-edit-link" data-page-id="<?php echo esc_attr($page_id); ?>">+ new goal</button>
             <button type="button" id="wcp-btn-new-subpage" class="wcp-edit-link" data-page-id="<?php echo esc_attr($page_id); ?>">+ new subpage</button>
+            <button type="button" id="wcp-btn-new-dynamic-listing" class="wcp-edit-link" data-page-id="<?php echo esc_attr($page_id); ?>">+ dynamic list</button>
             <form id="wcp-create-subpage-form" style="display:none;">
                 <input type="hidden" name="page_id" value="<?php echo esc_attr($page_id); ?>">
                 <input type="text" name="title" required placeholder="<?php esc_attr_e('Subpage title...', 'work-copilot-theme'); ?>" class="wcp-form-control wcp-quick-title">
@@ -169,6 +178,34 @@ get_header();
                 <input type="text" name="title" required placeholder="<?php esc_attr_e('Heading title...', 'work-copilot-theme'); ?>" class="wcp-form-control wcp-quick-title">
                 <button type="submit" class="wcp-btn wcp-btn-primary wcp-btn-sm"><?php _e('Create heading', 'work-copilot-theme'); ?></button>
                 <button type="button" id="wcp-btn-cancel-heading" class="wcp-edit-link"><?php _e('cancel', 'work-copilot-theme'); ?></button>
+                <span class="wcp-quick-status"></span>
+            </form>
+            <form id="wcp-create-dynamic-listing-form" style="display:none;">
+                <input type="hidden" name="page_id" value="<?php echo esc_attr($page_id); ?>">
+                <input type="text" name="title" required placeholder="<?php esc_attr_e('List title, e.g. Open tasks', 'work-copilot-theme'); ?>" class="wcp-form-control wcp-quick-title">
+                <select name="item_type" class="wcp-inline-select">
+                    <option value=""><?php _e('Any type', 'work-copilot-theme'); ?></option>
+                    <option value="task"><?php _e('Task', 'work-copilot-theme'); ?></option>
+                    <option value="info"><?php _e('Info', 'work-copilot-theme'); ?></option>
+                    <option value="learning"><?php _e('Learning', 'work-copilot-theme'); ?></option>
+                </select>
+                <select name="task_status" class="wcp-inline-select wcp-dl-status-select">
+                    <option value=""><?php _e('Any status', 'work-copilot-theme'); ?></option>
+                    <option value="to-do"><?php _e('To do', 'work-copilot-theme'); ?></option>
+                    <option value="in-progress"><?php _e('In progress', 'work-copilot-theme'); ?></option>
+                    <option value="done"><?php _e('Done', 'work-copilot-theme'); ?></option>
+                </select>
+                <select name="parent_page_id" class="wcp-inline-select wcp-dl-page-select">
+                    <option value=""><?php _e('All pages', 'work-copilot-theme'); ?></option>
+                    <?php
+                    $all_pages = get_posts(array('post_type' => 'page', 'post_status' => 'publish', 'posts_per_page' => -1, 'orderby' => 'title', 'order' => 'ASC'));
+                    foreach ($all_pages as $p) :
+                    ?>
+                        <option value="<?php echo esc_attr($p->ID); ?>"><?php echo esc_html($p->post_title); ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="submit" class="wcp-btn wcp-btn-primary wcp-btn-sm"><?php _e('Add list', 'work-copilot-theme'); ?></button>
+                <button type="button" id="wcp-btn-cancel-dynamic-listing" class="wcp-edit-link"><?php _e('cancel', 'work-copilot-theme'); ?></button>
                 <span class="wcp-quick-status"></span>
             </form>
         </div>

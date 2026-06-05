@@ -649,6 +649,74 @@ jQuery(document).ready(function($) {
     });
 
     // ==========================================================================
+    // Dynamic listing creation
+    // ==========================================================================
+
+    $(document).on('click', '#wcp-btn-new-dynamic-listing', function() {
+        var $form = $('#wcp-create-dynamic-listing-form');
+        $form.slideToggle(150, function() {
+            if ($form.is(':visible')) $form.find('.wcp-quick-title').focus();
+        });
+    });
+
+    $(document).on('click', '#wcp-btn-cancel-dynamic-listing', function() {
+        var $form = $('#wcp-create-dynamic-listing-form');
+        $form.slideUp(150);
+        $form[0].reset();
+        $form.find('.wcp-quick-status').text('');
+    });
+
+    $(document).on('submit', '#wcp-create-dynamic-listing-form', function(e) {
+        e.preventDefault();
+        var $form = $(this);
+        var $btn = $form.find('button[type="submit"]');
+        var $status = $form.find('.wcp-quick-status');
+        var pageId = $form.find('[name="page_id"]').val();
+
+        $btn.prop('disabled', true).text('Adding...');
+        $status.text('');
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/pages/' + pageId + '/dynamic-listings',
+            method: 'POST',
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            contentType: 'application/json',
+            data: JSON.stringify({
+                title:          $form.find('[name="title"]').val().trim(),
+                item_type:      $form.find('[name="item_type"]').val(),
+                task_status:    $form.find('[name="task_status"]').val(),
+                parent_page_id: parseInt($form.find('[name="parent_page_id"]').val()) || 0,
+            }),
+            success: function() {
+                window.location.reload();
+            },
+            error: function() {
+                $btn.prop('disabled', false).text('Add list');
+                $status.text('Error — please try again.');
+            }
+        });
+    });
+
+    $(document).on('click', '.wcp-dynamic-listing-delete', function() {
+        var $btn = $(this);
+        var pageId = $btn.data('page-id');
+        var listingId = $btn.data('listing-id');
+        if (!confirm('Remove this dynamic list?')) return;
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/pages/' + pageId + '/dynamic-listings/' + listingId,
+            method: 'DELETE',
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function() {
+                $btn.closest('.wcp-dynamic-listing').remove();
+            },
+            error: function() {
+                alert('Could not remove listing — please try again.');
+            }
+        });
+    });
+
+    // ==========================================================================
     // Goal creation modal
     // ==========================================================================
 

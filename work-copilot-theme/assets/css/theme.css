@@ -1932,3 +1932,32 @@ a.wcp-tree-label:hover {
 .wcp-goal-step2-status.error {
     color: #c0392b;
 }
+
+/* ==========================================================================
+   Dynamic Listings
+   ========================================================================== */
+
+.wcp-dynamic-listing {
+    margin-bottom: 40px;
+    padding-bottom: 30px;
+    border-bottom: 1px solid #eee;
+}
+
+.wcp-dynamic-listing-badge {
+    display: inline-block;
+    background: #0066cc;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 3px;
+    vertical-align: middle;
+}
+
+.wcp-dynamic-listing-empty {
+    color: #999;
+    font-size: 14px;
+    margin: 0;
+}

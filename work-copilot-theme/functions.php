@@ -55,13 +55,13 @@ function wcp_theme_scripts() {
     wp_enqueue_style('wcp-theme-style', get_stylesheet_uri(), array(), '1.2.0');
 
     // Custom theme styles
-    wp_enqueue_style('wcp-theme-custom', get_template_directory_uri() . '/assets/css/theme.css', array(), '1.7.0');
+    wp_enqueue_style('wcp-theme-custom', get_template_directory_uri() . '/assets/css/theme.css', array(), '1.8.0');
 
     // SortableJS for drag-to-reorder
     wp_enqueue_script('sortablejs', 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js', array(), '1.15.2', true);
 
     // Theme JavaScript
-    wp_enqueue_script('wcp-theme-js', get_template_directory_uri() . '/assets/js/theme.js', array('jquery', 'sortablejs'), '1.5.8', true);
+    wp_enqueue_script('wcp-theme-js', get_template_directory_uri() . '/assets/js/theme.js', array('jquery', 'sortablejs'), '1.5.9', true);
 
     // Localize script with data
     wp_localize_script('wcp-theme-js', 'wcpThemeData', array(
@@ -455,4 +455,48 @@ function wcp_theme_get_item_breadcrumbs($post_id) {
     }
 
     return array();
+}
+
+// Run a dynamic listing query and return matching posts
+function wcp_theme_query_dynamic_listing($listing) {
+    $tax_query = array('relation' => 'AND');
+
+    if (!empty($listing['item_type'])) {
+        $tax_query[] = array(
+            'taxonomy' => 'item_type',
+            'field'    => 'slug',
+            'terms'    => $listing['item_type'],
+        );
+    }
+
+    if (!empty($listing['task_status'])) {
+        $tax_query[] = array(
+            'taxonomy' => 'task_status',
+            'field'    => 'slug',
+            'terms'    => $listing['task_status'],
+        );
+    }
+
+    if (!empty($listing['parent_page_id'])) {
+        $parent_term = wcp_theme_get_page_context_term((int) $listing['parent_page_id']);
+        if ($parent_term) {
+            $child_ids    = get_term_children($parent_term->term_id, 'wcp_context');
+            $context_ids  = array_merge(array($parent_term->term_id), $child_ids ?: array());
+            $tax_query[]  = array(
+                'taxonomy' => 'wcp_context',
+                'field'    => 'term_id',
+                'terms'    => $context_ids,
+                'operator' => 'IN',
+            );
+        }
+    }
+
+    return get_posts(array(
+        'post_type'      => 'post',
+        'post_status'    => 'publish',
+        'posts_per_page' => 200,
+        'orderby'        => 'date',
+        'order'          => 'DESC',
+        'tax_query'      => count($tax_query) > 1 ? $tax_query : array_slice($tax_query, 1),
+    ));
 }
