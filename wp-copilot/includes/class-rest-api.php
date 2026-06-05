@@ -235,6 +235,18 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // Dynamic listings: add / remove stored queries on a page
+        register_rest_route($namespace, '/pages/(?P<page_id>\d+)/dynamic-listings', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'add_dynamic_listing'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+        register_rest_route($namespace, '/pages/(?P<page_id>\d+)/dynamic-listings/(?P<listing_id>[a-zA-Z0-9_-]+)', array(
+            'methods' => 'DELETE',
+            'callback' => array($this, 'delete_dynamic_listing'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // Tools: Bulk sync all pages/headings to wcp_context taxonomy
         register_rest_route($namespace, '/taxonomy/sync-all', array(
             'methods'             => 'POST',
@@ -1951,5 +1963,56 @@ class WCP_REST_API {
             'heading_id'    => $heading_id,
             'created_items' => $created_items,
         ) );
+    }
+
+    /**
+     * Add a dynamic listing query to a page's meta.
+     */
+    public function add_dynamic_listing( $request ) {
+        $page_id = (int) $request->get_param('page_id');
+        if ( ! get_post( $page_id ) ) {
+            return new WP_Error('not_found', 'Page not found', array('status' => 404));
+        }
+
+        $title          = sanitize_text_field( $request->get_param('title') );
+        $item_type      = sanitize_key( $request->get_param('item_type') ?: '' );
+        $task_status    = sanitize_key( $request->get_param('task_status') ?: '' );
+        $parent_page_id = (int) ( $request->get_param('parent_page_id') ?: 0 );
+
+        if ( empty( $title ) ) {
+            return new WP_Error('missing_title', 'Title is required', array('status' => 400));
+        }
+
+        $listings = json_decode( get_post_meta($page_id, '_wcp_dynamic_listings', true) ?: '[]', true );
+
+        $listing = array(
+            'id'             => uniqid('dl_'),
+            'title'          => $title,
+            'item_type'      => $item_type,
+            'task_status'    => $task_status,
+            'parent_page_id' => $parent_page_id,
+        );
+
+        $listings[] = $listing;
+        update_post_meta( $page_id, '_wcp_dynamic_listings', wp_json_encode($listings) );
+
+        return rest_ensure_response( array('success' => true, 'listing' => $listing) );
+    }
+
+    /**
+     * Remove a dynamic listing from a page's meta.
+     */
+    public function delete_dynamic_listing( $request ) {
+        $page_id    = (int) $request->get_param('page_id');
+        $listing_id = $request->get_param('listing_id');
+
+        $listings = json_decode( get_post_meta($page_id, '_wcp_dynamic_listings', true) ?: '[]', true );
+        $listings = array_values( array_filter($listings, function($l) use ($listing_id) {
+            return $l['id'] !== $listing_id;
+        }) );
+
+        update_post_meta( $page_id, '_wcp_dynamic_listings', wp_json_encode($listings) );
+
+        return rest_ensure_response( array('success' => true) );
     }
 }
