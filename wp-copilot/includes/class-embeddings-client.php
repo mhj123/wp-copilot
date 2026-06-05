@@ -368,52 +368,116 @@ class WCP_Embeddings_Client {
     }
 
     /**
-     * Find similar posts using cosine similarity
+     * Fetch a page of embeddings (vectors only) for chunked similarity search.
+     * Using LIMIT/OFFSET keeps peak memory proportional to chunk size, not corpus size.
      */
-    public function find_similar_posts($query_text, $limit = 10, $post_type = null, $exclude_post_ids = array()) {
-        // Generate embedding for query
-        $query_embedding = $this->generate_embedding($query_text);
+    private function get_embeddings_chunk( $post_type, $chunk_size, $offset ) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'wcp_embeddings';
 
-        if (is_wp_error($query_embedding)) {
-            return $query_embedding;
+        if ( $post_type ) {
+            $results = $wpdb->get_results( $wpdb->prepare(
+                "SELECT post_id, post_type, embedding_vector
+                 FROM $table
+                 WHERE post_type = %s
+                 ORDER BY id ASC
+                 LIMIT %d OFFSET %d",
+                $post_type, $chunk_size, $offset
+            ) );
+        } else {
+            $results = $wpdb->get_results( $wpdb->prepare(
+                "SELECT post_id, post_type, embedding_vector
+                 FROM $table
+                 ORDER BY id ASC
+                 LIMIT %d OFFSET %d",
+                $chunk_size, $offset
+            ) );
         }
 
-        // Get all embeddings — omit embedding_text to keep memory usage low
-        $all_embeddings = $this->get_all_embeddings($post_type, 'vectors_only');
-
-        if (empty($all_embeddings)) {
+        if ( ! $results ) {
             return array();
         }
 
-        // Calculate similarities
-        $similarities = array();
-        foreach ($all_embeddings as $embedding) {
-            // Skip excluded posts
-            if (in_array($embedding['post_id'], $exclude_post_ids)) {
-                continue;
-            }
-
-            // Skip if post no longer exists
-            if (!get_post($embedding['post_id'])) {
-                continue;
-            }
-
-            $similarity = $this->cosine_similarity($query_embedding, $embedding['vector']);
-
-            $similarities[] = array(
-                'post_id' => $embedding['post_id'],
-                'similarity' => $similarity,
-                'text' => $embedding['text'],
+        $chunk = array();
+        foreach ( $results as $row ) {
+            $chunk[] = array(
+                'post_id'    => (int) $row->post_id,
+                'post_type'  => $row->post_type,
+                'vector'     => json_decode( $row->embedding_vector, true ),
             );
         }
+        return $chunk;
+    }
 
-        // Sort by similarity (highest first)
-        usort($similarities, function($a, $b) {
+    /**
+     * Find similar posts using cosine similarity.
+     * Processes embeddings in chunks of 200 to keep peak memory bounded regardless
+     * of corpus size — avoids loading all vectors into PHP memory simultaneously.
+     */
+    public function find_similar_posts( $query_text, $limit = 10, $post_type = null, $exclude_post_ids = array() ) {
+        $query_embedding = $this->generate_embedding( $query_text );
+        if ( is_wp_error( $query_embedding ) ) {
+            return $query_embedding;
+        }
+
+        $chunk_size  = 200;
+        $prune_at    = $limit * 5; // keep candidate list small between chunks
+        $offset      = 0;
+        $candidates  = array();
+
+        while ( true ) {
+            $chunk = $this->get_embeddings_chunk( $post_type, $chunk_size, $offset );
+            if ( empty( $chunk ) ) {
+                break;
+            }
+
+            foreach ( $chunk as $embedding ) {
+                if ( in_array( $embedding['post_id'], $exclude_post_ids ) ) {
+                    continue;
+                }
+                $candidates[] = array(
+                    'post_id'    => $embedding['post_id'],
+                    'similarity' => $this->cosine_similarity( $query_embedding, $embedding['vector'] ),
+                );
+            }
+
+            unset( $chunk ); // free chunk memory before next iteration
+
+            // Prune early so the candidate list never grows unboundedly
+            if ( count( $candidates ) > $prune_at ) {
+                usort( $candidates, function( $a, $b ) {
+                    return $b['similarity'] <=> $a['similarity'];
+                } );
+                $candidates = array_slice( $candidates, 0, $prune_at );
+            }
+
+            $offset += $chunk_size;
+        }
+
+        if ( empty( $candidates ) ) {
+            return array();
+        }
+
+        usort( $candidates, function( $a, $b ) {
             return $b['similarity'] <=> $a['similarity'];
-        });
+        } );
 
-        // Return top N
-        return array_slice($similarities, 0, $limit);
+        // Verify existence only for the final top-N (avoids N+1 on the full corpus)
+        $results = array();
+        foreach ( $candidates as $candidate ) {
+            if ( count( $results ) >= $limit ) {
+                break;
+            }
+            if ( get_post( $candidate['post_id'] ) ) {
+                $results[] = array(
+                    'post_id'    => $candidate['post_id'],
+                    'similarity' => $candidate['similarity'],
+                    'text'       => '',
+                );
+            }
+        }
+
+        return $results;
     }
 
     /**
