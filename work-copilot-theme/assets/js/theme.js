@@ -535,6 +535,100 @@ jQuery(document).ready(function($) {
     });
 
     // ==========================================================================
+    // Subtasks
+    // ==========================================================================
+
+    // Toggle add-form
+    $(document).on('click', '.wcp-subtask-add-btn', function() {
+        var $section = $(this).closest('.wcp-item-row').find('.wcp-subtask-section');
+        var $form = $section.find('.wcp-subtask-add-form');
+        $form.slideToggle(120, function() {
+            if ($form.is(':visible')) $form.find('.wcp-subtask-input').focus();
+        });
+    });
+
+    $(document).on('click', '.wcp-subtask-add-cancel', function() {
+        var $form = $(this).closest('.wcp-subtask-add-form');
+        $form.slideUp(120);
+        $form.find('.wcp-subtask-input').val('');
+    });
+
+    // Submit new subtask
+    $(document).on('submit', '.wcp-subtask-add-form', function(e) {
+        e.preventDefault();
+        var $form   = $(this);
+        var itemId  = $form.data('item-id');
+        var title   = $form.find('.wcp-subtask-input').val().trim();
+        var $submit = $form.find('button[type="submit"]');
+
+        if (!title) return;
+        $submit.prop('disabled', true);
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/items/' + itemId + '/subtasks',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ title: title }),
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(response) {
+                if (!response.success) return;
+                var st = response.subtask;
+                var $list = $form.closest('.wcp-subtask-section').find('.wcp-subtask-list');
+                if (!$list.length) {
+                    $list = $('<ul class="wcp-subtask-list">').insertBefore($form);
+                }
+                var $li = $('<li class="wcp-subtask-row" data-subtask-id="' + st.id + '">'
+                    + '<input type="checkbox" class="wcp-subtask-checkbox" data-item-id="' + itemId + '" data-subtask-id="' + st.id + '">'
+                    + '<span class="wcp-subtask-title">' + $('<span>').text(st.title).html() + '</span>'
+                    + '<button type="button" class="wcp-subtask-delete wcp-edit-link" data-item-id="' + itemId + '" data-subtask-id="' + st.id + '">\xd7</button>'
+                    + '</li>');
+                $list.append($li);
+                $form.find('.wcp-subtask-input').val('');
+                $submit.prop('disabled', false);
+            },
+            error: function() { $submit.prop('disabled', false); }
+        });
+    });
+
+    // Toggle done
+    $(document).on('change', '.wcp-subtask-checkbox', function() {
+        var $cb        = $(this);
+        var itemId     = $cb.data('item-id');
+        var subtaskId  = $cb.data('subtask-id');
+        var $row       = $cb.closest('.wcp-subtask-row');
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/items/' + itemId + '/subtasks/' + subtaskId + '/toggle',
+            method: 'POST',
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(response) {
+                if (response.success) {
+                    $row.toggleClass('wcp-subtask-done', response.done);
+                    $cb.prop('checked', response.done);
+                }
+            },
+            error: function() { $cb.prop('checked', !$cb.prop('checked')); } // revert on fail
+        });
+    });
+
+    // Delete subtask
+    $(document).on('click', '.wcp-subtask-delete', function() {
+        var $btn      = $(this);
+        var itemId    = $btn.data('item-id');
+        var subtaskId = $btn.data('subtask-id');
+        var $row      = $btn.closest('.wcp-subtask-row');
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/items/' + itemId + '/subtasks/' + subtaskId,
+            method: 'DELETE',
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(response) {
+                if (response.success) $row.fadeOut(150, function() { $(this).remove(); });
+            }
+        });
+    });
+
+    // ==========================================================================
     // Subpage creation
     // ==========================================================================
 
