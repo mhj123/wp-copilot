@@ -91,6 +91,14 @@ get_header();
         $page_context_term = wcp_theme_get_page_context_term($page_id);
         $page_context_id   = $page_context_term ? $page_context_term->term_id : 0;
         $page_only_items   = wcp_theme_get_page_only_items($page_id);
+
+        // Context term IDs that belong to this page or its headings — suppress these
+        // from item context pills since they're already implied by the page structure.
+        $local_context_ids = $page_context_id ? array($page_context_id) : array();
+        foreach ($headings as $_h) {
+            $_ht = wcp_theme_get_heading_context_term($_h->ID);
+            if ($_ht) $local_context_ids[] = $_ht->term_id;
+        }
         ?>
 
         <!-- Page-level items (not under any heading) -->
@@ -100,7 +108,13 @@ get_header();
                 $priorities    = wp_get_post_terms($item->ID, 'priority', array('fields' => 'names'));
                 $task_statuses = wp_get_post_terms($item->ID, 'task_status', array('fields' => 'slugs'));
                 $item_tags     = wp_get_post_terms($item->ID, 'post_tag', array('fields' => 'names'));
-                $item_contexts = wp_get_post_terms($item->ID, 'wcp_context', array('fields' => 'names'));
+                $item_contexts = array_values(array_map(
+                    function($t) { return $t->name; },
+                    array_filter(
+                        wp_get_post_terms($item->ID, 'wcp_context'),
+                        function($t) use ($local_context_ids) { return !in_array($t->term_id, $local_context_ids); }
+                    )
+                ));
             ?>
                 <?php include(locate_template('template-parts/item-row.php')); ?>
             <?php endforeach; ?>
@@ -137,7 +151,13 @@ get_header();
                         $priorities    = wp_get_post_terms($item->ID, 'priority', array('fields' => 'names'));
                         $task_statuses = wp_get_post_terms($item->ID, 'task_status', array('fields' => 'slugs'));
                         $item_tags     = wp_get_post_terms($item->ID, 'post_tag', array('fields' => 'names'));
-                        $item_contexts = wp_get_post_terms($item->ID, 'wcp_context', array('fields' => 'names'));
+                        $item_contexts = array_values(array_map(
+                            function($t) { return $t->name; },
+                            array_filter(
+                                wp_get_post_terms($item->ID, 'wcp_context'),
+                                function($t) use ($local_context_ids) { return !in_array($t->term_id, $local_context_ids); }
+                            )
+                        ));
                     ?>
                         <?php include(locate_template('template-parts/item-row.php')); ?>
                     <?php endforeach; ?>

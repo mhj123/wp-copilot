@@ -75,5 +75,39 @@ $_task_status_slug = !empty($task_statuses) ? $task_statuses[0] : '';
         <?php endforeach; ?>
     </select>
 
+    <button type="button" class="wcp-subtask-add-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">+ subtask</button>
     <button type="button" class="wcp-item-delete wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">[delete]</button>
+
+    <?php
+    $subtasks = json_decode(get_post_meta($item->ID, '_wcp_subtasks', true) ?: '[]', true);
+    $has_subtasks = !empty($subtasks);
+    ?>
+    <?php if ($has_subtasks || true) : // always render the section so the add-form has a place ?>
+    <div class="wcp-subtask-section" data-item-id="<?php echo esc_attr($item->ID); ?>">
+        <?php if ($has_subtasks) : ?>
+        <ul class="wcp-subtask-list">
+            <?php foreach ($subtasks as $st) : ?>
+            <li class="wcp-subtask-row<?php echo $st['done'] ? ' wcp-subtask-done' : ''; ?>"
+                data-subtask-id="<?php echo esc_attr($st['id']); ?>">
+                <input type="checkbox"
+                       class="wcp-subtask-checkbox"
+                       data-item-id="<?php echo esc_attr($item->ID); ?>"
+                       data-subtask-id="<?php echo esc_attr($st['id']); ?>"
+                       <?php checked($st['done']); ?>>
+                <span class="wcp-subtask-title"><?php echo esc_html($st['title']); ?></span>
+                <button type="button"
+                        class="wcp-subtask-delete wcp-edit-link"
+                        data-item-id="<?php echo esc_attr($item->ID); ?>"
+                        data-subtask-id="<?php echo esc_attr($st['id']); ?>">×</button>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+        <?php endif; ?>
+        <form class="wcp-subtask-add-form" data-item-id="<?php echo esc_attr($item->ID); ?>" style="display:none;">
+            <input type="text" class="wcp-subtask-input" placeholder="Subtask title…" autocomplete="off">
+            <button type="submit" class="wcp-btn wcp-btn-primary wcp-btn-sm">Add</button>
+            <button type="button" class="wcp-subtask-add-cancel wcp-edit-link">cancel</button>
+        </form>
+    </div>
+    <?php endif; ?>
 </div>

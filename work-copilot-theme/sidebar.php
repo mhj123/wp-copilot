@@ -7,7 +7,7 @@
 <aside class="wcp-sidebar" role="navigation" aria-label="<?php esc_attr_e('Page Navigation', 'work-copilot-theme'); ?>">
 
     <div class="wcp-sidebar-header">
-        <h2><?php _e('Pages', 'work-copilot-theme'); ?></h2>
+        <h2><a href="<?php echo esc_url(home_url('/')); ?>" class="wcp-sidebar-logo"><?php bloginfo('name'); ?></a></h2>
     </div>
 
     <nav class="wcp-page-navigation">

@@ -235,6 +235,23 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // Subtasks: add, toggle, delete
+        register_rest_route($namespace, '/items/(?P<item_id>\d+)/subtasks', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'add_subtask'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+        register_rest_route($namespace, '/items/(?P<item_id>\d+)/subtasks/(?P<subtask_id>[a-zA-Z0-9_-]+)/toggle', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'toggle_subtask'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+        register_rest_route($namespace, '/items/(?P<item_id>\d+)/subtasks/(?P<subtask_id>[a-zA-Z0-9_-]+)', array(
+            'methods'             => 'DELETE',
+            'callback'            => array($this, 'delete_subtask'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // Dynamic listings: add / remove stored queries on a page
         register_rest_route($namespace, '/pages/(?P<page_id>\d+)/dynamic-listings', array(
             'methods' => 'POST',
@@ -1963,6 +1980,65 @@ class WCP_REST_API {
             'heading_id'    => $heading_id,
             'created_items' => $created_items,
         ) );
+    }
+
+    // ------------------------------------------------------------------
+    // Subtask helpers
+    // ------------------------------------------------------------------
+
+    private function get_subtasks( $item_id ) {
+        return json_decode( get_post_meta($item_id, '_wcp_subtasks', true) ?: '[]', true );
+    }
+
+    private function save_subtasks( $item_id, $subtasks ) {
+        update_post_meta( $item_id, '_wcp_subtasks', wp_json_encode( array_values($subtasks) ) );
+    }
+
+    public function add_subtask( $request ) {
+        $item_id = (int) $request->get_param('item_id');
+        $title   = sanitize_text_field( $request->get_param('title') );
+
+        if ( ! get_post($item_id) ) {
+            return new WP_Error('not_found', 'Item not found', array('status' => 404));
+        }
+        if ( empty($title) ) {
+            return new WP_Error('missing_title', 'Title is required', array('status' => 400));
+        }
+
+        $subtasks   = $this->get_subtasks($item_id);
+        $subtask    = array('id' => uniqid('st_'), 'title' => $title, 'done' => false);
+        $subtasks[] = $subtask;
+        $this->save_subtasks($item_id, $subtasks);
+
+        return rest_ensure_response(array('success' => true, 'subtask' => $subtask));
+    }
+
+    public function toggle_subtask( $request ) {
+        $item_id    = (int) $request->get_param('item_id');
+        $subtask_id = $request->get_param('subtask_id');
+        $subtasks   = $this->get_subtasks($item_id);
+
+        foreach ( $subtasks as &$st ) {
+            if ( $st['id'] === $subtask_id ) {
+                $st['done'] = ! $st['done'];
+                $this->save_subtasks($item_id, $subtasks);
+                return rest_ensure_response(array('success' => true, 'done' => $st['done']));
+            }
+        }
+
+        return new WP_Error('not_found', 'Subtask not found', array('status' => 404));
+    }
+
+    public function delete_subtask( $request ) {
+        $item_id    = (int) $request->get_param('item_id');
+        $subtask_id = $request->get_param('subtask_id');
+        $subtasks   = array_filter(
+            $this->get_subtasks($item_id),
+            function($st) use ($subtask_id) { return $st['id'] !== $subtask_id; }
+        );
+        $this->save_subtasks($item_id, $subtasks);
+
+        return rest_ensure_response(array('success' => true));
     }
 
     /**
