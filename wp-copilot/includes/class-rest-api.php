@@ -200,6 +200,20 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // Reorder headings on a page
+        register_rest_route($namespace, '/headings/reorder', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'reorder_headings'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Delete heading
+        register_rest_route($namespace, '/headings/(?P<heading_id>\d+)/delete', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'delete_heading'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // NEW: Create heading
         register_rest_route($namespace, '/headings/create', array(
             'methods' => 'POST',
@@ -232,6 +246,20 @@ class WCP_REST_API {
         register_rest_route($namespace, '/page/refresh-summary', array(
             'methods' => 'POST',
             'callback' => array($this, 'refresh_page_summary'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Content proposal accept
+        register_rest_route($namespace, '/pages/(?P<page_id>\d+)/content/accept', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'accept_content_proposal'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Page notes
+        register_rest_route($namespace, '/pages/(?P<page_id>\d+)/notes', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'save_page_notes'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
@@ -1114,6 +1142,15 @@ class WCP_REST_API {
         $ai_actions = WCP_AI_Actions::instance();
         $result = null;
 
+        // Auto-route: detect intent from the prompt, then fall through to the resolved type
+        if ( $action_type === 'auto' ) {
+            $routed      = $ai_actions->auto_route( $prompt );
+            $action_type = $routed['action'];
+            if ( ! $request->get_param('item_count') && $routed['item_count'] > 0 ) {
+                $request->set_param( 'item_count', $routed['item_count'] );
+            }
+        }
+
         switch ($action_type) {
             case 'chat':
             case 'chat_qa':
@@ -1135,6 +1172,14 @@ class WCP_REST_API {
             case 'generate_pages':
                 $item_count = intval($request->get_param('item_count') ?? 0);
                 $result = $ai_actions->generate_pages($prompt, $page_id, $context_mode, $selected_pages, $conversation_id, $item_count);
+                break;
+
+            case 'rewrite_content':
+                $result = $ai_actions->rewrite_page_content($prompt, $page_id, $context_mode, $selected_pages);
+                break;
+
+            case 'append_content':
+                $result = $ai_actions->append_page_content($prompt, $page_id, $context_mode, $selected_pages);
                 break;
 
             // Legacy support
@@ -1980,6 +2025,61 @@ class WCP_REST_API {
             'heading_id'    => $heading_id,
             'created_items' => $created_items,
         ) );
+    }
+
+    public function reorder_headings( $request ) {
+        $heading_ids = array_map('intval', (array) $request->get_param('heading_ids'));
+        foreach ( $heading_ids as $order => $id ) {
+            wp_update_post( array( 'ID' => $id, 'menu_order' => $order ) );
+        }
+        return rest_ensure_response( array('success' => true) );
+    }
+
+    public function delete_heading( $request ) {
+        $heading_id = (int) $request->get_param('heading_id');
+        $post = get_post($heading_id);
+
+        if ( ! $post || $post->post_type !== 'wcp_heading' ) {
+            return new WP_Error('not_found', 'Heading not found', array('status' => 404));
+        }
+
+        wp_delete_post($heading_id, true); // true = force delete, skip trash
+        return rest_ensure_response(array('success' => true));
+    }
+
+    public function accept_content_proposal( $request ) {
+        $page_id     = (int) $request->get_param('page_id');
+        $proposal_id = sanitize_text_field( $request->get_param('proposal_id') );
+
+        $proposal = get_transient( 'wcp_content_proposal_' . $proposal_id );
+        if ( ! $proposal ) {
+            return new WP_Error('expired', 'Proposal not found or expired', array('status' => 404));
+        }
+        if ( (int) $proposal['page_id'] !== $page_id ) {
+            return new WP_Error('mismatch', 'Proposal does not belong to this page', array('status' => 403));
+        }
+
+        $new_content = wp_kses_post( $proposal['content'] );
+
+        if ( $proposal['mode'] === 'append' ) {
+            $page        = get_post($page_id);
+            $new_content = $page->post_content . "\n\n" . $new_content;
+        }
+
+        wp_update_post( array( 'ID' => $page_id, 'post_content' => $new_content ) );
+        delete_transient( 'wcp_content_proposal_' . $proposal_id );
+
+        return rest_ensure_response( array('success' => true) );
+    }
+
+    public function save_page_notes( $request ) {
+        $page_id = (int) $request->get_param('page_id');
+        if ( ! get_post($page_id) ) {
+            return new WP_Error('not_found', 'Page not found', array('status' => 404));
+        }
+        $notes = wp_kses_post( $request->get_param('notes') ?: '' );
+        update_post_meta($page_id, '_wcp_page_notes', $notes);
+        return rest_ensure_response(array('success' => true, 'notes' => $notes));
     }
 
     // ------------------------------------------------------------------

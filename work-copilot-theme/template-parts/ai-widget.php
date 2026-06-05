@@ -51,33 +51,6 @@ if (empty($saved_prompts)) {
             </div>
         </div>
 
-        <!-- Action buttons (replaces dropdown) -->
-        <div class="wcp-ai-action-buttons">
-            <button type="button" class="wcp-ai-action-btn active" data-action="chat">
-                <span class="dashicons dashicons-format-chat"></span>
-                <?php _e('Chat', 'work-copilot'); ?>
-            </button>
-            <button type="button" class="wcp-ai-action-btn" data-action="generate">
-                <span class="dashicons dashicons-plus-alt2"></span>
-                <?php _e('Generate Items', 'work-copilot'); ?>
-            </button>
-            <button type="button" class="wcp-ai-action-btn" data-action="generate_headings">
-                <span class="dashicons dashicons-heading"></span>
-                <?php _e('Generate Headings', 'work-copilot'); ?>
-            </button>
-            <button type="button" class="wcp-ai-action-btn" data-action="generate_pages">
-                <span class="dashicons dashicons-admin-page"></span>
-                <?php _e('Create Sub-Pages', 'work-copilot'); ?>
-            </button>
-        </div>
-
-        <!-- Item count selector (shown only for generate action) -->
-        <div class="wcp-ai-item-count-wrapper" style="display: none;">
-            <label><?php _e('Items:', 'work-copilot'); ?></label>
-            <input type="number" id="wcp-ai-item-count" min="1" max="10" placeholder="3-5" class="wcp-ai-item-count">
-            <span class="wcp-ai-item-count-hint"><?php _e('Leave blank for AI to decide', 'work-copilot'); ?></span>
-        </div>
-
         <!-- Context selector -->
         <div class="wcp-ai-context-selector">
             <label><?php _e('Context:', 'work-copilot'); ?></label>
@@ -114,13 +87,13 @@ if (empty($saved_prompts)) {
             </div>
         </div>
 
-        <!-- Prompt chips -->
-        <div class="wcp-ai-prompt-chips">
-            <?php foreach ($saved_prompts as $index => $prompt): ?>
-                <button type="button" class="wcp-ai-chip" data-prompt="<?php echo esc_attr($prompt['prompt']); ?>">
-                    <?php echo esc_html($prompt['label']); ?>
-                </button>
-            <?php endforeach; ?>
+        <!-- Action toggles — select one to set the intent for the next send -->
+        <div class="wcp-ai-action-chips">
+            <button type="button" class="wcp-ai-action-chip" data-action="generate_items"><?php _e('Generate items', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip" data-action="generate_headings"><?php _e('Generate headings', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip" data-action="generate_pages"><?php _e('Create sub-pages', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip" data-action="rewrite_content"><?php _e('Edit page', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip" data-action="append_content"><?php _e('Append to page', 'work-copilot'); ?></button>
         </div>
 
         <!-- Conversation view -->
@@ -153,6 +126,19 @@ if (empty($saved_prompts)) {
             <div class="wcp-ai-loading" style="display: none;">
                 <span class="spinner is-active"></span>
                 <span><?php _e('AI is thinking...', 'work-copilot'); ?></span>
+            </div>
+        </div>
+
+        <!-- Content proposal panel (rewrite / append) -->
+        <div class="wcp-ai-content-proposal-panel" style="display:none;">
+            <div class="wcp-ai-approval-header">
+                <h4 class="wcp-ai-content-proposal-title"></h4>
+                <p class="description"><?php _e('Review the proposed content before accepting.', 'work-copilot'); ?></p>
+            </div>
+            <div class="wcp-ai-content-proposal-preview"></div>
+            <div class="wcp-ai-approval-actions">
+                <button type="button" class="wcp-ai-content-accept-btn button button-primary"><?php _e('Accept', 'work-copilot'); ?></button>
+                <button type="button" class="wcp-ai-content-dismiss-btn button"><?php _e('Dismiss', 'work-copilot'); ?></button>
             </div>
         </div>
 

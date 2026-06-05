@@ -513,6 +513,24 @@ jQuery(document).ready(function($) {
     });
 
     // Delete item
+    $(document).on('click', '.wcp-heading-delete', function() {
+        var $btn       = $(this);
+        var headingId  = $btn.data('heading-id');
+        var $group     = $btn.closest('.wcp-heading-group');
+
+        if (!confirm('Delete this heading and all its items?')) return;
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/headings/' + headingId + '/delete',
+            method: 'POST',
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(response) {
+                if (response.success) $group.fadeOut(200, function() { $(this).remove(); });
+            },
+            error: function() { alert('Could not delete heading — please try again.'); }
+        });
+    });
+
     $(document).on('click', '.wcp-item-delete', function() {
         var $btn = $(this);
         var $row = $btn.closest('.wcp-item-row');
@@ -710,6 +728,61 @@ jQuery(document).ready(function($) {
 
     // ==========================================================================
     // Heading creation form
+    // ==========================================================================
+
+    // ==========================================================================
+    // Page notes inline editor
+    // ==========================================================================
+
+    $(document).on('click', '.wcp-page-notes-edit, .wcp-page-notes-placeholder', function() {
+        var $wrap = $(this).closest('.wcp-page-notes-wrap');
+        $wrap.find('.wcp-page-notes-display').hide();
+        $wrap.find('.wcp-page-notes-editor').show();
+        $wrap.find('.wcp-page-notes-textarea').focus();
+    });
+
+    $(document).on('click', '.wcp-page-notes-cancel', function() {
+        var $wrap = $(this).closest('.wcp-page-notes-wrap');
+        $wrap.find('.wcp-page-notes-editor').hide();
+        $wrap.find('.wcp-page-notes-display').show();
+        $wrap.find('.wcp-page-notes-status').text('');
+    });
+
+    $(document).on('click', '.wcp-page-notes-save', function() {
+        var $wrap   = $(this).closest('.wcp-page-notes-wrap');
+        var pageId  = $wrap.data('page-id');
+        var notes   = $wrap.find('.wcp-page-notes-textarea').val();
+        var $btn    = $(this);
+        var $status = $wrap.find('.wcp-page-notes-status');
+
+        $btn.prop('disabled', true).text('Saving…');
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/pages/' + pageId + '/notes',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ notes: notes }),
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(response) {
+                var $display = $wrap.find('.wcp-page-notes-display');
+                $display.html(
+                    (notes ? notes : '<span class="wcp-page-notes-placeholder">Add notes…</span>')
+                    + ' <button type="button" class="wcp-page-notes-edit wcp-edit-link">[edit]</button>'
+                );
+                $display.toggleClass('wcp-page-notes-empty', !notes);
+                $wrap.find('.wcp-page-notes-editor').hide();
+                $display.show();
+                $btn.prop('disabled', false).text('Save');
+            },
+            error: function() {
+                $status.text('Could not save — please try again.');
+                $btn.prop('disabled', false).text('Save');
+            }
+        });
+    });
+
+    // ==========================================================================
+    // Heading / subpage / dynamic list creation
     // ==========================================================================
 
     $(document).on('click', '#wcp-btn-new-heading', function() {
@@ -1018,22 +1091,45 @@ jQuery(document).ready(function($) {
             ghostClass: 'wcp-drag-ghost',
             dragClass: 'wcp-dragging',
             onEnd: function(evt) {
-                // Skip if dropped back in the same position
                 if (evt.from === evt.to && evt.oldIndex === evt.newIndex) return;
-
                 var lists = [];
                 var seen = new Set();
-
                 [evt.from, evt.to].forEach(function(el) {
                     if (!seen.has(el)) {
                         seen.add(el);
                         lists.push(getListState(el));
                     }
                 });
-
                 saveItemOrder(lists);
             }
         });
     });
+
+    // Drag-to-reorder headings
+    var $headingsSortable = document.getElementById('wcp-headings-sortable');
+    if ($headingsSortable) {
+        Sortable.create($headingsSortable, {
+            handle: '.wcp-heading-drag-handle',
+            animation: 150,
+            ghostClass: 'wcp-drag-ghost',
+            dragClass: 'wcp-dragging',
+            onEnd: function(evt) {
+                if (evt.oldIndex === evt.newIndex) return;
+                var headingIds = Array.from(
+                    $headingsSortable.querySelectorAll('.wcp-heading-group')
+                ).map(function(el) { return parseInt(el.dataset.headingId, 10); });
+
+                $.ajax({
+                    url: wcpThemeData.restUrl + '/headings/reorder',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ heading_ids: headingIds }),
+                    beforeSend: function(xhr) {
+                        xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce);
+                    }
+                });
+            }
+        });
+    }
 
 });

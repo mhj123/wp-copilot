@@ -161,6 +161,16 @@ MD;
                 . '[{"title": "Q3 Goals", "content": "Tracking goals and progress for Q3."}, {"title": "Team Retros", "content": ""}]\n\n'
                 . "Start your response with [ and end with ].",
 
+            // Page content rewrite
+            'rewrite_content' => "Rewrite the page content below based on the user's instruction. "
+                . "Return ONLY the rewritten content — no commentary, no explanation, no preamble. "
+                . "Preserve the user's voice. You may use simple HTML (p, ul, li, strong, em) but keep it minimal.",
+
+            // Page content append
+            'append_content' => "Write new content to append to the existing page content based on the user's instruction. "
+                . "Return ONLY the new content to be appended — no commentary, no explanation, no preamble. "
+                . "It should flow naturally after the existing content. You may use simple HTML (p, ul, li, strong, em).",
+
             // Editor sidebar action - expand/modify draft content
             'expand_draft' => "You are helping the user expand and improve their draft content. "
                 . "Based on their instructions, modify or expand the draft they provide. "
