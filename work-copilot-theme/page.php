@@ -29,27 +29,18 @@ get_header();
 
     <!-- Page Content (only show if there is content) -->
     <?php if (get_the_content()) : ?>
-    <div class="wcp-page-content-box">
-        <?php the_content(); ?>
+    <div class="wcp-page-content-box" data-section="page-content" data-page-id="<?php echo esc_attr(get_the_ID()); ?>">
+        <div class="wcp-section-header">
+            <span class="wcp-section-label">Page content</span>
+            <button type="button" class="wcp-toggle-section wcp-edit-link"
+                    data-section="page-content"
+                    data-page-id="<?php echo esc_attr(get_the_ID()); ?>">hide</button>
+        </div>
+        <div class="wcp-section-body">
+            <?php the_content(); ?>
+        </div>
     </div>
     <?php endif; ?>
-
-    <!-- Page Notes -->
-    <?php $page_notes = get_post_meta(get_the_ID(), '_wcp_page_notes', true); ?>
-    <div class="wcp-page-notes-wrap" data-page-id="<?php echo esc_attr(get_the_ID()); ?>">
-        <div class="wcp-page-notes-display<?php echo $page_notes ? '' : ' wcp-page-notes-empty'; ?>">
-            <?php echo $page_notes ? wp_kses_post($page_notes) : '<span class="wcp-page-notes-placeholder">Add notes…</span>'; ?>
-            <button type="button" class="wcp-page-notes-edit wcp-edit-link">[edit]</button>
-        </div>
-        <div class="wcp-page-notes-editor" style="display:none;">
-            <textarea class="wcp-page-notes-textarea wcp-form-control" rows="4"><?php echo esc_textarea($page_notes); ?></textarea>
-            <div class="wcp-page-notes-actions">
-                <button type="button" class="wcp-page-notes-save wcp-btn wcp-btn-primary wcp-btn-sm">Save</button>
-                <button type="button" class="wcp-page-notes-cancel wcp-edit-link">cancel</button>
-                <span class="wcp-page-notes-status"></span>
-            </div>
-        </div>
-    </div>
 
     <?php
     endwhile;
@@ -290,6 +281,31 @@ get_header();
         </div>
 
     </section>
+
+    <!-- Page Notes (bottom, collapsible) -->
+    <?php $page_notes = get_post_meta($page_id, '_wcp_page_notes', true); ?>
+    <div class="wcp-page-notes-wrap" data-page-id="<?php echo esc_attr($page_id); ?>">
+        <div class="wcp-section-header">
+            <span class="wcp-section-label">Notes</span>
+            <button type="button" class="wcp-toggle-section wcp-edit-link"
+                    data-section="page-notes"
+                    data-page-id="<?php echo esc_attr($page_id); ?>">hide</button>
+            <button type="button" class="wcp-page-notes-edit wcp-edit-link">[edit]</button>
+        </div>
+        <div class="wcp-section-body">
+            <div class="wcp-page-notes-display<?php echo $page_notes ? '' : ' wcp-page-notes-empty'; ?>">
+                <?php echo $page_notes ? wp_kses_post($page_notes) : '<span class="wcp-page-notes-placeholder">Add notes…</span>'; ?>
+            </div>
+            <div class="wcp-page-notes-editor" style="display:none;">
+                <textarea class="wcp-page-notes-textarea wcp-form-control" rows="4"><?php echo esc_textarea($page_notes); ?></textarea>
+                <div class="wcp-page-notes-actions">
+                    <button type="button" class="wcp-page-notes-save wcp-btn wcp-btn-primary wcp-btn-sm">Save</button>
+                    <button type="button" class="wcp-page-notes-cancel wcp-edit-link">cancel</button>
+                    <span class="wcp-page-notes-status"></span>
+                </div>
+            </div>
+        </div>
+    </div>
 
 </div><!-- .wcp-page-content -->
 

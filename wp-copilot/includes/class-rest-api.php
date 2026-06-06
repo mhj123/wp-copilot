@@ -280,7 +280,12 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // Dynamic listings: add / remove stored queries on a page
+        // Dynamic listings: add / remove / refresh
+        register_rest_route($namespace, '/pages/(?P<page_id>\d+)/dynamic-listings/(?P<listing_id>[a-zA-Z0-9_-]+)/items', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'get_dynamic_listing_items'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
         register_rest_route($namespace, '/pages/(?P<page_id>\d+)/dynamic-listings', array(
             'methods' => 'POST',
             'callback' => array($this, 'add_dynamic_listing'),
@@ -2139,6 +2144,43 @@ class WCP_REST_API {
         $this->save_subtasks($item_id, $subtasks);
 
         return rest_ensure_response(array('success' => true));
+    }
+
+    /**
+     * Re-run a dynamic listing query and return rendered item rows as HTML.
+     */
+    public function get_dynamic_listing_items( $request ) {
+        $page_id    = (int) $request->get_param('page_id');
+        $listing_id = $request->get_param('listing_id');
+
+        $listings = json_decode( get_post_meta($page_id, '_wcp_dynamic_listings', true) ?: '[]', true );
+        $listing  = null;
+        foreach ( $listings as $l ) {
+            if ( $l['id'] === $listing_id ) { $listing = $l; break; }
+        }
+
+        if ( ! $listing ) {
+            return new WP_Error('not_found', 'Listing not found', array('status' => 404));
+        }
+
+        $items = wcp_theme_query_dynamic_listing( $listing );
+
+        ob_start();
+        foreach ( $items as $item ) {
+            $item_types    = wp_get_post_terms($item->ID, 'item_type',   array('fields' => 'names'));
+            $priorities    = wp_get_post_terms($item->ID, 'priority',    array('fields' => 'names'));
+            $task_statuses = wp_get_post_terms($item->ID, 'task_status', array('fields' => 'slugs'));
+            $item_tags     = wp_get_post_terms($item->ID, 'post_tag',    array('fields' => 'names'));
+            $item_contexts = wp_get_post_terms($item->ID, 'wcp_context', array('fields' => 'names'));
+            include locate_template('template-parts/item-row.php');
+        }
+        $html = ob_get_clean();
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'html'    => $html,
+            'count'   => count($items),
+        ));
     }
 
     /**

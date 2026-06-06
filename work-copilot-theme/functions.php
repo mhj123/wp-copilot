@@ -55,13 +55,13 @@ function wcp_theme_scripts() {
     wp_enqueue_style('wcp-theme-style', get_stylesheet_uri(), array(), '1.2.0');
 
     // Custom theme styles
-    wp_enqueue_style('wcp-theme-custom', get_template_directory_uri() . '/assets/css/theme.css', array(), '1.9.2');
+    wp_enqueue_style('wcp-theme-custom', get_template_directory_uri() . '/assets/css/theme.css', array(), '1.9.4');
 
     // SortableJS for drag-to-reorder
     wp_enqueue_script('sortablejs', 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js', array(), '1.15.2', true);
 
     // Theme JavaScript
-    wp_enqueue_script('wcp-theme-js', get_template_directory_uri() . '/assets/js/theme.js', array('jquery', 'sortablejs'), '1.6.3', true);
+    wp_enqueue_script('wcp-theme-js', get_template_directory_uri() . '/assets/js/theme.js', array('jquery', 'sortablejs'), '1.6.5', true);
 
     // Localize script with data
     wp_localize_script('wcp-theme-js', 'wcpThemeData', array(
@@ -157,7 +157,7 @@ function wcp_theme_get_page_items($page_id, $filters = array()) {
             ),
         ),
         'orderby' => 'date',
-        'order' => 'DESC',
+        'order' => 'ASC',
     );
 
     // Apply filters
@@ -290,7 +290,7 @@ function wcp_theme_get_heading_items($heading_id) {
                 'terms' => $heading_term->term_id,
             ),
         ),
-        'orderby' => array('menu_order' => 'ASC', 'date' => 'DESC'),
+        'orderby' => array('menu_order' => 'ASC', 'date' => 'ASC'),
     ));
 }
 
@@ -497,7 +497,7 @@ function wcp_theme_query_dynamic_listing($listing) {
         'post_status'    => 'publish',
         'posts_per_page' => 200,
         'orderby'        => 'date',
-        'order'          => 'DESC',
+        'order'          => 'ASC',
         'tax_query'      => count($tax_query) > 1 ? $tax_query : array_slice($tax_query, 1),
     ));
 }
