@@ -734,6 +734,48 @@ jQuery(document).ready(function($) {
     // Page notes inline editor
     // ==========================================================================
 
+    // ==========================================================================
+    // Collapsible sections: page content + notes (state persisted in localStorage)
+    // ==========================================================================
+
+    function sectionKey(section, pageId) {
+        return 'wcp_section_' + section + '_' + pageId;
+    }
+
+    function applySectionState(section, pageId, animate) {
+        var stored = localStorage.getItem(sectionKey(section, pageId));
+        var hidden  = stored === 'hidden';
+        var $body   = $('[data-section="' + section + '"][data-page-id="' + pageId + '"]').find('.wcp-section-body');
+        var $btn    = $('.wcp-toggle-section[data-section="' + section + '"][data-page-id="' + pageId + '"]');
+
+        if (hidden) {
+            animate ? $body.slideUp(150) : $body.hide();
+            $btn.text('show');
+        } else {
+            animate ? $body.slideDown(150) : $body.show();
+            $btn.text('hide');
+        }
+    }
+
+    // Initialise on load (no animation)
+    $('[data-section]').each(function() {
+        var section = $(this).data('section');
+        var pageId  = $(this).data('page-id');
+        if (section && pageId) applySectionState(section, pageId, false);
+    });
+
+    $(document).on('click', '.wcp-toggle-section', function() {
+        var section = $(this).data('section');
+        var pageId  = $(this).data('page-id');
+        var stored  = localStorage.getItem(sectionKey(section, pageId));
+        localStorage.setItem(sectionKey(section, pageId), stored === 'hidden' ? 'visible' : 'hidden');
+        applySectionState(section, pageId, true);
+    });
+
+    // ==========================================================================
+    // Page notes inline editor
+    // ==========================================================================
+
     $(document).on('click', '.wcp-page-notes-edit, .wcp-page-notes-placeholder', function() {
         var $wrap = $(this).closest('.wcp-page-notes-wrap');
         $wrap.find('.wcp-page-notes-display').hide();
@@ -766,8 +808,7 @@ jQuery(document).ready(function($) {
             success: function(response) {
                 var $display = $wrap.find('.wcp-page-notes-display');
                 $display.html(
-                    (notes ? notes : '<span class="wcp-page-notes-placeholder">Add notes…</span>')
-                    + ' <button type="button" class="wcp-page-notes-edit wcp-edit-link">[edit]</button>'
+                    notes ? notes : '<span class="wcp-page-notes-placeholder">Add notes…</span>'
                 );
                 $display.toggleClass('wcp-page-notes-empty', !notes);
                 $wrap.find('.wcp-page-notes-editor').hide();
@@ -860,6 +901,45 @@ jQuery(document).ready(function($) {
             error: function() {
                 $btn.prop('disabled', false).text('Add list');
                 $status.text('Error — please try again.');
+            }
+        });
+    });
+
+    $(document).on('click', '.wcp-dynamic-listing-refresh', function() {
+        var $btn      = $(this);
+        var pageId    = $btn.data('page-id');
+        var listingId = $btn.data('listing-id');
+        var $listing  = $btn.closest('.wcp-dynamic-listing');
+        var $items    = $listing.find('.wcp-dynamic-listing-items');
+        var $empty    = $listing.find('.wcp-dynamic-listing-empty');
+
+        $btn.text('[refreshing…]').prop('disabled', true);
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/pages/' + pageId + '/dynamic-listings/' + listingId + '/items',
+            method: 'GET',
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(response) {
+                if (response.success) {
+                    if (response.count > 0) {
+                        if (!$items.length) {
+                            $items = $('<div class="wcp-items-list wcp-dynamic-listing-items">').insertBefore($empty.length ? $empty : $listing.find('.wcp-add-heading-wrap'));
+                        }
+                        $items.html(response.html).show();
+                        $empty.hide();
+                    } else {
+                        $items.hide();
+                        if (!$empty.length) {
+                            $('<p class="wcp-dynamic-listing-empty">No items match this query.</p>').insertAfter($listing.find('.wcp-dynamic-listing-title'));
+                        } else {
+                            $empty.show();
+                        }
+                    }
+                }
+                $btn.text('[refresh]').prop('disabled', false);
+            },
+            error: function() {
+                $btn.text('[refresh]').prop('disabled', false);
             }
         });
     });

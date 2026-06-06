@@ -13,6 +13,10 @@ $dl_items = wcp_theme_query_dynamic_listing($listing);
         <span class="wcp-dynamic-listing-badge">list</span>
         <?php echo esc_html($listing['title']); ?>
         <button type="button"
+                class="wcp-edit-link wcp-dynamic-listing-refresh"
+                data-page-id="<?php echo esc_attr($page_id); ?>"
+                data-listing-id="<?php echo esc_attr($listing['id']); ?>">[refresh]</button>
+        <button type="button"
                 class="wcp-edit-link wcp-dynamic-listing-delete"
                 data-page-id="<?php echo esc_attr($page_id); ?>"
                 data-listing-id="<?php echo esc_attr($listing['id']); ?>">[remove]</button>

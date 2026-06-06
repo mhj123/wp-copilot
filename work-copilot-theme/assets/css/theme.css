@@ -199,18 +199,61 @@ body.wcp-ai-panel-open .wcp-main-content {
 /* Page content box (only when there's content) */
 .wcp-page-content-box {
     background: #fff;
-    padding: 30px;
+    padding: 0 30px 30px;
     border-radius: 6px;
     margin-bottom: 30px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     line-height: 1.8;
 }
 
+.wcp-page-content-box ul,
+.wcp-page-content-box ol {
+    padding-left: 1.5em;
+    margin: 0.5em 0;
+}
+
+.wcp-page-content-box li {
+    margin-bottom: 0.25em;
+}
+
+/* Collapsible section header (page content + notes) */
+.wcp-section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 0 10px;
+    cursor: default;
+}
+
+.wcp-section-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #aaa;
+    user-select: none;
+}
+
+.wcp-toggle-section {
+    font-size: 11px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.wcp-page-content-box:hover .wcp-toggle-section,
+.wcp-page-notes-wrap:hover .wcp-toggle-section {
+    opacity: 1;
+}
+
+.wcp-section-body {
+    padding-bottom: 10px;
+}
+
 .wcp-page-notes-wrap {
     background: #fff;
-    padding: 20px 30px;
+    padding: 0 30px 20px;
     border-radius: 6px;
-    margin-bottom: 30px;
+    margin-top: 30px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     line-height: 1.8;
 }
@@ -411,6 +454,7 @@ textarea.wcp-form-control {
 
 /* Heading Group - each heading with its items */
 .wcp-heading-group {
+    margin-top: 32px;
     margin-bottom: 40px;
     padding-bottom: 30px;
     border-bottom: 1px solid #eee;
@@ -1891,10 +1935,7 @@ a.wcp-tree-label:hover {
     font-size: 13px;
     color: #777;
     width: 100%;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 500px;
+    white-space: pre-wrap;
     order: 99;
 }
 
