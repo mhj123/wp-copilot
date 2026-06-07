@@ -569,6 +569,26 @@ textarea.wcp-form-control {
 .wcp-pill-tag {
     background: #f0f0f0;
     color: #555;
+    text-decoration: none;
+}
+
+a.wcp-pill-tag:hover {
+    background: #e0e0e0;
+    color: #222;
+}
+
+.wcp-tag-archive-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #aaa;
+    margin: 0 0 4px;
+}
+
+.wcp-tag-item-count {
+    font-size: 13px;
+    color: #999;
 }
 
 .wcp-inline-select {
