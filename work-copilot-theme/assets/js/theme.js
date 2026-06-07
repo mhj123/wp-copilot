@@ -173,6 +173,44 @@ jQuery(document).ready(function($) {
         }
     }
 
+    // ==========================================================================
+    // Dashboard — activity summary
+    // ==========================================================================
+
+    $(document).on('click', '#wcp-dash-summarise-btn', function() {
+        var $btn  = $(this);
+        var $area = $('#wcp-dash-activity-summary');
+        var force = $btn.text().trim().indexOf('Refresh') !== -1;
+
+        $btn.prop('disabled', true).text('Generating…');
+        $area.html('<p class="wcp-dash-empty">Thinking…</p>');
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/dashboard/activity-summary',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ force: force }),
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(response) {
+                $btn.prop('disabled', false).text('Refresh summary');
+                if (response.success) {
+                    var age = 'just now';
+                    $area.html(
+                        '<p class="wcp-dash-summary-text">' + response.summary.replace(/\n/g, '<br>') + '</p>'
+                        + '<p class="wcp-dash-summary-meta">' + response.post_count + ' items created in the last 7 days</p>'
+                    );
+                    $('#wcp-dash-activity-card .wcp-dash-summary-age').text(age);
+                } else {
+                    $area.html('<p class="wcp-dash-empty" style="color:#c0392b;">' + (response.message || 'Failed to generate summary.') + '</p>');
+                }
+            },
+            error: function() {
+                $btn.prop('disabled', false).text('Refresh summary');
+                $area.html('<p class="wcp-dash-empty" style="color:#c0392b;">Connection error — please try again.</p>');
+            }
+        });
+    });
+
     // Calendar .ics upload
     $(document).on('change', '#wcp-cal-file-input', function() {
         var file = this.files[0];
