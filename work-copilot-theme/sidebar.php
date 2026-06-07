@@ -14,7 +14,8 @@
         <?php
         global $post;
         $current_page_id = is_page() ? $post->ID : 0;
-        echo wcp_theme_build_page_nav(0, $current_page_id);
+        $open_ids = $current_page_id ? wcp_theme_get_page_ancestors($current_page_id) : array();
+        echo wcp_theme_build_page_nav(0, $current_page_id, 0, $open_ids);
         ?>
     </nav>
 

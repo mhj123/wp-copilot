@@ -142,9 +142,64 @@ jQuery(document).ready(function($) {
         $container.append($ul);
     }
 
-    if ($('#wcp-structure-tree').length && wcpThemeData.isLoggedIn) {
-        loadStructureTree();
+    // ── Dashboard / Structure tab switching ──────────────────────────
+    var structureLoaded = false;
+
+    function switchDashTab(tab) {
+        $('.wcp-dash-tab').removeClass('active');
+        $('.wcp-dash-tab[data-tab="' + tab + '"]').addClass('active');
+        $('.wcp-dash-panel').hide();
+        $('#wcp-dash-panel-' + tab).show();
+        localStorage.setItem('wcp_home_tab', tab);
+        if (tab === 'structure' && !structureLoaded && wcpThemeData.isLoggedIn) {
+            structureLoaded = true;
+            loadStructureTree();
+        }
     }
+
+    if ($('.wcp-dash-tab').length) {
+        // Restore last-used tab
+        var savedTab = localStorage.getItem('wcp_home_tab') || 'dashboard';
+        switchDashTab(savedTab);
+
+        $(document).on('click', '.wcp-dash-tab', function() {
+            switchDashTab($(this).data('tab'));
+        });
+    } else if ($('#wcp-structure-tree').length && wcpThemeData.isLoggedIn) {
+        // On non-homepage pages that embed the structure tree, load immediately
+        if ($('#wcp-structure-tree').is(':visible')) {
+            loadStructureTree();
+            structureLoaded = true;
+        }
+    }
+
+    // Calendar .ics upload
+    $(document).on('change', '#wcp-cal-file-input', function() {
+        var file = this.files[0];
+        if (!file) return;
+        var $status = $('#wcp-cal-upload-status');
+        $status.text('Uploading…');
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            $.ajax({
+                url: wcpThemeData.restUrl + '/calendar/import',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ ics_content: e.target.result }),
+                beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+                success: function(response) {
+                    if (response.success) {
+                        $status.text('Imported ' + response.events_imported + ' events.');
+                        setTimeout(function() { location.reload(); }, 800);
+                    } else {
+                        $status.text('Import failed.');
+                    }
+                },
+                error: function() { $status.text('Upload error — please try again.'); }
+            });
+        };
+        reader.readAsText(file);
+    });
 
     // ==========================================================================
     // Quick-add item forms (page-level and per-heading)
@@ -642,6 +697,111 @@ jQuery(document).ready(function($) {
     });
 
     // ==========================================================================
+    // Inline context picker
+    // ==========================================================================
+
+    $(document).on('click', '.wcp-item-context-btn', function() {
+        var itemId   = $(this).data('item-id');
+        var $row     = $(this).closest('.wcp-item-row');
+        var $panel   = $row.find('.wcp-item-context-panel');
+        var $tree    = $panel.find('.wcp-item-context-tree');
+
+        $panel.slideToggle(120);
+
+        // Lazy-load tree on first open
+        if ($panel.is(':hidden') || $tree.find('ul').length > 0) return;
+
+        var preselectedIds = ($row.data('context-ids') || '').toString().split(',').map(Number).filter(Boolean);
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/contexts/tree',
+            method: 'GET',
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(response) {
+                if (!response.success) return;
+                $tree.html('<ul class="wcp-context-tree"></ul>');
+                var $ul = $tree.find('ul');
+                renderItemContextTree(response.tree, $ul, preselectedIds);
+            }
+        });
+    });
+
+    function renderItemContextTree(nodes, $container, preselectedIds) {
+        nodes.forEach(function(node) {
+            var $li = $('<li>');
+            var $label = $('<label class="wcp-item-ctx-label">');
+            var checked = preselectedIds.indexOf(node.term_id) !== -1;
+            var $cb = $('<input type="checkbox">').val(node.term_id).prop('checked', checked);
+            $label.append($cb).append($('<span>').text(' ' + node.name));
+            $li.append($label);
+            if (node.children && node.children.length) {
+                var $ul = $('<ul>');
+                $li.append($ul);
+                renderItemContextTree(node.children, $ul, preselectedIds);
+            }
+            $container.append($li);
+        });
+    }
+
+    // Auto-save context on checkbox change
+    $(document).on('change', '.wcp-item-context-panel input[type="checkbox"]', function() {
+        var $panel  = $(this).closest('.wcp-item-context-panel');
+        var itemId  = $panel.data('item-id');
+        var ids     = $panel.find('input:checked').map(function() { return parseInt($(this).val()); }).get();
+        updateItem(itemId, { contexts: ids });
+        // Update data attr for future opens
+        $panel.closest('.wcp-item-row').data('context-ids', ids.join(','));
+    });
+
+    // ==========================================================================
+    // Inline tag editor
+    // ==========================================================================
+
+    $(document).on('click', '.wcp-item-tag-btn', function() {
+        $(this).closest('.wcp-item-row').find('.wcp-item-tag-panel').slideToggle(120);
+    });
+
+    function getItemTags($row) {
+        return $row.find('.wcp-item-tag-pill').map(function() {
+            return $(this).contents().filter(function() { return this.nodeType === 3; }).text().trim();
+        }).get().filter(Boolean);
+    }
+
+    $(document).on('submit', '.wcp-item-tag-form', function(e) {
+        e.preventDefault();
+        var $form  = $(this);
+        var $input = $form.find('.wcp-item-tag-input');
+        var tag    = $input.val().trim();
+        var itemId = $form.data('item-id');
+        if (!tag) return;
+
+        var $row   = $form.closest('.wcp-item-row');
+        var $pills = $row.find('.wcp-item-tag-pills');
+        var existing = getItemTags($row);
+        if (existing.indexOf(tag) !== -1) { $input.val(''); return; }
+
+        // Append pill
+        var $pill = $('<span class="wcp-item-tag-pill">')
+            .text(tag + ' ')
+            .append($('<button type="button" class="wcp-item-tag-remove wcp-edit-link">').text('×').data('tag', tag).data('item-id', itemId));
+        $pills.append($pill);
+        $input.val('');
+
+        var allTags = getItemTags($row);
+        updateItem(itemId, { tags: allTags });
+        $row.data('tags', allTags.join(','));
+    });
+
+    $(document).on('click', '.wcp-item-tag-remove', function() {
+        var itemId = $(this).data('item-id');
+        var $row   = $(this).closest('.wcp-item-row');
+        $(this).closest('.wcp-item-tag-pill').remove();
+        var allTags = getItemTags($row);
+        updateItem(itemId, { tags: allTags });
+        $row.data('tags', allTags.join(','));
+    });
+
+    // ==========================================================================
     // Subtasks
     // ==========================================================================
 
@@ -818,6 +978,18 @@ jQuery(document).ready(function($) {
     // ==========================================================================
     // Heading creation form
     // ==========================================================================
+
+    // ==========================================================================
+    // Sidebar nav — collapsible subpages
+    // ==========================================================================
+
+    $(document).on('click', '.wcp-nav-toggle', function() {
+        var $btn      = $(this);
+        var $children = $btn.closest('li').find('> .wcp-nav-children');
+        var open      = $children.is(':visible');
+        $children.slideToggle(150);
+        $btn.text(open ? '▸' : '▾').attr('aria-expanded', !open);
+    });
 
     // ==========================================================================
     // Page notes inline editor

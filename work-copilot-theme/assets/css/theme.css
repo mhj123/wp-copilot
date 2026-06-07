@@ -65,6 +65,34 @@
     padding-left: 15px;
 }
 
+.wcp-nav-row {
+    display: flex;
+    align-items: center;
+}
+
+.wcp-nav-toggle {
+    flex-shrink: 0;
+    width: 20px;
+    background: none;
+    border: none;
+    padding: 0;
+    color: #666;
+    font-size: 11px;
+    cursor: pointer;
+    line-height: 1;
+    text-align: center;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+}
+
+.wcp-nav-toggle:hover { opacity: 1; }
+
+.wcp-nav-toggle-spacer { width: 20px; flex-shrink: 0; }
+
+.wcp-nav-row a { flex: 1; }
+
+.wcp-nav-children { padding-left: 0; }
+
 .wcp-page-list li {
     margin: 0;
 }
@@ -862,6 +890,351 @@ textarea.wcp-form-control {
    Index/Home Page
    ========================================================================== */
 
+/* ==========================================================================
+   Daily Dashboard
+   ========================================================================== */
+
+.wcp-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.wcp-dashboard-header {
+    margin-bottom: 4px;
+}
+
+.wcp-dash-tabs {
+    display: flex;
+    gap: 4px;
+    margin-top: 12px;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 0;
+}
+
+.wcp-dash-tab {
+    padding: 7px 18px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #888;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.wcp-dash-tab:hover { color: #333; }
+
+.wcp-dash-tab.active {
+    color: #1e1e1e;
+    border-bottom-color: #1e1e1e;
+}
+
+.wcp-dash-panel { margin-top: 20px; }
+
+.wcp-dashboard-date {
+    margin: 0 0 4px;
+    font-size: 22px;
+    font-weight: 700;
+    color: #1e1e1e;
+}
+
+.wcp-dash-row {
+    display: grid;
+    gap: 16px;
+}
+
+.wcp-dash-three-col {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.wcp-dash-card {
+    background: #fff;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    padding: 20px 24px;
+}
+
+.wcp-dash-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.wcp-dash-card-header .wcp-dash-card-title {
+    margin-bottom: 0;
+}
+
+.wcp-dash-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: #888;
+    margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.wcp-dash-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #555;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 10px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+}
+
+.wcp-dash-badge-red { background: #c0392b; }
+
+.wcp-dash-empty {
+    color: #bbb;
+    font-size: 13px;
+    font-style: italic;
+    margin: 0;
+}
+
+.wcp-dash-task-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.wcp-dash-task {
+    padding: 7px 0;
+    border-bottom: 1px solid #f5f5f5;
+}
+
+.wcp-dash-task:last-child { border-bottom: none; }
+
+.wcp-dash-task.wcp-dash-critical .wcp-dash-task-title {
+    color: #c0392b;
+}
+
+.wcp-dash-task-main {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.wcp-dash-task-meta {
+    display: flex;
+    gap: 8px;
+    margin-top: 2px;
+    flex-wrap: wrap;
+}
+
+.wcp-dash-task-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: #1e1e1e;
+    text-decoration: none;
+    word-break: break-word;
+}
+
+.wcp-dash-task-title:hover { color: #0066cc; text-decoration: underline; }
+
+.wcp-dash-prio {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 1px 5px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.wcp-dash-prio-critical { background: #fde8e8; color: #c0392b; }
+.wcp-dash-prio-high     { background: #fef3e2; color: #d35400; }
+.wcp-dash-prio-medium   { background: #eaf4fb; color: #2980b9; }
+.wcp-dash-prio-low      { background: #f0f0f0; color: #777; }
+
+.wcp-dash-ctx {
+    font-size: 11px;
+    color: #888;
+}
+
+.wcp-dash-due {
+    font-size: 11px;
+    color: #aaa;
+}
+
+.wcp-dash-overdue {
+    color: #c0392b;
+    font-weight: 600;
+}
+
+.wcp-dash-status {
+    font-size: 11px;
+    color: #2980b9;
+}
+
+/* Upcoming week — day groups */
+.wcp-dash-day-group { margin-bottom: 12px; }
+.wcp-dash-day-group:last-child { margin-bottom: 0; }
+
+.wcp-dash-day-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #aaa;
+    margin: 0 0 4px;
+    letter-spacing: 0.3px;
+}
+
+/* Scheduled pages */
+.wcp-dash-sched-list { list-style: none; margin: 0; padding: 0; }
+.wcp-dash-sched-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid #f5f5f5;
+    font-size: 13px;
+}
+.wcp-dash-sched-item:last-child { border-bottom: none; }
+.wcp-dash-sched-freq {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #aaa;
+    width: 70px;
+    flex-shrink: 0;
+}
+
+/* Activity list */
+.wcp-dash-activity-list { list-style: none; margin: 0; padding: 0; }
+.wcp-dash-activity-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid #f5f5f5;
+    font-size: 13px;
+}
+.wcp-dash-activity-item:last-child { border-bottom: none; }
+.wcp-dash-activity-item .wcp-dash-due { margin-left: auto; white-space: nowrap; }
+
+/* Calendar */
+.wcp-dash-calendar-card {}
+
+.wcp-dash-cal-upload {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.wcp-cal-upload-label {
+    cursor: pointer;
+}
+
+.wcp-dash-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.wcp-dash-cal-col {
+    min-height: 80px;
+    padding: 8px 6px;
+    border-radius: 4px;
+    background: #fafafa;
+    font-size: 12px;
+}
+
+.wcp-dash-cal-today {
+    background: #f0f6ff;
+    border: 1px solid #cce0ff;
+}
+
+.wcp-dash-cal-col-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 6px;
+    gap: 1px;
+}
+
+.wcp-dash-cal-day-name {
+    font-size: 10px;
+    text-transform: uppercase;
+    color: #aaa;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+.wcp-dash-cal-today .wcp-dash-cal-day-name { color: #0066cc; }
+
+.wcp-dash-cal-day-num {
+    font-size: 18px;
+    font-weight: 700;
+    color: #333;
+    line-height: 1;
+}
+
+.wcp-dash-cal-today .wcp-dash-cal-day-num {
+    color: #fff;
+    background: #0066cc;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+.wcp-dash-cal-allday {
+    background: #d4eaff;
+    color: #0055aa;
+    border-radius: 3px;
+    padding: 2px 5px;
+    margin-bottom: 3px;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.wcp-dash-cal-event {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 4px;
+}
+
+.wcp-dash-cal-time {
+    font-size: 10px;
+    color: #aaa;
+    line-height: 1;
+}
+
+.wcp-dash-cal-evtitle {
+    font-size: 12px;
+    color: #333;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wcp-dash-cal-empty {
+    color: #ddd;
+    text-align: center;
+    margin-top: 16px;
+    font-size: 16px;
+}
+
+/* Legacy index.php class (keep in case referenced elsewhere) */
 .wcp-index-content {
     background: #fff;
     padding: 40px;
@@ -2074,6 +2447,84 @@ a.wcp-tree-label:hover {
 .wcp-goal-step1-status.error,
 .wcp-goal-step2-status.error {
     color: #c0392b;
+}
+
+/* ==========================================================================
+   Inline context picker + tag editor on item rows
+   ========================================================================== */
+
+.wcp-item-context-panel,
+.wcp-item-tag-panel {
+    flex-basis: 100%;
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    border: 1px solid #eee;
+    font-size: 12px;
+}
+
+/* Context tree inside item row — compact, no outer chrome */
+.wcp-item-context-tree .wcp-context-tree {
+    padding: 0;
+    margin: 0;
+}
+
+.wcp-item-ctx-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    padding: 2px 0;
+    color: #444;
+}
+
+.wcp-item-ctx-label:hover { color: #000; }
+
+/* Tag pills */
+.wcp-item-tag-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.wcp-item-tag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: #e8eaf0;
+    color: #444;
+    border-radius: 10px;
+    padding: 2px 8px;
+    font-size: 11px;
+}
+
+.wcp-item-tag-remove {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: #999;
+    font-size: 13px;
+    line-height: 1;
+}
+
+.wcp-item-tag-remove:hover { color: #c0392b; }
+
+.wcp-item-tag-form {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.wcp-item-tag-input {
+    flex: 1;
+    max-width: 200px;
+    font-size: 12px;
+    padding: 3px 7px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
 }
 
 /* ==========================================================================

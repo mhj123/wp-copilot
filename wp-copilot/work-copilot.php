@@ -67,6 +67,7 @@ class Work_Copilot {
         require_once WCP_PLUGIN_DIR . 'admin/class-page-template-metabox.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-page-template-manager.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-page-scheduler.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-calendar-importer.php';
         require_once WCP_PLUGIN_DIR . 'public/class-public.php';
     }
 
