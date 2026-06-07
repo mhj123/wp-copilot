@@ -32,15 +32,16 @@ $_context_ids       = is_wp_error($_context_ids) ? array() : $_context_ids;
            style="<?php echo $is_task ? '' : 'display:none;'; ?>">
     <span class="wcp-item-title"><?php echo esc_html($item->post_title); ?></span>
     <a href="<?php echo esc_url(get_permalink($item->ID)); ?>" class="wcp-item-view-link wcp-edit-link" title="View item">[view]</a>
+    <button type="button" class="wcp-item-ai-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>" title="AI actions">[ai]</button>
+    <input type="checkbox" class="wcp-item-select-cb" data-item-id="<?php echo esc_attr($item->ID); ?>" data-item-title="<?php echo esc_attr($item->post_title); ?>" style="display:none;">
     <?php $source_url = get_post_meta($item->ID, '_wcp_source_url', true); ?>
     <?php if ($source_url) : ?>
         <a href="<?php echo esc_url($source_url); ?>" class="wcp-source-link" target="_blank" rel="noopener" title="<?php echo esc_attr($source_url); ?>">↗</a>
     <?php endif; ?>
     <input type="text" class="wcp-item-title-input" style="display:none;" value="<?php echo esc_attr($item->post_title); ?>">
 
-    <?php if (!empty($item->post_content)) : ?>
-        <span class="wcp-item-description"><?php echo esc_html(wp_strip_all_tags($item->post_content)); ?></span>
-    <?php endif; ?>
+    <span class="wcp-item-description<?php echo empty($item->post_content) ? ' wcp-item-description-empty' : ''; ?>"
+          data-item-id="<?php echo esc_attr($item->ID); ?>"><?php echo esc_html(wp_strip_all_tags($item->post_content)); ?></span>
 
     <?php if (!empty($item_contexts)) : ?>
         <span class="wcp-item-meta-pills">
@@ -119,6 +120,17 @@ $_context_ids       = is_wp_error($_context_ids) ? array() : $_context_ids;
             <?php endforeach; ?>
         </ul>
         <?php endif; ?>
+        <!-- Per-item AI panel -->
+        <div class="wcp-item-ai-panel" data-item-id="<?php echo esc_attr($item->ID); ?>" style="display:none;">
+            <div class="wcp-item-ai-chips">
+                <button type="button" class="wcp-item-ai-chip" data-action="improve_phrasing">Improve phrasing</button>
+                <button type="button" class="wcp-item-ai-chip" data-action="suggest_subtasks">Add subtasks</button>
+                <button type="button" class="wcp-item-ai-chip" data-action="suggest_contexts">Auto-associate</button>
+                <button type="button" class="wcp-item-ai-chip" data-action="to_goal">Convert to goal</button>
+            </div>
+            <div class="wcp-item-ai-result" style="display:none;"></div>
+        </div>
+
         <!-- Context picker -->
         <div class="wcp-item-context-panel" data-item-id="<?php echo esc_attr($item->ID); ?>" style="display:none;">
             <div class="wcp-item-context-tree"></div>

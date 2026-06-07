@@ -200,6 +200,13 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // Update heading title
+        register_rest_route($namespace, '/headings/(?P<heading_id>\d+)/update', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'update_heading'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // Reorder headings on a page
         register_rest_route($namespace, '/headings/reorder', array(
             'methods'             => 'POST',
@@ -253,6 +260,13 @@ class WCP_REST_API {
         register_rest_route($namespace, '/pages/(?P<page_id>\d+)/content/accept', array(
             'methods'             => 'POST',
             'callback'            => array($this, 'accept_content_proposal'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Per-item AI actions
+        register_rest_route($namespace, '/items/(?P<item_id>\d+)/ai', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'item_ai_action'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
@@ -1826,6 +1840,11 @@ class WCP_REST_API {
             $updated['post_title'] = sanitize_text_field($title);
         }
 
+        $content = $request->get_param('content');
+        if ($content !== null) {
+            $updated['post_content'] = wp_kses_post($content);
+        }
+
         if (count($updated) > 1) {
             wp_update_post($updated);
         }
@@ -2076,12 +2095,102 @@ class WCP_REST_API {
         ) );
     }
 
+    public function update_heading( $request ) {
+        $heading_id = (int) $request->get_param('heading_id');
+        $post = get_post($heading_id);
+        if ( ! $post || $post->post_type !== 'wcp_heading' ) {
+            return new WP_Error('not_found', 'Heading not found', array('status' => 404));
+        }
+        $title = sanitize_text_field( $request->get_param('title') );
+        if ( $title ) {
+            wp_update_post( array('ID' => $heading_id, 'post_title' => $title) );
+            // Sync the context taxonomy term name
+            WCP_Taxonomy_Sync::instance()->sync_heading_to_taxonomy($heading_id, get_post($heading_id), true);
+        }
+        return rest_ensure_response( array('success' => true) );
+    }
+
     public function reorder_headings( $request ) {
         $heading_ids = array_map('intval', (array) $request->get_param('heading_ids'));
         foreach ( $heading_ids as $order => $id ) {
             wp_update_post( array( 'ID' => $id, 'menu_order' => $order ) );
         }
         return rest_ensure_response( array('success' => true) );
+    }
+
+    public function item_ai_action( $request ) {
+        $item_id = (int) $request->get_param('item_id');
+        $action  = sanitize_key( $request->get_param('action') );
+        $item    = get_post( $item_id );
+        if ( ! $item || $item->post_type !== 'post' ) {
+            return new WP_Error( 'not_found', 'Item not found', array('status' => 404) );
+        }
+
+        $ai_client  = WCP_AI_Client::instance();
+        $contexts   = wp_get_post_terms( $item_id, 'wcp_context', array('fields' => 'names') );
+        $ctx_str    = ! empty($contexts) && ! is_wp_error($contexts) ? implode(', ', $contexts) : '';
+        $item_text  = "Title: {$item->post_title}\n"
+                    . ( $item->post_content ? "Content: " . wp_strip_all_tags($item->post_content) . "\n" : '' )
+                    . ( $ctx_str ? "Context: {$ctx_str}" : '' );
+
+        switch ( $action ) {
+            case 'improve_phrasing':
+                $sys  = "Rewrite the item title (and optionally content if present) to be clearer, more actionable, and more concise. "
+                      . "Return ONLY a JSON object: {\"title\": \"...\", \"content\": \"...\"}. "
+                      . "Keep 'content' empty string if there was no original content.";
+                $resp = $ai_client->request_with_conversation( $sys, $item_text, array(), 256 );
+                if ( is_wp_error($resp) ) return $resp;
+                $parsed = json_decode( $resp['content'], true );
+                return rest_ensure_response(array(
+                    'success'  => true,
+                    'action'   => 'improve_phrasing',
+                    'proposal' => $parsed ?: array('title' => $resp['content'], 'content' => ''),
+                ));
+
+            case 'suggest_subtasks':
+                $sys  = "Generate 3–6 concrete, actionable subtasks for this item. "
+                      . "Return ONLY a JSON array of strings: [\"subtask 1\", \"subtask 2\", ...]";
+                $resp = $ai_client->request_with_conversation( $sys, $item_text, array(), 512 );
+                if ( is_wp_error($resp) ) return $resp;
+                $subtasks = json_decode( $resp['content'], true ) ?: array();
+                return rest_ensure_response(array(
+                    'success'  => true,
+                    'action'   => 'suggest_subtasks',
+                    'subtasks' => array_map('sanitize_text_field', (array) $subtasks),
+                ));
+
+            case 'suggest_contexts':
+                $all_ctxs = WCP_Taxonomy_Sync::get_all_contexts();
+                $ctx_list = implode("\n", array_map(fn($t) => "- {$t->name} (id:{$t->term_id})", $all_ctxs));
+                $sys  = "Given the item below, suggest which pages or headings it should be associated with from this list. "
+                      . "Return ONLY a JSON array of numeric term IDs: [123, 456]. "
+                      . "Available contexts:\n{$ctx_list}";
+                $resp = $ai_client->request_with_conversation( $sys, $item_text, array(), 256 );
+                if ( is_wp_error($resp) ) return $resp;
+                $ids = array_map('intval', json_decode($resp['content'], true) ?: array());
+                // Get names for display
+                $names = array();
+                foreach ( $all_ctxs as $t ) {
+                    if ( in_array($t->term_id, $ids) ) $names[] = $t->name;
+                }
+                return rest_ensure_response(array(
+                    'success'      => true,
+                    'action'       => 'suggest_contexts',
+                    'context_ids'  => $ids,
+                    'context_names'=> $names,
+                ));
+
+            case 'to_goal':
+                // Pre-fill goal modal description from this item; actual creation handled by existing JS
+                return rest_ensure_response(array(
+                    'success'     => true,
+                    'action'      => 'to_goal',
+                    'description' => $item->post_title . ( $item->post_content ? "\n" . wp_strip_all_tags($item->post_content) : '' ),
+                ));
+
+            default:
+                return new WP_Error( 'unknown_action', "Unknown action: {$action}", array('status' => 400) );
+        }
     }
 
     public function generate_activity_summary( $request ) {
