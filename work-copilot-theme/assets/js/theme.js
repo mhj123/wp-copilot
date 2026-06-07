@@ -267,6 +267,39 @@ jQuery(document).ready(function($) {
         $('.wcp-items-section').toggleClass('wcp-show-descriptions', !showing);
     });
 
+    var PRIORITY_ORDER = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3, '': 4 };
+
+    function sortListByPriority($list) {
+        var $rows = $list.find('> .wcp-item-row').get();
+        $rows.sort(function(a, b) {
+            var pa = PRIORITY_ORDER[$(a).data('priority') || ''] ?? 4;
+            var pb = PRIORITY_ORDER[$(b).data('priority') || ''] ?? 4;
+            return pa - pb;
+        });
+        $.each($rows, function(i, row) { $list.append(row); });
+    }
+
+    $(document).on('click', '.wcp-sort-priority', function() {
+        var $btn   = $(this);
+        var active = $btn.hasClass('active');
+        var scope  = $btn.data('scope');
+        $btn.toggleClass('active', !active);
+        if (!active) {
+            if (scope === 'listing') {
+                var listingId = $btn.data('listing-id');
+                $('[data-listing-id="' + listingId + '"].wcp-dynamic-listing .wcp-items-list').each(function() {
+                    sortListByPriority($(this));
+                });
+            } else {
+                $('.wcp-items-section .wcp-items-list, .wcp-dynamic-listing .wcp-items-list').each(function() {
+                    sortListByPriority($(this));
+                });
+            }
+        } else {
+            location.reload();
+        }
+    });
+
     // Sort items by due date within each items-list container
     function sortListByDueDate($list) {
         var $rows = $list.find('> .wcp-item-row').get();
@@ -552,7 +585,9 @@ jQuery(document).ready(function($) {
 
     $(document).on('change', '.wcp-priority-select', function() {
         var itemId = $(this).data('item-id');
-        updateItem(itemId, { priority: $(this).val() });
+        var prio   = $(this).val();
+        $(this).closest('.wcp-item-row').data('priority', prio);
+        updateItem(itemId, { priority: prio });
     });
 
     $(document).on('change', '.wcp-status-select', function() {

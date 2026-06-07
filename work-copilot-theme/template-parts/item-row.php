@@ -18,7 +18,8 @@ $_due_date         = get_post_meta($item->ID, '_wcp_due_date', true) ?: '';
      data-item-id="<?php echo esc_attr($item->ID); ?>"
      data-item-type="<?php echo esc_attr($_item_type_slug); ?>"
      data-task-status="<?php echo esc_attr($_task_status_slug); ?>"
-     data-due-date="<?php echo esc_attr($_due_date); ?>">
+     data-due-date="<?php echo esc_attr($_due_date); ?>"
+     data-priority="<?php echo esc_attr(!empty($priorities) ? $priorities[0] : ''); ?>">
     <span class="wcp-drag-handle" title="Drag to reorder">&#8942;</span>
     <input type="checkbox"
            class="wcp-task-checkbox"
@@ -62,7 +63,7 @@ $_due_date         = get_post_meta($item->ID, '_wcp_due_date', true) ?: '';
 
     <select class="wcp-inline-select wcp-priority-select" data-item-id="<?php echo esc_attr($item->ID); ?>">
         <option value=""><?php _e('prio', 'work-copilot-theme'); ?></option>
-        <?php foreach (array('high', 'medium', 'low') as $prio) : ?>
+        <?php foreach (array('critical', 'high', 'medium', 'low') as $prio) : ?>
             <option value="<?php echo $prio; ?>" <?php selected(!empty($priorities) && $priorities[0] === $prio); ?>><?php echo $prio; ?></option>
         <?php endforeach; ?>
     </select>
