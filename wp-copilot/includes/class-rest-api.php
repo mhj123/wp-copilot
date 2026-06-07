@@ -496,6 +496,9 @@ class WCP_REST_API {
 
         if (!empty($item_type)) {
             wp_set_post_terms($post_id, $item_type, 'item_type');
+            if ($item_type === 'task') {
+                wp_set_post_terms($post_id, array('to-do'), 'task_status');
+            }
         }
 
         if (!empty($priority)) {
@@ -1187,6 +1190,14 @@ class WCP_REST_API {
                 $result = $ai_actions->append_page_content($prompt, $page_id, $context_mode, $selected_pages);
                 break;
 
+            case 'fetch_posts':
+                $result = $ai_actions->fetch_posts_auto($prompt, $page_id, $conversation_id);
+                break;
+
+            case 'fetch_structure':
+                $result = $ai_actions->fetch_structure_chat($prompt, $conversation_id);
+                break;
+
             // Legacy support
             case 'coaching':
             case 'coaching_dialogue':
@@ -1821,6 +1832,13 @@ class WCP_REST_API {
         if ($task_status !== null) {
             $terms = $task_status ? array(sanitize_key($task_status)) : array();
             wp_set_post_terms($item_id, $terms, 'task_status');
+        }
+
+        $due_date = $request->get_param('due_date');
+        if ($due_date !== null) {
+            // Accept Y-m-d or empty string to clear
+            $safe = preg_match('/^\d{4}-\d{2}-\d{2}$/', $due_date) ? $due_date : '';
+            update_post_meta($item_id, '_wcp_due_date', $safe);
         }
 
         // Re-embed immediately, bypassing the 60-second save_post throttle

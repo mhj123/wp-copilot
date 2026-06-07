@@ -1481,6 +1481,203 @@ class WCP_AI_Actions {
     }
 
     /**
+     * "Fetch posts": interpret the prompt, run the query, and answer — all in one step.
+     */
+    public function fetch_posts_auto( $prompt, $page_id, $conversation_id = null ) {
+        $interpret = $this->fetch_posts_interpret( $prompt, $page_id, $conversation_id );
+        if ( is_wp_error( $interpret ) ) return $interpret;
+        return $this->fetch_posts_execute( $interpret['fetch_id'], $conversation_id );
+    }
+
+    /**
+     * Interpret the natural language prompt into structured query params via a lightweight
+     * AI call. Stores params in a transient keyed by fetch_id.
+     */
+    public function fetch_posts_interpret( $prompt, $page_id, $conversation_id = null ) {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) return new WP_Error( 'auth_error', 'User not authenticated' );
+
+        $prompt_builder = WCP_Prompt_Builder::instance();
+        $system_prompt  = $prompt_builder->build_system_prompt( 'fetch_interpret', $page_id );
+
+        $ai_client = WCP_AI_Client::instance();
+        $response  = $ai_client->request_with_conversation( $system_prompt, "User request: {$prompt}", array(), 256 );
+        if ( is_wp_error( $response ) ) return $response;
+
+        $params = $this->parse_json_response( $response['content'] );
+        if ( is_wp_error( $params ) ) return $params;
+
+        // Ensure limit has a sensible default
+        if ( empty( $params['limit'] ) || (int) $params['limit'] < 1 ) {
+            $params['limit'] = 10;
+        }
+        $params['limit'] = min( (int) $params['limit'], 100 );
+
+        $fetch_id = wp_generate_uuid4();
+        set_transient( 'wcp_fetch_' . $fetch_id, array(
+            'params'  => $params,
+            'prompt'  => $prompt,
+            'page_id' => $page_id,
+        ), 10 * MINUTE_IN_SECONDS );
+
+        return array(
+            'outcome'  => 'fetch_confirmation',
+            'fetch_id' => $fetch_id,
+            'params'   => $params,
+        );
+    }
+
+    /**
+     * Phase 2 of "Fetch posts": run the confirmed query deterministically, then answer
+     * the original prompt using the fetched posts as context.
+     */
+    public function fetch_posts_execute( $fetch_id, $conversation_id = null ) {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) return new WP_Error( 'auth_error', 'User not authenticated' );
+
+        $stored = get_transient( 'wcp_fetch_' . $fetch_id );
+        if ( ! $stored ) return new WP_Error( 'expired', 'Fetch session expired — please try again' );
+
+        delete_transient( 'wcp_fetch_' . $fetch_id );
+        $params  = $stored['params'];
+        $prompt  = $stored['prompt'];
+        $page_id = $stored['page_id'];
+
+        // Build WP_Query args from extracted params
+        $args = array(
+            'post_type'      => 'post',
+            'post_status'    => 'publish',
+            'posts_per_page' => (int) $params['limit'],
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+        );
+        if ( ! empty( $params['date_from'] ) || ! empty( $params['date_to'] ) ) {
+            $date_query = array( 'inclusive' => true );
+            if ( ! empty( $params['date_from'] ) ) $date_query['after']  = $params['date_from'];
+            if ( ! empty( $params['date_to'] ) )   $date_query['before'] = $params['date_to'];
+            $args['date_query'] = array( $date_query );
+        }
+        if ( ! empty( $params['task_status'] ) ) {
+            $args['tax_query'][] = array( 'taxonomy' => 'task_status', 'field' => 'slug', 'terms' => $params['task_status'] );
+        }
+        if ( ! empty( $params['item_type'] ) ) {
+            $args['tax_query'][] = array( 'taxonomy' => 'item_type', 'field' => 'slug', 'terms' => $params['item_type'] );
+        }
+        if ( ! empty( $params['parent_page_id'] ) ) {
+            $context_builder = WCP_Context_Builder::instance();
+            // reuse helper: get context term for the page, then query items in that tree
+            // We'll use the existing build_context_by_mode select path instead
+            $args['tax_query'][] = array(
+                'taxonomy' => 'wcp_context',
+                'field'    => 'slug',
+                'terms'    => get_terms( array(
+                    'taxonomy' => 'wcp_context', 'hide_empty' => false,
+                    'meta_query' => array( array( 'key' => 'wcp_ref_id', 'value' => (int) $params['parent_page_id'] ) ),
+                    'fields' => 'slugs',
+                ) ),
+            );
+        }
+
+        $posts = get_posts( $args );
+
+        // Build a context_data array the existing format_for_prompt understands
+        $context_data = array(
+            'pages'     => array(),
+            'items'     => array(),
+            'rag_items' => array(),
+            'memories'  => array(),
+            'limits'    => array( 'max_chars_per_item' => 2000, 'max_chars_page_summary' => 0 ),
+        );
+        foreach ( $posts as $p ) {
+            $context_data['items'][] = array(
+                'id'      => $p->ID,
+                'title'   => $p->post_title,
+                'content' => wp_strip_all_tags( $p->post_content ),
+                'date'    => $p->post_date,
+            );
+        }
+
+        $prompt_builder = WCP_Prompt_Builder::instance();
+        $system_prompt  = $prompt_builder->build_system_prompt( 'chat', $page_id );
+        $user_message   = $prompt_builder->build_user_message( $prompt, $context_data );
+
+        $conversation_history = array();
+        if ( $conversation_id ) {
+            $mgr = WCP_Conversations_Manager::instance();
+            foreach ( $mgr->get_messages( $conversation_id, 10 ) as $msg ) {
+                $conversation_history[] = array( 'role' => $msg['role'], 'content' => $msg['content'] );
+            }
+        }
+
+        $ai_client = WCP_AI_Client::instance();
+        $response  = $ai_client->request_with_conversation( $system_prompt, $user_message, $conversation_history, 4096 );
+        if ( is_wp_error( $response ) ) return $response;
+
+        if ( $conversation_id ) {
+            $mgr = WCP_Conversations_Manager::instance();
+            $mgr->add_message( $conversation_id, 'user', $prompt );
+            $mgr->add_message( $conversation_id, 'assistant', $response['content'] );
+        }
+
+        return array(
+            'outcome'      => 'chat',
+            'message'      => $response['content'],
+            'posts_fetched' => count( $posts ),
+        );
+    }
+
+    /**
+     * "Fetch structure": build the full page/heading taxonomy tree as context and answer
+     * the user's structural question. No AI interpretation needed — deterministic.
+     */
+    public function fetch_structure_chat( $prompt, $conversation_id = null ) {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) return new WP_Error( 'auth_error', 'User not authenticated' );
+
+        $contexts = WCP_Taxonomy_Sync::get_all_contexts();
+        $tree_text = $this->format_context_tree( $contexts );
+
+        $system_prompt = "You are a helpful assistant with access to the full page, subpage and heading structure of this knowledge base. Answer the user's question using the structure provided.";
+        $user_message  = "User request: {$prompt}\n\n## Full Structure:\n\n{$tree_text}";
+
+        $conversation_history = array();
+        if ( $conversation_id ) {
+            $mgr = WCP_Conversations_Manager::instance();
+            foreach ( $mgr->get_messages( $conversation_id, 10 ) as $msg ) {
+                $conversation_history[] = array( 'role' => $msg['role'], 'content' => $msg['content'] );
+            }
+        }
+
+        $ai_client = WCP_AI_Client::instance();
+        $response  = $ai_client->request_with_conversation( $system_prompt, $user_message, $conversation_history, 4096 );
+        if ( is_wp_error( $response ) ) return $response;
+
+        if ( $conversation_id ) {
+            $mgr = WCP_Conversations_Manager::instance();
+            $mgr->add_message( $conversation_id, 'user', $prompt );
+            $mgr->add_message( $conversation_id, 'assistant', $response['content'] );
+        }
+
+        return array( 'outcome' => 'chat', 'message' => $response['content'] );
+    }
+
+    /**
+     * Recursively format the wcp_context taxonomy tree into an indented text outline.
+     */
+    private function format_context_tree( $terms, $parent_id = 0, $depth = 0 ) {
+        $output = '';
+        $indent = str_repeat( '  ', $depth );
+        foreach ( $terms as $term ) {
+            if ( (int) $term->parent !== $parent_id ) continue;
+            $ref_type = get_term_meta( $term->term_id, 'wcp_ref_type', true );
+            $label    = $ref_type === 'wcp_heading' ? "— {$term->name}" : $term->name;
+            $output  .= "{$indent}{$label}\n";
+            $output  .= $this->format_context_tree( $terms, $term->term_id, $depth + 1 );
+        }
+        return $output;
+    }
+
+    /**
      * Get version for debugging
      */
     public static function get_version() {

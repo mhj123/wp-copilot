@@ -185,6 +185,16 @@ MD;
             'reframe' => "Rewrite the provided item draft from the requested perspective. "
                 . "Keep it concise and actionable. Maintain the core information while shifting the viewpoint.",
 
+            // Fetch posts: extract structured query params from natural language
+            'fetch_interpret' => "Extract database query parameters from the user's request. "
+                . "Today's date is " . date('Y-m-d') . ".\n\n"
+                . "IMPORTANT: Respond with ONLY a valid JSON object. No text before or after. "
+                . "Use null for any field the user did not specify. Valid item_type values: task, info, learning. "
+                . "Valid task_status values: to-do, in-progress, done. "
+                . "Express dates as absolute Y-m-d strings. Format:\n"
+                . '{"date_from":null,"date_to":null,"item_type":null,"task_status":null,"parent_page_id":null,"limit":10}'
+                . "\n\nStart your response with { and end with }.",
+
             // Goal planning: understand the goal and propose action items
             'plan-goal' => "You are helping the user define a goal and create a concrete action plan.\n\n"
                 . "The user has described what they want to achieve. Your task:\n"

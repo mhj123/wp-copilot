@@ -552,7 +552,8 @@ class WCP_Context_Builder {
                     $truncated = true;
                 }
 
-                $prompt .= "- {$item['title']}: {$content}";
+                $date_prefix = !empty($item['date']) ? '[' . substr($item['date'], 0, 10) . '] ' : '';
+                $prompt .= "- {$date_prefix}{$item['title']}: {$content}";
                 if ($truncated) {
                     $prompt .= " [truncated from {$original_length} chars]";
                 }

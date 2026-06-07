@@ -553,6 +553,20 @@ textarea.wcp-form-control {
     min-width: 100px;
 }
 
+.wcp-due-date-input {
+    padding: 3px 6px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    font-size: 12px;
+    background: #f8f9fa;
+    color: #666;
+}
+
+.wcp-sort-due-date.active {
+    color: #0066cc;
+    font-weight: 600;
+}
+
 .wcp-no-items-in-heading {
     color: #999;
     font-style: italic;
