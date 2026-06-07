@@ -53,7 +53,8 @@ $_context_ids       = is_wp_error($_context_ids) ? array() : $_context_ids;
     <?php if (!empty($item_tags)) : ?>
         <span class="wcp-item-meta-pills">
             <?php foreach ($item_tags as $tag) : ?>
-                <span class="wcp-pill wcp-pill-tag"><?php echo esc_html($tag); ?></span>
+                <a href="<?php echo esc_url(home_url('/?tag=' . urlencode(sanitize_title($tag)))); ?>"
+                   class="wcp-pill wcp-pill-tag"><?php echo esc_html($tag); ?></a>
             <?php endforeach; ?>
         </span>
     <?php endif; ?>
