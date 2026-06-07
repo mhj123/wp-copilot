@@ -10,16 +10,20 @@ $is_task = !empty($item_types) && $item_types[0] === 'task';
 $is_done = !empty($task_statuses) && $task_statuses[0] === 'done';
 ?>
 <?php
-$_item_type_slug   = !empty($item_types) ? $item_types[0] : '';
-$_task_status_slug = !empty($task_statuses) ? $task_statuses[0] : '';
-$_due_date         = get_post_meta($item->ID, '_wcp_due_date', true) ?: '';
+$_item_type_slug    = !empty($item_types) ? $item_types[0] : '';
+$_task_status_slug  = !empty($task_statuses) ? $task_statuses[0] : '';
+$_due_date          = get_post_meta($item->ID, '_wcp_due_date', true) ?: '';
+$_context_ids       = wp_get_post_terms($item->ID, 'wcp_context', array('fields' => 'ids'));
+$_context_ids       = is_wp_error($_context_ids) ? array() : $_context_ids;
 ?>
 <div class="wcp-item-row<?php echo $is_done ? ' wcp-task-done' : ''; ?>"
      data-item-id="<?php echo esc_attr($item->ID); ?>"
      data-item-type="<?php echo esc_attr($_item_type_slug); ?>"
      data-task-status="<?php echo esc_attr($_task_status_slug); ?>"
      data-due-date="<?php echo esc_attr($_due_date); ?>"
-     data-priority="<?php echo esc_attr(!empty($priorities) ? $priorities[0] : ''); ?>">
+     data-priority="<?php echo esc_attr(!empty($priorities) ? $priorities[0] : ''); ?>"
+     data-context-ids="<?php echo esc_attr(implode(',', $_context_ids)); ?>"
+     data-tags="<?php echo esc_attr(implode(',', $item_tags)); ?>">
     <span class="wcp-drag-handle" title="Drag to reorder">&#8942;</span>
     <input type="checkbox"
            class="wcp-task-checkbox"
@@ -85,6 +89,8 @@ $_due_date         = get_post_meta($item->ID, '_wcp_due_date', true) ?: '';
            title="Due date"
            style="<?php echo $is_task ? '' : 'display:none;'; ?>">
     <button type="button" class="wcp-subtask-add-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">+ subtask</button>
+    <button type="button" class="wcp-item-context-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">+ context</button>
+    <button type="button" class="wcp-item-tag-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">+ tag</button>
     <button type="button" class="wcp-item-delete wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">[delete]</button>
 
     <?php
@@ -112,6 +118,27 @@ $_due_date         = get_post_meta($item->ID, '_wcp_due_date', true) ?: '';
             <?php endforeach; ?>
         </ul>
         <?php endif; ?>
+        <!-- Context picker -->
+        <div class="wcp-item-context-panel" data-item-id="<?php echo esc_attr($item->ID); ?>" style="display:none;">
+            <div class="wcp-item-context-tree"></div>
+        </div>
+
+        <!-- Tag editor -->
+        <div class="wcp-item-tag-panel" data-item-id="<?php echo esc_attr($item->ID); ?>" style="display:none;">
+            <div class="wcp-item-tag-pills">
+                <?php foreach ($item_tags as $tag) : ?>
+                <span class="wcp-item-tag-pill">
+                    <?php echo esc_html($tag); ?>
+                    <button type="button" class="wcp-item-tag-remove" data-tag="<?php echo esc_attr($tag); ?>" data-item-id="<?php echo esc_attr($item->ID); ?>">×</button>
+                </span>
+                <?php endforeach; ?>
+            </div>
+            <form class="wcp-item-tag-form" data-item-id="<?php echo esc_attr($item->ID); ?>">
+                <input type="text" class="wcp-item-tag-input" placeholder="Add tag…" autocomplete="off">
+                <button type="submit" class="wcp-btn wcp-btn-primary wcp-btn-sm">Add</button>
+            </form>
+        </div>
+
         <form class="wcp-subtask-add-form" data-item-id="<?php echo esc_attr($item->ID); ?>" style="display:none;">
             <input type="text" class="wcp-subtask-input" placeholder="Subtask title…" autocomplete="off">
             <button type="submit" class="wcp-btn wcp-btn-primary wcp-btn-sm">Add</button>

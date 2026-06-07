@@ -256,6 +256,13 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // Calendar import
+        register_rest_route($namespace, '/calendar/import', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'import_calendar'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // Page notes
         register_rest_route($namespace, '/pages/(?P<page_id>\d+)/notes', array(
             'methods'             => 'POST',
@@ -1834,6 +1841,18 @@ class WCP_REST_API {
             wp_set_post_terms($item_id, $terms, 'task_status');
         }
 
+        $contexts = $request->get_param('contexts');
+        if ($contexts !== null) {
+            $term_ids = array_map('intval', (array) $contexts);
+            wp_set_post_terms($item_id, $term_ids, 'wcp_context');
+        }
+
+        $tags = $request->get_param('tags');
+        if ($tags !== null) {
+            $tag_names = array_map('sanitize_text_field', (array) $tags);
+            wp_set_post_terms($item_id, $tag_names, 'post_tag');
+        }
+
         $due_date = $request->get_param('due_date');
         if ($due_date !== null) {
             // Accept Y-m-d or empty string to clear
@@ -2056,6 +2075,15 @@ class WCP_REST_API {
             wp_update_post( array( 'ID' => $id, 'menu_order' => $order ) );
         }
         return rest_ensure_response( array('success' => true) );
+    }
+
+    public function import_calendar( $request ) {
+        $ics_content = $request->get_param('ics_content');
+        if ( empty( $ics_content ) ) {
+            return new WP_Error('missing_content', 'ics_content is required', array('status' => 400));
+        }
+        $count = WCP_Calendar_Importer::instance()->import( $ics_content );
+        return rest_ensure_response(array('success' => true, 'events_imported' => $count));
     }
 
     public function delete_heading( $request ) {

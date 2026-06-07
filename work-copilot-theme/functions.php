@@ -55,13 +55,13 @@ function wcp_theme_scripts() {
     wp_enqueue_style('wcp-theme-style', get_stylesheet_uri(), array(), '1.2.0');
 
     // Custom theme styles
-    wp_enqueue_style('wcp-theme-custom', get_template_directory_uri() . '/assets/css/theme.css', array(), '1.9.7');
+    wp_enqueue_style('wcp-theme-custom', get_template_directory_uri() . '/assets/css/theme.css', array(), '2.0.2');
 
     // SortableJS for drag-to-reorder
     wp_enqueue_script('sortablejs', 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js', array(), '1.15.2', true);
 
     // Theme JavaScript
-    wp_enqueue_script('wcp-theme-js', get_template_directory_uri() . '/assets/js/theme.js', array('jquery', 'sortablejs'), '1.6.7', true);
+    wp_enqueue_script('wcp-theme-js', get_template_directory_uri() . '/assets/js/theme.js', array('jquery', 'sortablejs'), '1.7.1', true);
 
     // Localize script with data
     wp_localize_script('wcp-theme-js', 'wcpThemeData', array(
@@ -88,32 +88,57 @@ function wcp_theme_get_page_tree($parent_id = 0) {
     return get_posts($args);
 }
 
-// Recursively build page navigation
-function wcp_theme_build_page_nav($parent_id = 0, $current_page_id = 0) {
-    $pages = wcp_theme_get_page_tree($parent_id);
-
-    if (empty($pages)) {
-        return '';
+// Return array of ancestor page IDs for a given page (parent, grandparent, …)
+function wcp_theme_get_page_ancestors($page_id) {
+    $ancestors = array();
+    $p = get_post($page_id);
+    while ($p && $p->post_parent) {
+        $ancestors[] = (int) $p->post_parent;
+        $p = get_post($p->post_parent);
     }
+    return $ancestors;
+}
+
+// Recursively build collapsible page navigation.
+// Subpages are hidden by default; ancestors of the current page are pre-expanded.
+function wcp_theme_build_page_nav($parent_id = 0, $current_page_id = 0, $depth = 0, $open_ids = array()) {
+    $pages = wcp_theme_get_page_tree($parent_id);
+    if (empty($pages)) return '';
 
     $output = '<ul class="wcp-page-list">';
 
     foreach ($pages as $page) {
-        $is_current = ($page->ID == $current_page_id) ? ' class="current-page"' : '';
-        $output .= '<li' . $is_current . '>';
-        $output .= '<a href="' . get_permalink($page->ID) . '">' . esc_html($page->post_title) . '</a>';
+        $is_current  = ($page->ID === $current_page_id);
+        $is_open     = $is_current || in_array($page->ID, $open_ids);
+        $children    = wcp_theme_build_page_nav($page->ID, $current_page_id, $depth + 1, $open_ids);
+        $has_children = !empty($children);
 
-        // Check for child pages
-        $children = wcp_theme_build_page_nav($page->ID, $current_page_id);
-        if ($children) {
+        $classes = array();
+        if ($is_current)  $classes[] = 'current-page';
+
+        $output .= '<li' . ($classes ? ' class="' . implode(' ', $classes) . '"' : '') . '>';
+        $output .= '<div class="wcp-nav-row">';
+
+        if ($has_children) {
+            $output .= '<button type="button" class="wcp-nav-toggle" data-page-id="' . $page->ID . '" aria-expanded="' . ($is_open ? 'true' : 'false') . '">'
+                     . ($is_open ? '▾' : '▸') . '</button>';
+        } else {
+            $output .= '<span class="wcp-nav-toggle-spacer"></span>';
+        }
+
+        $output .= '<a href="' . esc_url(get_permalink($page->ID)) . '">' . esc_html($page->post_title) . '</a>';
+        $output .= '</div>';
+
+        if ($has_children) {
+            $output .= '<div class="wcp-nav-children"' . (!$is_open ? ' style="display:none;"' : '') . '>';
             $output .= $children;
+            $output .= '</div>';
         }
 
         $output .= '</li>';
     }
 
     $output .= '</ul>';
-
     return $output;
 }
 
