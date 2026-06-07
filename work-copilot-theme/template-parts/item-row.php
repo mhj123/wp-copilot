@@ -12,11 +12,13 @@ $is_done = !empty($task_statuses) && $task_statuses[0] === 'done';
 <?php
 $_item_type_slug   = !empty($item_types) ? $item_types[0] : '';
 $_task_status_slug = !empty($task_statuses) ? $task_statuses[0] : '';
+$_due_date         = get_post_meta($item->ID, '_wcp_due_date', true) ?: '';
 ?>
 <div class="wcp-item-row<?php echo $is_done ? ' wcp-task-done' : ''; ?>"
      data-item-id="<?php echo esc_attr($item->ID); ?>"
      data-item-type="<?php echo esc_attr($_item_type_slug); ?>"
-     data-task-status="<?php echo esc_attr($_task_status_slug); ?>">
+     data-task-status="<?php echo esc_attr($_task_status_slug); ?>"
+     data-due-date="<?php echo esc_attr($_due_date); ?>">
     <span class="wcp-drag-handle" title="Drag to reorder">&#8942;</span>
     <input type="checkbox"
            class="wcp-task-checkbox"
@@ -75,6 +77,12 @@ $_task_status_slug = !empty($task_statuses) ? $task_statuses[0] : '';
         <?php endforeach; ?>
     </select>
 
+    <input type="date"
+           class="wcp-due-date-input"
+           data-item-id="<?php echo esc_attr($item->ID); ?>"
+           value="<?php echo esc_attr($_due_date); ?>"
+           title="Due date"
+           style="<?php echo $is_task ? '' : 'display:none;'; ?>">
     <button type="button" class="wcp-subtask-add-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">+ subtask</button>
     <button type="button" class="wcp-item-delete wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">[delete]</button>
 

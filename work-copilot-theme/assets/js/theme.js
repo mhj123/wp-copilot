@@ -267,6 +267,43 @@ jQuery(document).ready(function($) {
         $('.wcp-items-section').toggleClass('wcp-show-descriptions', !showing);
     });
 
+    // Sort items by due date within each items-list container
+    function sortListByDueDate($list) {
+        var $rows = $list.find('> .wcp-item-row').get();
+        $rows.sort(function(a, b) {
+            var da = $(a).data('due-date') || '';
+            var db = $(b).data('due-date') || '';
+            // Items with a due date go first; among those, earliest first
+            if (da && db) return da < db ? -1 : da > db ? 1 : 0;
+            if (da) return -1;
+            if (db) return 1;
+            return 0;
+        });
+        $.each($rows, function(i, row) { $list.append(row); });
+    }
+
+    $(document).on('click', '.wcp-sort-due-date', function() {
+        var $btn    = $(this);
+        var active  = $btn.hasClass('active');
+        var scope   = $btn.data('scope'); // 'listing' or undefined (page-wide)
+        $btn.toggleClass('active', !active);
+        if (!active) {
+            if (scope === 'listing') {
+                // Sort only within this dynamic listing
+                var listingId = $btn.data('listing-id');
+                $('[data-listing-id="' + listingId + '"].wcp-dynamic-listing .wcp-items-list').each(function() {
+                    sortListByDueDate($(this));
+                });
+            } else {
+                $('.wcp-items-section .wcp-items-list, .wcp-dynamic-listing .wcp-items-list').each(function() {
+                    sortListByDueDate($(this));
+                });
+            }
+        } else {
+            location.reload();
+        }
+    });
+
     // Toggle semantic search panel
     $('#wcp-toggle-search').on('click', function() {
         var $panel = $('#wcp-search-panel');
@@ -483,17 +520,34 @@ jQuery(document).ready(function($) {
         var $row = $(this).closest('.wcp-item-row');
         var $statusSelect = $row.find('.wcp-status-select');
         var $checkbox = $row.find('.wcp-task-checkbox');
+        var $dueDate = $row.find('.wcp-due-date-input');
         $row.data('item-type', type);
         if (type === 'task') {
             $statusSelect.show();
             $checkbox.show();
+            $dueDate.show();
+            // Default status to 'to-do' if not already set
+            if (!$statusSelect.val()) {
+                $statusSelect.val('to-do');
+                $row.data('task-status', 'to-do');
+                updateItem(itemId, { task_status: 'to-do' });
+            }
         } else {
             $statusSelect.hide().val('');
             $checkbox.hide().prop('checked', false);
+            $dueDate.hide().val('');
             $row.removeClass('wcp-task-done');
-            $row.data('task-status', '');
-            updateItem(itemId, { task_status: '' });
+            $row.data('task-status', '').data('due-date', '');
+            updateItem(itemId, { task_status: '', due_date: '' });
         }
+    });
+
+    $(document).on('change', '.wcp-due-date-input', function() {
+        var $input = $(this);
+        var itemId = $input.data('item-id');
+        var date   = $input.val(); // Y-m-d or ''
+        $input.closest('.wcp-item-row').data('due-date', date);
+        updateItem(itemId, { due_date: date });
     });
 
     $(document).on('change', '.wcp-priority-select', function() {
