@@ -381,30 +381,32 @@ foreach ($cal_events as $ev) {
     </div>
     <?php endif; ?>
 
-    <!-- ── Recent activity (collapsed) ──────────────────────────── -->
-    <div class="wcp-dash-card">
-        <div class="wcp-dash-card-header wcp-dash-collapsible-header" data-section="activity">
-            <h2 class="wcp-dash-card-title">Recent activity</h2>
-            <button type="button" class="wcp-toggle-section wcp-edit-link" data-section="activity" data-page-id="0">show</button>
+    <!-- ── Recent activity summary ───────────────────────────────── -->
+    <?php
+    $cached_summary = get_transient('wcp_activity_summary');
+    $summary_text   = $cached_summary['summary'] ?? '';
+    $summary_count  = $cached_summary['post_count'] ?? 0;
+    $summary_time   = $cached_summary['generated_at'] ?? '';
+    $summary_age    = $summary_time ? human_time_diff(strtotime($summary_time), current_time('timestamp')) . ' ago' : '';
+    ?>
+    <div class="wcp-dash-card" id="wcp-dash-activity-card">
+        <div class="wcp-dash-card-header">
+            <h2 class="wcp-dash-card-title">
+                This week
+                <?php if ($summary_age) : ?>
+                    <span class="wcp-dash-summary-age"><?php echo esc_html($summary_age); ?></span>
+                <?php endif; ?>
+            </h2>
+            <button type="button" id="wcp-dash-summarise-btn" class="wcp-edit-link">
+                <?php echo $summary_text ? 'Refresh summary' : 'Generate summary'; ?>
+            </button>
         </div>
-        <div class="wcp-section-body" style="display:none;" id="wcp-dash-activity">
-            <?php if (empty($recent_items)) : ?>
-                <p class="wcp-dash-empty">No activity in the last 7 days.</p>
+        <div id="wcp-dash-activity-summary">
+            <?php if ($summary_text) : ?>
+                <p class="wcp-dash-summary-text"><?php echo nl2br(esc_html($summary_text)); ?></p>
+                <p class="wcp-dash-summary-meta"><?php echo esc_html($summary_count); ?> items created in the last 7 days</p>
             <?php else : ?>
-                <ul class="wcp-dash-activity-list">
-                <?php foreach ($recent_items as $item) :
-                    $ctxs = wp_get_post_terms($item->ID, 'wcp_context', array('fields' => 'names'));
-                    $modified = human_time_diff(strtotime($item->post_modified), current_time('timestamp')) . ' ago';
-                ?>
-                    <li class="wcp-dash-activity-item">
-                        <a href="<?php echo esc_url(get_permalink($item->ID)); ?>" class="wcp-dash-task-title"><?php echo esc_html($item->post_title); ?></a>
-                        <span class="wcp-dash-due"><?php echo esc_html($modified); ?></span>
-                        <?php if (!empty($ctxs) && !is_wp_error($ctxs)) : ?>
-                            <span class="wcp-dash-ctx"><?php echo esc_html($ctxs[0]); ?></span>
-                        <?php endif; ?>
-                    </li>
-                <?php endforeach; ?>
-                </ul>
+                <p class="wcp-dash-empty">Click "Generate summary" to get an AI overview of this week's activity.</p>
             <?php endif; ?>
         </div>
     </div>

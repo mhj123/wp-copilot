@@ -256,6 +256,13 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // Dashboard activity summary
+        register_rest_route($namespace, '/dashboard/activity-summary', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'generate_activity_summary'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // Calendar import
         register_rest_route($namespace, '/calendar/import', array(
             'methods'             => 'POST',
@@ -2075,6 +2082,83 @@ class WCP_REST_API {
             wp_update_post( array( 'ID' => $id, 'menu_order' => $order ) );
         }
         return rest_ensure_response( array('success' => true) );
+    }
+
+    public function generate_activity_summary( $request ) {
+        $force = (bool) $request->get_param('force');
+        $cache_key = 'wcp_activity_summary';
+
+        if ( ! $force ) {
+            $cached = get_transient( $cache_key );
+            if ( $cached ) {
+                return rest_ensure_response( $cached );
+            }
+        }
+
+        // Fetch posts created in the last 7 days
+        $posts = get_posts( array(
+            'post_type'      => 'post',
+            'post_status'    => 'publish',
+            'posts_per_page' => 50,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+            'date_query'     => array( array( 'after' => '7 days ago', 'inclusive' => true ) ),
+        ) );
+
+        if ( empty( $posts ) ) {
+            return rest_ensure_response( array(
+                'success'      => true,
+                'summary'      => 'No items were created in the last 7 days.',
+                'post_count'   => 0,
+                'generated_at' => current_time( 'mysql' ),
+            ) );
+        }
+
+        // Build context: titles + short excerpts
+        $items_text = '';
+        foreach ( $posts as $p ) {
+            $excerpt = wp_strip_all_tags( $p->post_content );
+            $excerpt = $excerpt ? ' — ' . mb_substr( $excerpt, 0, 200 ) : '';
+            $contexts = wp_get_post_terms( $p->ID, 'wcp_context', array( 'fields' => 'names' ) );
+            $ctx = ! empty( $contexts ) && ! is_wp_error( $contexts ) ? ' [' . implode( ', ', $contexts ) . ']' : '';
+            $items_text .= "- {$p->post_title}{$ctx}{$excerpt}\n";
+        }
+
+        // Get global mission for orientation
+        $mission = WCP_Mission_Loader::instance()->get_global_mission();
+        $mission_line = $mission ? "\n\nCopilot mission:\n{$mission}" : '';
+
+        $system_prompt = "You are a personal work assistant helping the user orient themselves. "
+            . "Summarise the main themes from the items listed — what has the user been focused on this week? "
+            . "Be concise (3-5 sentences), insightful, and practical. "
+            . "Frame the summary in light of the copilot's mission where relevant. "
+            . "Do not list items individually — synthesise the themes.";
+
+        $user_message = "Items created in the last 7 days ({$count} total):\n\n{$items_text}{$mission_line}";
+
+        $count = count( $posts );
+        $user_message = str_replace( '{$count}', $count, $user_message );
+
+        $ai_client = WCP_AI_Client::instance();
+        $response  = $ai_client->request_with_conversation( $system_prompt, $user_message, array(), 1024 );
+
+        if ( is_wp_error( $response ) ) {
+            return rest_ensure_response( array(
+                'success' => false,
+                'message' => $response->get_error_message(),
+            ) );
+        }
+
+        $result = array(
+            'success'      => true,
+            'summary'      => $response['content'],
+            'post_count'   => $count,
+            'generated_at' => current_time( 'mysql' ),
+        );
+
+        set_transient( $cache_key, $result, 6 * HOUR_IN_SECONDS );
+
+        return rest_ensure_response( $result );
     }
 
     public function import_calendar( $request ) {
