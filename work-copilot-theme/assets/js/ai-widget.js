@@ -97,8 +97,13 @@
             $(document).on('click', '.wcp-ai-action-chip', (e) => {
                 const $chip = $(e.currentTarget);
                 const action = $chip.data('action');
+                if (action === 'create_goal') {
+                    // Delegate to the existing goal modal on the page
+                    this.minimizeWidget();
+                    $('#wcp-btn-new-goal').trigger('click');
+                    return;
+                }
                 if ($chip.hasClass('active')) {
-                    // Deselect → back to plain chat
                     $chip.removeClass('active');
                     this.currentAction = 'chat';
                 } else {

@@ -360,6 +360,75 @@ jQuery(document).ready(function($) {
         $('.wcp-items-section').toggleClass('wcp-show-descriptions', !showing);
     });
 
+    // Actions toggle — hide non-essential row controls
+    var actionsHidden = localStorage.getItem('wcp_actions_hidden') === '1';
+    if (actionsHidden) {
+        $('.wcp-items-section').addClass('wcp-hide-actions');
+        $('.wcp-toggle-actions').addClass('active');
+    }
+    $(document).on('click', '.wcp-toggle-actions', function() {
+        actionsHidden = !actionsHidden;
+        $(this).toggleClass('active', actionsHidden);
+        $('.wcp-items-section').toggleClass('wcp-hide-actions', actionsHidden);
+        localStorage.setItem('wcp_actions_hidden', actionsHidden ? '1' : '0');
+    });
+
+    // Inline heading title edit — click title text to edit
+    $(document).on('click', '.wcp-heading-title-text', function() {
+        var $span  = $(this);
+        var $input = $span.siblings('.wcp-heading-title-input');
+        $span.hide();
+        $input.show().focus().select();
+    });
+
+    function saveHeadingTitle($input) {
+        var headingId = $input.data('heading-id');
+        var title     = $input.val().trim();
+        var $span     = $input.siblings('.wcp-heading-title-text');
+        if (!title) { $input.hide(); $span.show(); return; }
+        $span.text(title).show();
+        $input.hide();
+        $.ajax({
+            url: wcpThemeData.restUrl + '/headings/' + headingId + '/update',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ title: title }),
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); }
+        });
+    }
+
+    $(document).on('blur', '.wcp-heading-title-input', function() { saveHeadingTitle($(this)); });
+    $(document).on('keydown', '.wcp-heading-title-input', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); saveHeadingTitle($(this)); }
+        if (e.key === 'Escape') { $(this).hide().siblings('.wcp-heading-title-text').show(); }
+    });
+
+    // Inline item description edit — click description to edit
+    $(document).on('click', '.wcp-item-description', function() {
+        var $span  = $(this);
+        var itemId = $span.data('item-id');
+        var text   = $span.text();
+        var $ta    = $('<textarea class="wcp-item-description-edit wcp-form-control">')
+                        .val(text).attr('rows', 3);
+        $span.hide().after($ta);
+        $ta.focus();
+
+        function saveDesc() {
+            var newVal = $ta.val().trim();
+            $span.text(newVal).show();
+            $ta.remove();
+            if (newVal !== text) {
+                updateItem(itemId, { content: newVal });
+                text = newVal;
+            }
+        }
+
+        $ta.on('blur', saveDesc);
+        $ta.on('keydown', function(e) {
+            if (e.key === 'Escape') { $ta.val(text); saveDesc(); }
+        });
+    });
+
     var PRIORITY_ORDER = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3, '': 4 };
 
     function sortListByPriority($list) {
@@ -732,6 +801,196 @@ jQuery(document).ready(function($) {
                 }
             }
         });
+    });
+
+    // ==========================================================================
+    // Select mode — multi-select items → create goal from selected
+    // ==========================================================================
+
+    var selectMode = false;
+
+    $(document).on('click', '#wcp-select-mode-btn', function() {
+        selectMode = !selectMode;
+        $(this).toggleClass('active', selectMode).text(selectMode ? 'done selecting' : 'select');
+        $('.wcp-item-select-cb').toggle(selectMode);
+        if (!selectMode) {
+            $('.wcp-item-select-cb').prop('checked', false);
+            $('#wcp-selection-bar').hide();
+        } else {
+            $('#wcp-selection-bar').show();
+        }
+    });
+
+    $(document).on('change', '.wcp-item-select-cb', function() {
+        var checked = $('.wcp-item-select-cb:checked');
+        var n = checked.length;
+        $('#wcp-selection-count').text(n + ' item' + (n !== 1 ? 's' : '') + ' selected');
+        $('#wcp-goal-from-selected-btn').prop('disabled', n === 0);
+    });
+
+    $(document).on('click', '#wcp-selection-cancel-btn', function() {
+        selectMode = false;
+        $('#wcp-select-mode-btn').removeClass('active').text('select');
+        $('.wcp-item-select-cb').hide().prop('checked', false);
+        $('#wcp-selection-bar').hide();
+    });
+
+    $(document).on('click', '#wcp-goal-from-selected-btn', function() {
+        var titles = $('.wcp-item-select-cb:checked').map(function() {
+            return $(this).data('item-title');
+        }).get();
+        var description = 'Goal covering:\n' + titles.map(function(t) { return '- ' + t; }).join('\n');
+        var pageId = $('#wcp-selection-bar').data('page-id');
+        // Open goal modal with pre-filled description
+        $('#wcp-goal-description').val(description);
+        goalModal.open(pageId);
+        // Exit select mode
+        $('#wcp-selection-cancel-btn').trigger('click');
+    });
+
+    // ==========================================================================
+    // Per-item AI actions
+    // ==========================================================================
+
+    $(document).on('click', '.wcp-item-ai-btn', function() {
+        var $row   = $(this).closest('.wcp-item-row');
+        var $panel = $row.find('.wcp-item-ai-panel');
+        $panel.slideToggle(120);
+        $row.find('.wcp-item-ai-result').hide().empty();
+        $row.find('.wcp-item-ai-chip').removeClass('active');
+    });
+
+    $(document).on('click', '.wcp-item-ai-chip', function() {
+        var $chip   = $(this);
+        var action  = $chip.data('action');
+        var $panel  = $chip.closest('.wcp-item-ai-panel');
+        var itemId  = $panel.data('item-id');
+        var $result = $panel.find('.wcp-item-ai-result');
+        var $row    = $panel.closest('.wcp-item-row');
+
+        $panel.find('.wcp-item-ai-chip').removeClass('active');
+        $chip.addClass('active');
+
+        if (action === 'to_goal') {
+            // Pre-fill goal modal then close panel
+            var pageId = $('input[name="page_id"]').first().val() || wcpThemeData && wcpThemeData.pageId;
+            $.ajax({
+                url: wcpThemeData.restUrl + '/items/' + itemId + '/ai',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ action: 'to_goal' }),
+                beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+                success: function(r) {
+                    if (r.success) {
+                        $('#wcp-goal-description').val(r.description);
+                        goalModal.open(pageId);
+                        $panel.slideUp(120);
+                    }
+                }
+            });
+            return;
+        }
+
+        $result.show().html('<em style="color:#aaa;font-size:12px;">Thinking…</em>');
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/items/' + itemId + '/ai',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ action: action }),
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(r) {
+                if (!r.success) { $result.html('<em style="color:#c0392b;">Error</em>'); return; }
+
+                if (action === 'improve_phrasing') {
+                    var p = r.proposal;
+                    $result.html(
+                        '<div class="wcp-item-ai-proposal">'
+                        + '<strong>' + $('<span>').text(p.title).html() + '</strong>'
+                        + (p.content ? '<br><span style="color:#666;font-size:12px;">' + $('<span>').text(p.content).html() + '</span>' : '')
+                        + '</div>'
+                        + '<div style="margin-top:6px;">'
+                        + '<button class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-item-ai-accept" data-item-id="' + itemId + '" data-title="' + $('<span>').text(p.title).html() + '" data-content="' + $('<span>').text(p.content || '').html() + '">Accept</button>'
+                        + ' <button class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
+                        + '</div>'
+                    );
+                } else if (action === 'suggest_subtasks') {
+                    var items = r.subtasks.map(function(st) {
+                        return '<li><label><input type="checkbox" class="wcp-ai-sub-cb" checked data-title="' + $('<span>').text(st).html() + '"> ' + $('<span>').text(st).html() + '</label></li>';
+                    }).join('');
+                    $result.html(
+                        '<ul class="wcp-item-ai-subtask-list">' + items + '</ul>'
+                        + '<button class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-item-ai-add-subtasks" data-item-id="' + itemId + '">Add checked</button>'
+                        + ' <button class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
+                    );
+                } else if (action === 'suggest_contexts') {
+                    var names = r.context_names.map(function(n) { return '<li>' + $('<span>').text(n).html() + '</li>'; }).join('');
+                    $result.html(
+                        '<p style="font-size:12px;margin:0 0 6px;">Suggested associations:</p>'
+                        + '<ul style="margin:0 0 8px;padding-left:16px;font-size:12px;">' + names + '</ul>'
+                        + '<button class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-item-ai-accept-contexts" data-item-id="' + itemId + '" data-ids="' + r.context_ids.join(',') + '">Apply</button>'
+                        + ' <button class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
+                    );
+                }
+            },
+            error: function() { $result.html('<em style="color:#c0392b;">Connection error</em>'); }
+        });
+    });
+
+    // Accept improved phrasing
+    $(document).on('click', '.wcp-item-ai-accept', function() {
+        var $btn  = $(this);
+        var id    = $btn.data('item-id');
+        var title = $btn.data('title');
+        var content = $btn.data('content');
+        updateItem(id, { title: title, content: content });
+        var $row = $btn.closest('.wcp-item-row');
+        $row.find('.wcp-item-title').text(title);
+        $btn.closest('.wcp-item-ai-panel').slideUp(120);
+    });
+
+    // Add AI-suggested subtasks
+    $(document).on('click', '.wcp-item-ai-add-subtasks', function() {
+        var $btn   = $(this);
+        var itemId = $btn.data('item-id');
+        var $panel = $btn.closest('.wcp-item-ai-panel');
+        $btn.find('.wcp-ai-sub-cb:checked').each(function() {
+            var title = $(this).data('title');
+            $.ajax({
+                url: wcpThemeData.restUrl + '/items/' + itemId + '/subtasks',
+                method: 'POST', contentType: 'application/json',
+                data: JSON.stringify({ title: title }),
+                beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); }
+            });
+        });
+        // Also collect from the actual checkboxes in the result
+        $panel.find('.wcp-ai-sub-cb:checked').each(function() {
+            var title = $(this).data('title');
+            $.ajax({
+                url: wcpThemeData.restUrl + '/items/' + itemId + '/subtasks',
+                method: 'POST', contentType: 'application/json',
+                data: JSON.stringify({ title: title }),
+                beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); }
+            });
+        });
+        $panel.slideUp(120);
+        location.reload();
+    });
+
+    // Apply suggested contexts
+    $(document).on('click', '.wcp-item-ai-accept-contexts', function() {
+        var $btn = $(this);
+        var itemId = $btn.data('item-id');
+        var ids = $btn.data('ids').toString().split(',').map(Number).filter(Boolean);
+        updateItem(itemId, { contexts: ids });
+        $btn.closest('.wcp-item-ai-panel').slideUp(120);
+    });
+
+    // Dismiss any AI result
+    $(document).on('click', '.wcp-item-ai-dismiss', function() {
+        var $panel = $(this).closest('.wcp-item-ai-panel');
+        $panel.find('.wcp-item-ai-result').hide().empty();
+        $panel.find('.wcp-item-ai-chip').removeClass('active');
     });
 
     // ==========================================================================

@@ -2380,6 +2380,61 @@ a.wcp-tree-label:hover {
     display: block;
 }
 
+/* Hide non-essential actions when toggle is active */
+.wcp-items-section.wcp-hide-actions .wcp-item-view-link,
+.wcp-items-section.wcp-hide-actions .wcp-item-ai-btn,
+.wcp-items-section.wcp-hide-actions .wcp-source-link,
+.wcp-items-section.wcp-hide-actions .wcp-type-select,
+.wcp-items-section.wcp-hide-actions .wcp-priority-select,
+.wcp-items-section.wcp-hide-actions .wcp-status-select,
+.wcp-items-section.wcp-hide-actions .wcp-due-date-input,
+.wcp-items-section.wcp-hide-actions .wcp-subtask-add-btn,
+.wcp-items-section.wcp-hide-actions .wcp-item-context-btn,
+.wcp-items-section.wcp-hide-actions .wcp-item-tag-btn,
+.wcp-items-section.wcp-hide-actions .wcp-item-delete {
+    display: none !important;
+}
+
+/* Description click-to-edit */
+.wcp-item-description {
+    cursor: text;
+}
+.wcp-item-description:hover {
+    background: #fafafa;
+    border-radius: 2px;
+}
+.wcp-item-description-empty::after {
+    content: 'Add description…';
+    color: #ccc;
+    font-style: italic;
+}
+.wcp-item-description-edit {
+    flex-basis: 100%;
+    margin-top: 4px;
+    font-size: 13px;
+    resize: vertical;
+}
+
+/* Heading title inline edit */
+.wcp-heading-title-text {
+    cursor: text;
+}
+.wcp-heading-title-text:hover {
+    background: #f5f5f5;
+    border-radius: 2px;
+    padding: 0 3px;
+    margin: 0 -3px;
+}
+.wcp-heading-title-input {
+    font-size: 20px;
+    font-weight: 600;
+    border: 1px solid #cce0ff;
+    border-radius: 3px;
+    padding: 2px 6px;
+    width: 60%;
+    background: #f8faff;
+}
+
 /* ==========================================================================
    Goal headings
    ========================================================================== */
@@ -2491,6 +2546,88 @@ a.wcp-tree-label:hover {
 .wcp-goal-step2-status.error {
     color: #c0392b;
 }
+
+/* ==========================================================================
+   Selection bar + per-item AI panel
+   ========================================================================== */
+
+#wcp-selection-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    font-size: 13px;
+    color: #555;
+    border-top: 1px dashed #ddd;
+    margin-top: 8px;
+}
+
+#wcp-selection-count { flex: 1; }
+
+.wcp-item-select-cb {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.wcp-item-ai-btn {
+    font-size: 11px;
+    color: #aaa;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.wcp-item-row:hover .wcp-item-ai-btn { opacity: 1; }
+
+.wcp-item-ai-panel {
+    flex-basis: 100%;
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: #f0f4ff;
+    border-radius: 4px;
+    border: 1px solid #d8e4ff;
+    font-size: 12px;
+}
+
+.wcp-item-ai-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 8px;
+}
+
+.wcp-item-ai-chip {
+    padding: 3px 10px;
+    background: #fff;
+    border: 1px solid #c0d0ff;
+    border-radius: 12px;
+    font-size: 11px;
+    color: #3355cc;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.wcp-item-ai-chip:hover { background: #e8eeff; }
+.wcp-item-ai-chip.active { background: #3355cc; color: #fff; border-color: #3355cc; }
+
+.wcp-item-ai-result {
+    margin-top: 4px;
+    padding: 8px;
+    background: #fff;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+.wcp-item-ai-proposal { margin-bottom: 6px; line-height: 1.5; }
+
+.wcp-item-ai-subtask-list {
+    list-style: none;
+    margin: 0 0 8px;
+    padding: 0;
+}
+
+.wcp-item-ai-subtask-list li { padding: 2px 0; }
 
 /* ==========================================================================
    Inline context picker + tag editor on item rows

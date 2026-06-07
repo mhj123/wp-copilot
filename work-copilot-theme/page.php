@@ -86,6 +86,8 @@ get_header();
             <button type="button" class="wcp-sort-priority wcp-edit-link" title="Sort by priority">sort by priority</button>
             <button type="button" class="wcp-sort-due-date wcp-edit-link" title="Sort by due date">sort by due date</button>
             <button type="button" class="wcp-toggle-descriptions wcp-edit-link" title="Toggle descriptions">descriptions</button>
+            <button type="button" class="wcp-toggle-actions wcp-edit-link" title="Toggle item actions">actions</button>
+            <button type="button" id="wcp-select-mode-btn" class="wcp-edit-link" data-page-id="<?php echo esc_attr($page_id); ?>">select</button>
         </div>
 
         <?php
@@ -141,8 +143,8 @@ get_header();
                     <?php if ($is_goal) : ?>
                         <span class="wcp-goal-badge">Goal</span>
                     <?php endif; ?>
-                    <?php echo esc_html($heading->post_title); ?>
-                    <a href="<?php echo get_edit_post_link($heading_id); ?>" class="wcp-edit-link">[edit]</a>
+                    <span class="wcp-heading-title-text" data-heading-id="<?php echo esc_attr($heading_id); ?>"><?php echo esc_html($heading->post_title); ?></span>
+                    <input class="wcp-heading-title-input" type="text" style="display:none;" value="<?php echo esc_attr($heading->post_title); ?>" data-heading-id="<?php echo esc_attr($heading_id); ?>">
                     <button type="button" class="wcp-heading-delete wcp-edit-link" data-heading-id="<?php echo esc_attr($heading_id); ?>">[delete]</button>
                 </h3>
                 <?php if ($is_goal && !empty($heading->post_content)) : ?>
@@ -233,6 +235,13 @@ get_header();
                 <button type="button" id="wcp-btn-cancel-dynamic-listing" class="wcp-edit-link"><?php _e('cancel', 'work-copilot-theme'); ?></button>
                 <span class="wcp-quick-status"></span>
             </form>
+        </div>
+
+        <!-- Selection mode: create goal from selected items -->
+        <div id="wcp-selection-bar" style="display:none;" data-page-id="<?php echo esc_attr($page_id); ?>">
+            <span id="wcp-selection-count">0 items selected</span>
+            <button type="button" id="wcp-goal-from-selected-btn" class="wcp-btn wcp-btn-primary wcp-btn-sm" disabled>Create goal from selected</button>
+            <button type="button" id="wcp-selection-cancel-btn" class="wcp-edit-link">cancel</button>
         </div>
 
         <!-- Goal creation modal -->

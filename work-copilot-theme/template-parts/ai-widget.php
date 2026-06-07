@@ -92,6 +92,7 @@ if (empty($saved_prompts)) {
             <button type="button" class="wcp-ai-action-chip" data-action="generate_items"><?php _e('Generate items', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="generate_headings"><?php _e('Generate headings', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="generate_pages"><?php _e('Create sub-pages', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip" data-action="create_goal"><?php _e('Create goal', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="rewrite_content"><?php _e('Edit page', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="append_content"><?php _e('Append to page', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="fetch_posts"><?php _e('Fetch posts', 'work-copilot'); ?></button>
