@@ -13,6 +13,10 @@ $dl_items = wcp_theme_query_dynamic_listing($listing);
         <span class="wcp-dynamic-listing-badge">list</span>
         <?php echo esc_html($listing['title']); ?>
         <button type="button"
+                class="wcp-sort-priority wcp-edit-link"
+                data-scope="listing"
+                data-listing-id="<?php echo esc_attr($listing['id']); ?>">sort by priority</button>
+        <button type="button"
                 class="wcp-sort-due-date wcp-edit-link"
                 data-scope="listing"
                 data-listing-id="<?php echo esc_attr($listing['id']); ?>">sort by due date</button>

@@ -153,7 +153,7 @@ class WCP_Taxonomies {
         }
 
         // Priorities
-        $priorities = array('high', 'medium', 'low');
+        $priorities = array('critical', 'high', 'medium', 'low');
         foreach ($priorities as $priority) {
             if (!term_exists($priority, 'priority')) {
                 wp_insert_term($priority, 'priority', array(
