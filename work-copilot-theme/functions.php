@@ -207,18 +207,12 @@ function wcp_theme_get_page_items($page_id, $filters = array()) {
 
 // Enqueue AI widget assets
 function wcp_theme_enqueue_ai_widget() {
-    // Only enqueue on frontend pages and if user is logged in
     if (is_admin() || !is_user_logged_in() || !get_option('wcp_ai_enabled', false)) {
         return;
     }
 
-    // Only on pages
-    if (!is_page()) {
-        return;
-    }
-
     // Version for cache busting - update with each change
-    $widget_version = '1.9.1';
+    $widget_version = '2.0.0';
 
     // Enqueue widget CSS
     wp_enqueue_style(
@@ -250,13 +244,7 @@ add_action('wp_enqueue_scripts', 'wcp_theme_enqueue_ai_widget');
 
 // Include AI widget in footer
 function wcp_theme_ai_widget_footer() {
-    // Only show on frontend pages if user is logged in
     if (is_admin() || !is_user_logged_in() || !get_option('wcp_ai_enabled', false)) {
-        return;
-    }
-
-    // Only on pages
-    if (!is_page()) {
         return;
     }
 
