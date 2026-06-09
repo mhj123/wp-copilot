@@ -2205,7 +2205,6 @@ class WCP_REST_API {
                     'success'     => true,
                     'action'      => 'action_plan',
                     'steps'       => $steps,
-                    'context_ids' => wp_get_post_terms($item_id, 'wcp_context', array('fields' => 'ids')),
                 ));
 
             default:
