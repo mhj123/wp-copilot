@@ -923,6 +923,24 @@ jQuery(document).ready(function($) {
                         + '<button class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-item-ai-add-subtasks" data-item-id="' + itemId + '">Add checked</button>'
                         + ' <button class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
                     );
+                } else if (action === 'action_plan') {
+                    var html = '<ol class="wcp-action-plan-list">';
+                    r.steps.forEach(function(step, i) {
+                        html += '<li class="wcp-action-plan-step" data-index="' + i + '">'
+                            + '<div class="wcp-ap-title-row">'
+                            + '<input class="wcp-ap-title" type="text" value="' + $('<span>').text(step.title).html() + '">'
+                            + '<button type="button" class="wcp-ap-remove wcp-edit-link">×</button>'
+                            + '</div>'
+                            + '<textarea class="wcp-ap-desc">' + $('<span>').text(step.description || '').html() + '</textarea>'
+                            + '</li>';
+                    });
+                    html += '</ol>'
+                        + '<div class="wcp-ap-actions">'
+                        + '<button type="button" class="wcp-ap-add-step wcp-edit-link">+ add step</button>'
+                        + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-ap-accept" data-item-id="' + itemId + '" data-contexts="' + (r.context_ids || []).join(',') + '">Create tasks</button>'
+                        + '<button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
+                        + '</div>';
+                    $result.html(html);
                 } else if (action === 'suggest_contexts') {
                     var names = r.context_names.map(function(n) { return '<li>' + $('<span>').text(n).html() + '</li>'; }).join('');
                     $result.html(
@@ -934,6 +952,67 @@ jQuery(document).ready(function($) {
                 }
             },
             error: function() { $result.html('<em style="color:#c0392b;">Connection error</em>'); }
+        });
+    });
+
+    // Action plan — add a blank step
+    $(document).on('click', '.wcp-ap-add-step', function() {
+        var $list = $(this).closest('.wcp-item-ai-result').find('.wcp-action-plan-list');
+        var idx   = $list.find('.wcp-action-plan-step').length;
+        $list.append(
+            '<li class="wcp-action-plan-step" data-index="' + idx + '">'
+            + '<div class="wcp-ap-title-row">'
+            + '<input class="wcp-ap-title" type="text" placeholder="Step title…">'
+            + '<button type="button" class="wcp-ap-remove wcp-edit-link">×</button>'
+            + '</div>'
+            + '<textarea class="wcp-ap-desc" placeholder="Brief detail or rationale…"></textarea>'
+            + '</li>'
+        );
+        $list.find('.wcp-action-plan-step:last .wcp-ap-title').focus();
+    });
+
+    // Action plan — remove a step
+    $(document).on('click', '.wcp-ap-remove', function() {
+        $(this).closest('.wcp-action-plan-step').remove();
+    });
+
+    // Action plan — accept: create each step as a task item
+    $(document).on('click', '.wcp-ap-accept', function() {
+        var $btn      = $(this);
+        var itemId    = $btn.data('item-id');
+        var contextIds = ($btn.data('contexts') || '').toString().split(',').map(Number).filter(Boolean);
+        var $steps    = $btn.closest('.wcp-item-ai-result').find('.wcp-action-plan-step');
+        var tasks     = [];
+        $steps.each(function() {
+            var title = $(this).find('.wcp-ap-title').val().trim();
+            var desc  = $(this).find('.wcp-ap-desc').val().trim();
+            if (title) tasks.push({ title: title, content: desc });
+        });
+        if (!tasks.length) return;
+
+        $btn.prop('disabled', true).text('Creating…');
+
+        var done = 0;
+        tasks.forEach(function(task) {
+            $.ajax({
+                url: wcpThemeData.restUrl + '/items/create',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    title: task.title,
+                    content: task.content,
+                    contexts: contextIds,
+                    item_type: 'task',
+                }),
+                beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+                success: function() {
+                    done++;
+                    if (done === tasks.length) {
+                        $btn.closest('.wcp-item-ai-panel').slideUp(120);
+                        location.reload();
+                    }
+                }
+            });
         });
     });
 

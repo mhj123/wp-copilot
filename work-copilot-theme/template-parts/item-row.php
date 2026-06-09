@@ -123,6 +123,7 @@ $_context_ids       = is_wp_error($_context_ids) ? array() : $_context_ids;
         <!-- Per-item AI panel -->
         <div class="wcp-item-ai-panel" data-item-id="<?php echo esc_attr($item->ID); ?>" style="display:none;">
             <div class="wcp-item-ai-chips">
+                <button type="button" class="wcp-item-ai-chip" data-action="action_plan">Action plan</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="improve_phrasing">Improve phrasing</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="suggest_subtasks">Add subtasks</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="suggest_contexts">Auto-associate</button>
