@@ -2181,11 +2181,31 @@ class WCP_REST_API {
                 ));
 
             case 'to_goal':
-                // Pre-fill goal modal description from this item; actual creation handled by existing JS
                 return rest_ensure_response(array(
                     'success'     => true,
                     'action'      => 'to_goal',
                     'description' => $item->post_title . ( $item->post_content ? "\n" . wp_strip_all_tags($item->post_content) : '' ),
+                ));
+
+            case 'action_plan':
+                $sys = "You are helping the user break down a task into a concrete, ordered action plan. "
+                     . "Generate 4–7 numbered steps to achieve the item. "
+                     . "Each step should have:\n"
+                     . "- A short, actionable title (verb-led, max 10 words)\n"
+                     . "- A brief rationale or detail (1–2 sentences: what to do and why it matters)\n\n"
+                     . "Return ONLY a valid JSON array. No text before or after. Format:\n"
+                     . '[{"title":"Step title","description":"Brief rationale or detail."}]';
+                $resp = $ai_client->request_with_conversation( $sys, $item_text, array(), 1024, 60 );
+                if ( is_wp_error($resp) ) return $resp;
+                $steps = json_decode( $resp['content'], true );
+                if ( ! is_array($steps) ) {
+                    return new WP_Error('parse_error', 'Could not parse action plan', array('status' => 500));
+                }
+                return rest_ensure_response(array(
+                    'success'     => true,
+                    'action'      => 'action_plan',
+                    'steps'       => $steps,
+                    'context_ids' => wp_get_post_terms($item_id, 'wcp_context', array('fields' => 'ids')),
                 ));
 
             default:
