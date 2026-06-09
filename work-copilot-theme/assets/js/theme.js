@@ -937,7 +937,7 @@ jQuery(document).ready(function($) {
                     html += '</ol>'
                         + '<div class="wcp-ap-actions">'
                         + '<button type="button" class="wcp-ap-add-step wcp-edit-link">+ add step</button>'
-                        + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-ap-accept" data-item-id="' + itemId + '" data-contexts="' + (r.context_ids || []).join(',') + '">Create tasks</button>'
+                        + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-ap-accept" data-item-id="' + itemId + '">Add as subtasks</button>'
                         + '<button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
                         + '</div>';
                     $result.html(html);
@@ -976,44 +976,38 @@ jQuery(document).ready(function($) {
         $(this).closest('.wcp-action-plan-step').remove();
     });
 
-    // Action plan — accept: create each step as a task item
+    // Action plan — accept: add each step as a subtask
     $(document).on('click', '.wcp-ap-accept', function() {
-        var $btn      = $(this);
-        var itemId    = $btn.data('item-id');
-        var contextIds = ($btn.data('contexts') || '').toString().split(',').map(Number).filter(Boolean);
-        var $steps    = $btn.closest('.wcp-item-ai-result').find('.wcp-action-plan-step');
-        var tasks     = [];
+        var $btn   = $(this);
+        var itemId = $btn.data('item-id');
+        var $steps = $btn.closest('.wcp-item-ai-result').find('.wcp-action-plan-step');
+        var steps  = [];
         $steps.each(function() {
             var title = $(this).find('.wcp-ap-title').val().trim();
-            var desc  = $(this).find('.wcp-ap-desc').val().trim();
-            if (title) tasks.push({ title: title, content: desc });
+            if (title) steps.push(title);
         });
-        if (!tasks.length) return;
+        if (!steps.length) return;
 
-        $btn.prop('disabled', true).text('Creating…');
+        $btn.prop('disabled', true).text('Adding…');
 
-        var done = 0;
-        tasks.forEach(function(task) {
+        // Add subtasks sequentially to preserve order
+        function addNext(i) {
+            if (i >= steps.length) {
+                $btn.closest('.wcp-item-ai-panel').slideUp(120);
+                location.reload();
+                return;
+            }
             $.ajax({
-                url: wcpThemeData.restUrl + '/items/create',
+                url: wcpThemeData.restUrl + '/items/' + itemId + '/subtasks',
                 method: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify({
-                    title: task.title,
-                    content: task.content,
-                    contexts: contextIds,
-                    item_type: 'task',
-                }),
+                data: JSON.stringify({ title: steps[i] }),
                 beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
-                success: function() {
-                    done++;
-                    if (done === tasks.length) {
-                        $btn.closest('.wcp-item-ai-panel').slideUp(120);
-                        location.reload();
-                    }
-                }
+                success: function() { addNext(i + 1); },
+                error: function() { addNext(i + 1); }
             });
-        });
+        }
+        addNext(0);
     });
 
     // Accept improved phrasing
