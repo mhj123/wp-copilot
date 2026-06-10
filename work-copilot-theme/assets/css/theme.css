@@ -572,6 +572,18 @@ textarea.wcp-form-control {
     text-decoration: none;
 }
 
+/* Delegation status pills */
+.wcp-pill-delegation {
+    background: #f0f0f0;
+    color: #555;
+}
+
+.wcp-delegation-status-pending     { background: #fef3e0; color: #b7791f; }
+.wcp-delegation-status-in_progress { background: #e8f0fe; color: #3c4db5; }
+.wcp-delegation-status-needs_input { background: #fef3e0; color: #b7791f; font-weight: 700; }
+.wcp-delegation-status-completed   { background: #e6f4ea; color: #1e7e34; }
+.wcp-delegation-status-failed      { background: #fdecea; color: #c0392b; }
+
 a.wcp-pill-tag:hover {
     background: #e0e0e0;
     color: #222;
@@ -2620,6 +2632,81 @@ a.wcp-tree-label:hover {
 }
 
 .wcp-item-ai-proposal { margin-bottom: 6px; line-height: 1.5; }
+
+/* Delegation form (inside the AI result area) */
+.wcp-delegation-form .wcp-delegate-instruction {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 12px;
+    padding: 6px;
+    border: 1px solid #c0d0ff;
+    border-radius: 3px;
+    margin-bottom: 6px;
+    resize: vertical;
+}
+
+.wcp-delegation-form .wcp-delegate-files {
+    font-size: 11px;
+    display: block;
+}
+
+/* Delegation review block: report, artifacts, clarification Q&A */
+.wcp-delegation-report {
+    flex-basis: 100%;
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: #fafafa;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.wcp-delegation-report-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.wcp-delegation-status-message { color: #888; font-size: 11px; }
+
+.wcp-delegation-question {
+    padding: 8px;
+    margin: 6px 0;
+    background: #fef3e0;
+    border: 1px solid #f0d9a8;
+    border-radius: 3px;
+}
+
+.wcp-delegation-question-text { margin: 0 0 6px; }
+
+.wcp-delegation-answer-input {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 12px;
+    padding: 5px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    margin-bottom: 6px;
+    resize: vertical;
+}
+
+.wcp-delegation-qa { margin: 6px 0; color: #555; }
+.wcp-delegation-qa p { margin: 2px 0; }
+
+.wcp-delegation-report-text {
+    margin: 6px 0;
+    white-space: normal;
+}
+
+.wcp-delegation-artifacts {
+    margin: 6px 0 0;
+    padding-left: 16px;
+}
+
+.wcp-delegation-artifacts a { color: #3355cc; text-decoration: none; }
+.wcp-delegation-artifacts a:hover { text-decoration: underline; }
 
 .wcp-item-ai-subtask-list {
     list-style: none;
