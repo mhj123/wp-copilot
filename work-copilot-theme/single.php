@@ -57,6 +57,8 @@ get_header();
                 <?php the_content(); ?>
             </div>
 
+            <?php if (function_exists('wcpg_connections_panel')) wcpg_connections_panel(get_the_ID()); ?>
+
             <?php if (!empty($tags)) : ?>
             <footer class="wcp-item-footer">
                 <div class="wcp-item-tags">
