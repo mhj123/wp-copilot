@@ -42,6 +42,8 @@ get_header();
     </div>
     <?php endif; ?>
 
+    <?php if (function_exists('wcpg_connections_panel')) wcpg_connections_panel(get_the_ID()); ?>
+
     <?php
     endwhile;
 
