@@ -15,6 +15,15 @@ $_task_status_slug  = !empty($task_statuses) ? $task_statuses[0] : '';
 $_due_date          = get_post_meta($item->ID, '_wcp_due_date', true) ?: '';
 $_context_ids       = wp_get_post_terms($item->ID, 'wcp_context', array('fields' => 'ids'));
 $_context_ids       = is_wp_error($_context_ids) ? array() : $_context_ids;
+$_delegation_active = class_exists('WCPD_Delegation_Manager');
+$_delegations       = $_delegation_active ? WCPD_Delegation_Manager::instance()->get_delegations_for_item($item->ID) : array();
+$_delegation_labels = array(
+    'pending'     => 'delegated',
+    'in_progress' => 'in progress',
+    'needs_input' => 'question',
+    'completed'   => 'completed',
+    'failed'      => 'failed',
+);
 ?>
 <div class="wcp-item-row<?php echo $is_done ? ' wcp-task-done' : ''; ?>"
      data-item-id="<?php echo esc_attr($item->ID); ?>"
@@ -57,6 +66,16 @@ $_context_ids       = is_wp_error($_context_ids) ? array() : $_context_ids;
                 <a href="<?php echo esc_url(home_url('/?tag=' . urlencode(sanitize_title($tag)))); ?>"
                    class="wcp-pill wcp-pill-tag"><?php echo esc_html($tag); ?></a>
             <?php endforeach; ?>
+        </span>
+    <?php endif; ?>
+
+    <?php if (!empty($_delegations)) :
+        $_latest_dlg   = end($_delegations);
+        $_dlg_status   = $_latest_dlg['status'] ?? 'pending';
+        $_dlg_label    = $_delegation_labels[$_dlg_status] ?? $_dlg_status;
+    ?>
+        <span class="wcp-item-meta-pills">
+            <span class="wcp-pill wcp-pill-delegation wcp-delegation-status-<?php echo esc_attr($_dlg_status); ?>">&#8644; <?php echo esc_html($_dlg_label); ?></span>
         </span>
     <?php endif; ?>
 
@@ -128,9 +147,60 @@ $_context_ids       = is_wp_error($_context_ids) ? array() : $_context_ids;
                 <button type="button" class="wcp-item-ai-chip" data-action="suggest_subtasks">Add subtasks</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="suggest_contexts">Auto-associate</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="to_goal">Convert to goal</button>
+                <?php if ($_delegation_active && get_option('wcpd_enabled') === '1') : ?>
+                <button type="button" class="wcp-item-ai-chip" data-action="delegate">Delegate</button>
+                <?php endif; ?>
             </div>
             <div class="wcp-item-ai-result" style="display:none;"></div>
         </div>
+
+        <?php // Delegation review: report, artifacts, clarification Q&A — read-only except answer forms ?>
+        <?php foreach ($_delegations as $_dlg) :
+            $_has_detail = !empty($_dlg['report']) || !empty($_dlg['artifact_ids']) || !empty($_dlg['clarifications']);
+            if (!$_has_detail) continue;
+            $_dlg_status = $_dlg['status'] ?? 'pending';
+        ?>
+        <div class="wcp-delegation-report" data-delegation-id="<?php echo esc_attr($_dlg['id']); ?>">
+            <div class="wcp-delegation-report-header">
+                <span class="wcp-pill wcp-pill-delegation wcp-delegation-status-<?php echo esc_attr($_dlg_status); ?>">&#8644; <?php echo esc_html($_delegation_labels[$_dlg_status] ?? $_dlg_status); ?></span>
+                <?php if (!empty($_dlg['status_message'])) : ?>
+                    <span class="wcp-delegation-status-message"><?php echo esc_html($_dlg['status_message']); ?></span>
+                <?php endif; ?>
+            </div>
+
+            <?php foreach ((array) ($_dlg['clarifications'] ?? array()) as $_q) : ?>
+                <?php if (empty($_q['answer'])) : ?>
+                <div class="wcp-delegation-question">
+                    <p class="wcp-delegation-question-text"><strong>Agent asks:</strong> <?php echo esc_html($_q['question']); ?></p>
+                    <textarea class="wcp-delegation-answer-input" rows="2" placeholder="Your answer…"></textarea>
+                    <button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-delegation-answer-send"
+                            data-delegation-id="<?php echo esc_attr($_dlg['id']); ?>"
+                            data-question-id="<?php echo esc_attr($_q['id']); ?>">Send answer</button>
+                </div>
+                <?php else : ?>
+                <div class="wcp-delegation-qa">
+                    <p><strong>Q:</strong> <?php echo esc_html($_q['question']); ?></p>
+                    <p><strong>A:</strong> <?php echo esc_html($_q['answer']); ?></p>
+                </div>
+                <?php endif; ?>
+            <?php endforeach; ?>
+
+            <?php if (!empty($_dlg['report'])) : ?>
+                <div class="wcp-delegation-report-text"><?php echo nl2br(esc_html($_dlg['report'])); ?></div>
+            <?php endif; ?>
+
+            <?php if (!empty($_dlg['artifact_ids'])) : ?>
+                <ul class="wcp-delegation-artifacts">
+                    <?php foreach ((array) $_dlg['artifact_ids'] as $_aid) :
+                        $_aurl = wp_get_attachment_url($_aid);
+                        if (!$_aurl) continue;
+                    ?>
+                    <li><a href="<?php echo esc_url($_aurl); ?>" target="_blank" rel="noopener">&#128206; <?php echo esc_html(get_the_title($_aid) ?: basename($_aurl)); ?></a></li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php endif; ?>
+        </div>
+        <?php endforeach; ?>
 
         <!-- Context picker -->
         <div class="wcp-item-context-panel" data-item-id="<?php echo esc_attr($item->ID); ?>" style="display:none;">

@@ -891,6 +891,20 @@ jQuery(document).ready(function($) {
             return;
         }
 
+        if (action === 'delegate') {
+            $result.show().html(
+                '<div class="wcp-delegation-form">'
+                + '<textarea class="wcp-delegate-instruction" rows="3" placeholder="Instruction for the Hermes agent…"></textarea>'
+                + '<input type="file" class="wcp-delegate-files" multiple>'
+                + '<div style="margin-top:6px;">'
+                + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-delegate-send" data-item-id="' + itemId + '">Delegate</button>'
+                + ' <button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Cancel</button>'
+                + '</div></div>'
+            );
+            $result.find('.wcp-delegate-instruction').focus();
+            return;
+        }
+
         $result.show().html('<em style="color:#aaa;font-size:12px;">Thinking…</em>');
 
         $.ajax({
@@ -1057,6 +1071,84 @@ jQuery(document).ready(function($) {
         var ids = $btn.data('ids').toString().split(',').map(Number).filter(Boolean);
         updateItem(itemId, { contexts: ids });
         $btn.closest('.wcp-item-ai-panel').slideUp(120);
+    });
+
+    // Delegate to Hermes agent: submit instruction + files as multipart
+    $(document).on('click', '.wcp-delegate-send', function() {
+        var $btn    = $(this);
+        var itemId  = $btn.data('item-id');
+        var $result = $btn.closest('.wcp-item-ai-result');
+        var instruction = $result.find('.wcp-delegate-instruction').val().trim();
+        var fileInput   = $result.find('.wcp-delegate-files')[0];
+
+        if (!instruction) {
+            $result.find('.wcp-delegate-instruction').focus();
+            return;
+        }
+
+        var fd = new FormData();
+        fd.append('instruction', instruction);
+        if (fileInput && fileInput.files) {
+            for (var i = 0; i < fileInput.files.length; i++) {
+                fd.append('files[]', fileInput.files[i]);
+            }
+        }
+
+        $btn.prop('disabled', true).text('Delegating…');
+
+        $.ajax({
+            url: wcpThemeData.delegationRestUrl + '/items/' + itemId + '/delegate',
+            method: 'POST',
+            data: fd,
+            processData: false,
+            contentType: false,
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(r) {
+                if (!r.success) {
+                    $result.html('<em style="color:#c0392b;">' + $('<span>').text(r.message || 'Error').html() + '</em>');
+                    return;
+                }
+                var html = '<p style="font-size:12px;margin:0;">Delegated <strong>(pending)</strong> — ID ' + $('<span>').text(r.delegation.id).html() + '</p>';
+                if (!r.telegram_sent) {
+                    html += '<p style="font-size:12px;color:#b7791f;margin:4px 0 0;">Created, but Telegram notification failed: '
+                        + $('<span>').text(r.telegram_error || 'unknown error').html() + '</p>';
+                }
+                $result.html(html);
+                setTimeout(function() { location.reload(); }, 1500);
+            },
+            error: function(xhr) {
+                var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Connection error';
+                $result.html('<em style="color:#c0392b;">' + $('<span>').text(msg).html() + '</em>');
+            }
+        });
+    });
+
+    // Answer an agent's clarification question
+    $(document).on('click', '.wcp-delegation-answer-send', function() {
+        var $btn         = $(this);
+        var delegationId = $btn.data('delegation-id');
+        var questionId   = $btn.data('question-id');
+        var $question    = $btn.closest('.wcp-delegation-question');
+        var answer       = $question.find('.wcp-delegation-answer-input').val().trim();
+
+        if (!answer) {
+            $question.find('.wcp-delegation-answer-input').focus();
+            return;
+        }
+
+        $btn.prop('disabled', true).text('Sending…');
+
+        $.ajax({
+            url: wcpThemeData.delegationRestUrl + '/delegations/' + delegationId + '/answer',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ question_id: questionId, answer: answer }),
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function() { location.reload(); },
+            error: function() {
+                $btn.prop('disabled', false).text('Send answer');
+            }
+        });
     });
 
     // Dismiss any AI result
