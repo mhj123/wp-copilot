@@ -1,0 +1,138 @@
+.wcpg-panel {
+    background: #fff;
+    border: 1px solid #e2e4e7;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 20px 0;
+}
+
+.wcpg-edge-list {
+    list-style: none;
+    margin: 10px 0 0;
+    padding: 0;
+}
+
+.wcpg-edge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+.wcpg-predicate {
+    color: #646970;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.wcpg-chip {
+    display: inline-block;
+    background: #f0f4f8;
+    border-radius: 12px;
+    padding: 2px 10px;
+    font-size: 13px;
+    text-decoration: none;
+}
+
+.wcpg-chip:hover {
+    background: #e3ecf5;
+}
+
+.wcpg-literal {
+    font-size: 13px;
+    font-style: italic;
+}
+
+.wcpg-delete {
+    border: none;
+    background: none;
+    color: #b0b5ba;
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    padding: 0 4px;
+}
+
+.wcpg-delete:hover {
+    color: #d63638;
+}
+
+.wcpg-empty {
+    color: #8c8f94;
+    font-size: 13px;
+    font-style: italic;
+}
+
+.wcpg-add-form {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #f0f0f1;
+    position: relative;
+}
+
+.wcpg-add-form input[type="text"] {
+    font-size: 13px;
+    padding: 4px 8px;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+}
+
+.wcpg-object-entity {
+    position: relative;
+}
+
+.wcpg-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 20;
+    min-width: 220px;
+    margin: 2px 0 0;
+    padding: 0;
+    list-style: none;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.wcpg-suggestions li {
+    padding: 6px 10px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.wcpg-suggestions li:hover {
+    background: #f0f4f8;
+}
+
+.wcpg-literal-toggle {
+    font-size: 12px;
+    color: #646970;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.wcpg-save {
+    font-size: 13px;
+    padding: 4px 12px;
+    border: 1px solid #2271b1;
+    border-radius: 4px;
+    background: #2271b1;
+    color: #fff;
+    cursor: pointer;
+}
+
+.wcpg-save:hover {
+    background: #135e96;
+}
+
+.wcpg-form-error {
+    color: #d63638;
+    font-size: 12px;
+}
