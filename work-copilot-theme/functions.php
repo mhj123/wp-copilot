@@ -515,3 +515,27 @@ function wcp_theme_query_dynamic_listing($listing) {
         'tax_query'      => count($tax_query) > 1 ? $tax_query : array_slice($tax_query, 1),
     ));
 }
+
+/**
+ * Require authentication for ALL REST API requests.
+ *
+ * This site sits behind a server-level Basic Auth gate that must exempt
+ * /wp-json so Application Password credentials reach WordPress. This filter
+ * puts an equivalent lock back at the WP layer: logged-in sessions (theme
+ * nonce requests) and Application Passwords (Hermes) pass; anonymous
+ * requests get a 401 instead of content. If credentials were supplied but
+ * failed, $result already holds that error and is passed through untouched.
+ */
+add_filter('rest_authentication_errors', function ($result) {
+    if (!empty($result)) {
+        return $result;
+    }
+    if (!is_user_logged_in()) {
+        return new WP_Error(
+            'rest_authentication_required',
+            __('Authentication required.', 'work-copilot-theme'),
+            array('status' => 401)
+        );
+    }
+    return $result;
+});
