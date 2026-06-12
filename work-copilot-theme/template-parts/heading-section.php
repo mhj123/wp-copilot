@@ -137,5 +137,7 @@ $items = wcp_theme_get_heading_items($heading_id);
                 <?php endforeach; ?>
             <?php endif; ?>
         </div>
+
+        <?php if (function_exists('wcpg_render_tables')) wcpg_render_tables($page_id, $heading_id); ?>
     </div>
 </div>
