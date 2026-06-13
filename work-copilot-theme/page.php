@@ -295,6 +295,8 @@ get_header();
 
     </section>
 
+    <?php if (function_exists('wcpg_render_tables')) wcpg_render_tables($page_id, 0); ?>
+
     <!-- Page Notes (bottom, collapsible) -->
     <?php $page_notes = get_post_meta($page_id, '_wcp_page_notes', true); ?>
     <div class="wcp-page-notes-wrap" data-page-id="<?php echo esc_attr($page_id); ?>">
