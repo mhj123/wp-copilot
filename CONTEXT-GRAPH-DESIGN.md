@@ -1,6 +1,21 @@
 # Context Graph — Design Sketch
 
-Status: design only, not yet implemented.
+Status: implemented in `wcp-graph` (0.2.0) as two layers:
+
+1. **Derived structural edges** — pages, headings and items already form a
+   containment hierarchy in native WP state (`post_parent`,
+   `_wcp_parent_id` meta, `wcp_context` term assignments).
+   `WCPG_Structure` reads that as `contains`/`within` edges at query time;
+   they are never stored, so they can never drift from the structure.
+   They appear read-only (grouped under "structure") in the Connections
+   panel and flow through the same REST routes as stored edges.
+2. **Semantic tables** — added to a page or heading section via "+ table".
+   Rows are the items that scope contains (derived from layer 1, so new
+   items become new rows automatically); columns are predicates; each
+   cell's values are stored edges. The table config (column term IDs) is
+   page meta — deleting a table or column removes only the view, never
+   the edges. In the cell editor, picking a suggestion connects an
+   entity; pressing Enter without picking stores a literal.
 
 ## Summary
 
