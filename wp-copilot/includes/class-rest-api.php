@@ -526,6 +526,8 @@ class WCP_REST_API {
             wp_set_post_terms($post_id, $item_type, 'item_type');
             if ($item_type === 'task') {
                 wp_set_post_terms($post_id, array('to-do'), 'task_status');
+            } elseif ($item_type === 'spec') {
+                wp_set_post_terms($post_id, array('draft'), 'spec_status');
             }
         }
 
@@ -1865,6 +1867,12 @@ class WCP_REST_API {
         if ($task_status !== null) {
             $terms = $task_status ? array(sanitize_key($task_status)) : array();
             wp_set_post_terms($item_id, $terms, 'task_status');
+        }
+
+        $spec_status = $request->get_param('spec_status');
+        if ($spec_status !== null) {
+            $terms = $spec_status ? array(sanitize_key($spec_status)) : array();
+            wp_set_post_terms($item_id, $terms, 'spec_status');
         }
 
         $contexts = $request->get_param('contexts');

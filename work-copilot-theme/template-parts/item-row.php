@@ -12,6 +12,10 @@ $is_done = !empty($task_statuses) && $task_statuses[0] === 'done';
 <?php
 $_item_type_slug    = !empty($item_types) ? $item_types[0] : '';
 $_task_status_slug  = !empty($task_statuses) ? $task_statuses[0] : '';
+$_is_spec           = $_item_type_slug === 'spec';
+$_spec_statuses     = wp_get_post_terms($item->ID, 'spec_status', array('fields' => 'slugs'));
+$_spec_statuses     = is_wp_error($_spec_statuses) ? array() : $_spec_statuses;
+$_spec_status_slug  = !empty($_spec_statuses) ? $_spec_statuses[0] : '';
 $_due_date          = get_post_meta($item->ID, '_wcp_due_date', true) ?: '';
 $_context_ids       = wp_get_post_terms($item->ID, 'wcp_context', array('fields' => 'ids'));
 $_context_ids       = is_wp_error($_context_ids) ? array() : $_context_ids;
@@ -29,6 +33,7 @@ $_delegation_labels = array(
      data-item-id="<?php echo esc_attr($item->ID); ?>"
      data-item-type="<?php echo esc_attr($_item_type_slug); ?>"
      data-task-status="<?php echo esc_attr($_task_status_slug); ?>"
+     data-spec-status="<?php echo esc_attr($_spec_status_slug); ?>"
      data-due-date="<?php echo esc_attr($_due_date); ?>"
      data-priority="<?php echo esc_attr(!empty($priorities) ? $priorities[0] : ''); ?>"
      data-context-ids="<?php echo esc_attr(implode(',', $_context_ids)); ?>"
@@ -81,7 +86,7 @@ $_delegation_labels = array(
 
     <select class="wcp-inline-select wcp-type-select" data-item-id="<?php echo esc_attr($item->ID); ?>">
         <option value=""><?php _e('type', 'work-copilot-theme'); ?></option>
-        <?php foreach (array('task', 'info', 'learning') as $type) : ?>
+        <?php foreach (array('task', 'info', 'learning', 'spec') as $type) : ?>
             <option value="<?php echo $type; ?>" <?php selected(!empty($item_types) && $item_types[0] === $type); ?>><?php echo $type; ?></option>
         <?php endforeach; ?>
     </select>
@@ -100,6 +105,15 @@ $_delegation_labels = array(
         <option value=""><?php _e('status', 'work-copilot-theme'); ?></option>
         <?php foreach (array('to-do' => 'to do', 'in-progress' => 'in progress', 'done' => 'done') as $slug => $label) : ?>
             <option value="<?php echo $slug; ?>" <?php selected($current_status, $slug); ?>><?php echo $label; ?></option>
+        <?php endforeach; ?>
+    </select>
+
+    <select class="wcp-inline-select wcp-spec-status-select"
+            data-item-id="<?php echo esc_attr($item->ID); ?>"
+            style="<?php echo $_is_spec ? '' : 'display:none;'; ?>">
+        <option value=""><?php _e('status', 'work-copilot-theme'); ?></option>
+        <?php foreach (array('draft' => 'draft', 'review' => 'review', 'final' => 'final') as $slug => $label) : ?>
+            <option value="<?php echo $slug; ?>" <?php selected($_spec_status_slug, $slug); ?>><?php echo $label; ?></option>
         <?php endforeach; ?>
     </select>
 

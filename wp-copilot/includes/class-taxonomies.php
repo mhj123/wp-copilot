@@ -22,6 +22,7 @@ class WCP_Taxonomies {
         add_action('init', array($this, 'register_taxonomies'));
         add_action('init', array($this, 'populate_default_terms'), 20);
         add_action('init', array($this, 'populate_task_status_terms'), 21);
+        add_action('init', array($this, 'populate_spec_terms'), 22);
     }
 
     public function register_taxonomies() {
@@ -112,6 +113,22 @@ class WCP_Taxonomies {
             'public'           => true,
         ));
 
+        // Spec status taxonomy (visible only when item_type = spec)
+        register_taxonomy('spec_status', array('post'), array(
+            'labels' => array(
+                'name'          => __('Spec Status', 'work-copilot'),
+                'singular_name' => __('Spec Status', 'work-copilot'),
+                'menu_name'     => __('Spec Status', 'work-copilot'),
+            ),
+            'hierarchical'     => false,
+            'show_ui'          => true,
+            'show_admin_column' => true,
+            'query_var'        => true,
+            'rewrite'          => array('slug' => 'spec-status'),
+            'show_in_rest'     => true,
+            'public'           => true,
+        ));
+
         // Pinned taxonomy
         register_taxonomy('pinned', array('post'), array(
             'labels' => array(
@@ -143,7 +160,7 @@ class WCP_Taxonomies {
         }
 
         // Item types
-        $item_types = array('task', 'info', 'learning');
+        $item_types = array('task', 'info', 'learning', 'spec');
         foreach ($item_types as $type) {
             if (!term_exists($type, 'item_type')) {
                 wp_insert_term($type, 'item_type', array(
@@ -188,5 +205,28 @@ class WCP_Taxonomies {
         }
 
         update_option('wcp_task_status_terms_created', true);
+    }
+
+    /**
+     * Populate spec-related terms: the 'spec' item type (for existing installs
+     * where populate_default_terms has already run) and the spec_status terms.
+     */
+    public function populate_spec_terms() {
+        if (get_option('wcp_spec_terms_created')) {
+            return;
+        }
+
+        if (!term_exists('spec', 'item_type')) {
+            wp_insert_term('spec', 'item_type', array('slug' => 'spec'));
+        }
+
+        $spec_statuses = array('draft' => 'Draft', 'review' => 'Review', 'final' => 'Final');
+        foreach ($spec_statuses as $slug => $label) {
+            if (!term_exists($slug, 'spec_status')) {
+                wp_insert_term($label, 'spec_status', array('slug' => $slug));
+            }
+        }
+
+        update_option('wcp_spec_terms_created', true);
     }
 }

@@ -84,6 +84,8 @@ get_header();
                 <button type="button" class="wcp-filter-btn active" data-filter="all">All items</button>
                 <button type="button" class="wcp-filter-btn" data-filter="tasks">All tasks</button>
                 <button type="button" class="wcp-filter-btn" data-filter="open">Open tasks</button>
+                <button type="button" class="wcp-filter-btn" data-filter="info">All info</button>
+                <button type="button" class="wcp-filter-btn" data-filter="spec">All specs</button>
             </div>
             <button type="button" class="wcp-sort-priority wcp-edit-link" title="Sort by priority">sort by priority</button>
             <button type="button" class="wcp-sort-due-date wcp-edit-link" title="Sort by due date">sort by due date</button>
@@ -217,6 +219,7 @@ get_header();
                     <option value="task"><?php _e('Task', 'work-copilot-theme'); ?></option>
                     <option value="info"><?php _e('Info', 'work-copilot-theme'); ?></option>
                     <option value="learning"><?php _e('Learning', 'work-copilot-theme'); ?></option>
+                    <option value="spec"><?php _e('Spec', 'work-copilot-theme'); ?></option>
                 </select>
                 <select name="task_status" class="wcp-inline-select wcp-dl-status-select">
                     <option value=""><?php _e('Any status', 'work-copilot-theme'); ?></option>

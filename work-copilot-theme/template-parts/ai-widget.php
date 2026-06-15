@@ -97,6 +97,9 @@ if (empty($saved_prompts)) {
             <button type="button" class="wcp-ai-action-chip" data-action="append_content"><?php _e('Append to page', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="fetch_posts"><?php _e('Fetch posts', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="fetch_structure"><?php _e('Fetch structure', 'work-copilot'); ?></button>
+            <?php if (class_exists('WCPD_Delegation_Manager') && get_option('wcpd_enabled') === '1') : ?>
+            <button type="button" class="wcp-ai-action-chip" data-action="agent_review"><?php _e('Agent review', 'work-copilot'); ?></button>
+            <?php endif; ?>
         </div>
 
 
@@ -195,6 +198,8 @@ if (empty($saved_prompts)) {
         pageId: <?php echo absint($page_id); ?>,
         pageName: <?php echo wp_json_encode(get_the_title($page_id)); ?>,
         restUrl: <?php echo wp_json_encode(rest_url('work-copilot/v1')); ?>,
+        delegationRestUrl: <?php echo wp_json_encode(rest_url('wcp-delegation/v1')); ?>,
+        delegationEnabled: <?php echo (class_exists('WCPD_Delegation_Manager') && get_option('wcpd_enabled') === '1') ? 'true' : 'false'; ?>,
         nonce: <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>
     };
 </script>

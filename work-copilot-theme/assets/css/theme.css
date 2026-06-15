@@ -885,6 +885,11 @@ a.wcp-pill-tag:hover {
     color: #fff;
 }
 
+.wcp-type-spec {
+    background: #9b59b6;
+    color: #fff;
+}
+
 .wcp-priority-high {
     background: #e74c3c;
     color: #fff;
