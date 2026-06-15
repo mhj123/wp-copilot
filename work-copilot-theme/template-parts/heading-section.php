@@ -69,6 +69,7 @@ $items = wcp_theme_get_heading_items($heading_id);
                         <option value="task"><?php _e('Task', 'work-copilot-theme'); ?></option>
                         <option value="info"><?php _e('Info', 'work-copilot-theme'); ?></option>
                         <option value="learning"><?php _e('Learning', 'work-copilot-theme'); ?></option>
+                        <option value="spec"><?php _e('Spec', 'work-copilot-theme'); ?></option>
                     </select>
                 </div>
 

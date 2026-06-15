@@ -167,6 +167,61 @@ Use `"status":"failed"` with an explanatory `message` if the task can't be done.
 > self-contained artifacts. Upload them, then post `completed` with a report
 > covering: what you did, key decisions, and what each artifact contains.
 
+## 7. Context reviews (from the AI assistant)
+
+A second, lighter entry point: from the **AI Assistant** widget on a page, the
+user selects context (this page / entire corpus / specific pages), picks the
+**Agent review** chip, and sends an instruction. This creates a *review*
+delegation (`rev_…`) whose subject is the selected context, not a single item.
+
+The loop is the same doorbell + packet pattern, but **results are returned as
+text only** — there are no artifacts and no item. Whatever you post as the
+`report` (or `message`) is appended to the user's AI conversation as a message
+labelled **Hermes**, which they see next time they open the assistant. This is
+review-only: do not call any other WP routes; nothing is written to posts/pages.
+
+```bash
+# Poll for pending reviews (or use the Telegram doorbell)
+curl -u hermes:APP_PASSWORD \
+  "https://your-site.com/wp-json/wcp-delegation/v1/reviews?status=pending"
+
+# Fetch the packet — context_pack.formatted_context is the packed selection
+curl -u hermes:APP_PASSWORD \
+  "https://your-site.com/wp-json/wcp-delegation/v1/reviews/rev_…"
+
+# Acknowledge, then return your feedback as the report
+curl -u hermes:APP_PASSWORD -X POST \
+  "https://your-site.com/wp-json/wcp-delegation/v1/reviews/rev_…/status" \
+  -H 'Content-Type: application/json' \
+  -d '{"status":"in_progress","message":"Reviewing…"}'
+
+curl -u hermes:APP_PASSWORD -X POST \
+  "https://your-site.com/wp-json/wcp-delegation/v1/reviews/rev_…/status" \
+  -H 'Content-Type: application/json' \
+  -d '{"status":"completed","report":"Feedback: …"}'
+```
+
+Review packet shape:
+
+```jsonc
+{
+  "review": { "id": "rev_…", "status": "pending", "instruction": "…",
+              "created_at": "…", "updated_at": "…", "status_message": "", "report": "" },
+  "context_pack": {
+    "global_mission": "…",
+    "page_mission": "…",
+    "page_id": 122,
+    "context_mode": "page",          // page | corpus | select
+    "selected_pages": [],            // populated for context_mode = select
+    "formatted_context": "…"         // ready-to-use prompt text for the selection
+  },
+  "endpoints": { "self": "…/reviews/rev_…", "status": "…/reviews/rev_…/status" }
+}
+```
+
+Review state machine: `pending → in_progress → completed | failed`
+(no `needs_input` / artifacts / answer loop — that's item delegations only).
+
 ## Endpoint reference
 
 | Method | Path | Caller | Purpose |
@@ -177,3 +232,7 @@ Use `"status":"failed"` with an explanatory `message` if the task can't be done.
 | `POST` | `/delegations/<id>/status` | agent | `status` (+ `message`, `report`; `question` required for `needs_input`) |
 | `POST` | `/delegations/<id>/artifacts` | agent | Upload result files (multipart `files[]`) |
 | `POST` | `/delegations/<id>/answer` | user (theme UI) | Answer a clarification question (`question_id`, `answer`) |
+| `POST` | `/reviews` | user (theme UI) | Create a context review (`conversation_id`, `page_id`, `context_mode`, `selected_pages`, `instruction`) |
+| `GET` | `/reviews?status=<s>` | agent | List reviews (polling fallback) |
+| `GET` | `/reviews/<id>` | agent | Full review packet |
+| `POST` | `/reviews/<id>/status` | agent | `status` (+ `message`, `report`); report is appended to the user's AI chat |

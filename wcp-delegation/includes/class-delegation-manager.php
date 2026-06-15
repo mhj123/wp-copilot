@@ -20,6 +20,7 @@ class WCPD_Delegation_Manager {
 
     const META_KEY       = '_wcpd_delegations';
     const INDEX_OPTION   = 'wcpd_delegation_index';
+    const REVIEWS_OPTION = 'wcpd_reviews';
     const MAX_FILES      = 5;
     const MAX_FILE_BYTES = 10485760; // 10 MB
     const MAX_REPORT_CHARS = 20000;
@@ -369,6 +370,235 @@ class WCPD_Delegation_Manager {
      */
     public function send_test_message() {
         return $this->notify_telegram('Work Copilot Delegation: test message — your Telegram settings work.');
+    }
+
+    // ------------------------------------------------------------------
+    // Context reviews — initiated from the AI assistant widget, not an item.
+    // Subject is a conversation + a context selection (page / corpus / select).
+    // Hermes reads the packed context and posts back a report, which is
+    // appended to the originating conversation as a Hermes-labelled message.
+    // Review-only: no item meta, no post/page writes.
+    // ------------------------------------------------------------------
+
+    /**
+     * Create a context-review delegation from the AI assistant widget.
+     *
+     * @param string $conversation_id Originating AI conversation (feedback target)
+     * @param int    $page_id         Page the widget is open on
+     * @param string $context_mode    'page' | 'corpus' | 'select'
+     * @param array  $selected_pages  Page selection (for 'select' mode)
+     * @param string $instruction     What the user wants Hermes to review
+     * @return array|WP_Error { review, telegram_sent, telegram_error }
+     */
+    public function create_review($conversation_id, $page_id, $context_mode, $selected_pages, $instruction) {
+        $instruction = sanitize_textarea_field($instruction);
+        if (empty($instruction)) {
+            return new WP_Error('missing_instruction', 'Instruction is required', array('status' => 400));
+        }
+
+        $context_mode = in_array($context_mode, array('page', 'corpus', 'select'), true) ? $context_mode : 'page';
+
+        $review_id = 'rev_' . wp_generate_uuid4();
+        $now       = current_time('mysql');
+
+        $review = array(
+            'id'              => $review_id,
+            'status'          => 'pending',
+            'instruction'     => $instruction,
+            'report'          => '',
+            'status_message'  => '',
+            'conversation_id' => sanitize_text_field($conversation_id),
+            'page_id'         => (int) $page_id,
+            'context_mode'    => $context_mode,
+            'selected_pages'  => is_array($selected_pages) ? $selected_pages : array(),
+            'user_id'         => get_current_user_id(),
+            'created_at'      => $now,
+            'updated_at'      => $now,
+        );
+
+        $reviews = $this->get_reviews();
+        $reviews[$review_id] = $review;
+        $this->save_reviews($reviews);
+
+        // Persist the request in the conversation so, on reopen, the thread
+        // shows what was asked alongside Hermes's later reply.
+        if (!empty($review['conversation_id']) && class_exists('WCP_Conversations_Manager')) {
+            WCP_Conversations_Manager::instance()->add_message(
+                $review['conversation_id'],
+                'user',
+                $instruction,
+                array('source' => 'agent_review_request', 'review_id' => $review_id)
+            );
+        }
+
+        if (class_exists('WCP_AI_Logger')) {
+            WCP_AI_Logger::instance()->log_action('review_created', array(
+                'prompt'          => $instruction,
+                'context_post_id' => (int) $page_id,
+                'output'          => array('review_id' => $review_id),
+            ));
+        }
+
+        $message = "New context review\n"
+            . 'Instruction: ' . mb_substr($instruction, 0, 500) . "\n"
+            . "ID: {$review_id}\n"
+            . 'Packet: ' . $this->review_packet_url($review_id);
+        $sent = $this->notify_telegram($message);
+
+        return array(
+            'review'         => $review,
+            'telegram_sent'  => !is_wp_error($sent),
+            'telegram_error' => is_wp_error($sent) ? $sent->get_error_message() : null,
+        );
+    }
+
+    public function get_review($review_id) {
+        $reviews = $this->get_reviews();
+        return isset($reviews[$review_id]) ? $reviews[$review_id] : null;
+    }
+
+    /**
+     * Summaries for the agent's polling fallback.
+     */
+    public function list_reviews($status = '') {
+        $results = array();
+        foreach ($this->get_reviews() as $review_id => $review) {
+            if ($status && (!isset($review['status']) || $review['status'] !== $status)) {
+                continue;
+            }
+            $results[] = array(
+                'id'         => $review_id,
+                'status'     => $review['status'] ?? '',
+                'created_at' => $review['created_at'] ?? '',
+                'packet_url' => $this->review_packet_url($review_id),
+            );
+        }
+        return $results;
+    }
+
+    /**
+     * Full work packet for a context review: brief, the packed context
+     * selection, mission, and absolute endpoint URLs.
+     */
+    public function build_review_packet($review_id) {
+        $review = $this->get_review($review_id);
+        if (!$review) {
+            return new WP_Error('not_found', 'Review not found', array('status' => 404));
+        }
+
+        $page_id      = (int) $review['page_id'];
+        $context_mode = $review['context_mode'];
+
+        // Mission text (same pattern as build_packet). {user} vars resolve to
+        // the agent's WP user on agent-initiated fetches — fine for context.
+        $mission = array('global' => '', 'page' => '');
+        if (class_exists('WCP_Mission_Loader')) {
+            $mission = WCP_Mission_Loader::instance()->get_mission_context($page_id);
+        }
+
+        // Reuse the same context-building path the AI chat uses, so the agent
+        // sees exactly what the user selected.
+        $formatted_context = '';
+        if (class_exists('WCP_Context_Builder')) {
+            $builder      = WCP_Context_Builder::instance();
+            $context_data = $builder->build_context_by_mode($page_id, $context_mode, array(
+                'selected_pages' => $review['selected_pages'],
+                'query'          => $review['instruction'],
+                'include_items'  => true,
+            ));
+            $formatted_context = $builder->format_for_prompt($context_data);
+        }
+
+        $base = rest_url('wcp-delegation/v1/reviews/' . $review_id);
+
+        return array(
+            'review' => array(
+                'id'             => $review['id'],
+                'status'         => $review['status'],
+                'instruction'    => $review['instruction'],
+                'created_at'     => $review['created_at'],
+                'updated_at'     => $review['updated_at'],
+                'status_message' => $review['status_message'],
+                'report'         => $review['report'],
+            ),
+            'context_pack' => array(
+                'global_mission'    => $mission['global'] ?? '',
+                'page_mission'      => $mission['page'] ?? '',
+                'page_id'           => $page_id,
+                'context_mode'      => $context_mode,
+                'selected_pages'    => $review['selected_pages'],
+                'formatted_context' => $formatted_context,
+            ),
+            'endpoints' => array(
+                'self'   => $base,
+                'status' => $base . '/status',
+            ),
+        );
+    }
+
+    /**
+     * Agent-facing status update for a review. When a report/message arrives,
+     * it is appended to the originating AI conversation as a Hermes message.
+     */
+    public function update_review_status($review_id, $status, $message = '', $report = '') {
+        // Reviews use a subset of the state machine; no needs_input loop yet.
+        $allowed = array('in_progress', 'completed', 'failed');
+        if (!in_array($status, $allowed, true)) {
+            return new WP_Error('invalid_status', 'Invalid status. Allowed: ' . implode(', ', $allowed), array('status' => 400));
+        }
+
+        $reviews = $this->get_reviews();
+        if (!isset($reviews[$review_id])) {
+            return new WP_Error('not_found', 'Review not found', array('status' => 404));
+        }
+
+        $message = sanitize_textarea_field($message);
+        $report  = mb_substr(sanitize_textarea_field($report), 0, self::MAX_REPORT_CHARS);
+
+        $reviews[$review_id]['status']         = $status;
+        $reviews[$review_id]['status_message'] = $message;
+        if ($report !== '') {
+            $reviews[$review_id]['report'] = $report;
+        }
+        $reviews[$review_id]['updated_at'] = current_time('mysql');
+        $review = $reviews[$review_id];
+        $this->save_reviews($reviews);
+
+        // Surface feedback in the originating conversation. Role MUST be a
+        // model-valid 'assistant' — chat_qa replays history with these roles
+        // verbatim — and is labelled "Hermes" in the UI via metadata.source.
+        $feedback = $report !== '' ? $report : $message;
+        if ($feedback !== '' && !empty($review['conversation_id']) && class_exists('WCP_Conversations_Manager')) {
+            WCP_Conversations_Manager::instance()->add_message(
+                $review['conversation_id'],
+                'assistant',
+                $feedback,
+                array('source' => 'hermes', 'review_id' => $review_id)
+            );
+        }
+
+        if (class_exists('WCP_AI_Logger')) {
+            WCP_AI_Logger::instance()->log_action('review_status_changed', array(
+                'prompt'          => $message,
+                'context_post_id' => (int) $review['page_id'],
+                'output'          => array('review_id' => $review_id, 'status' => $status),
+            ));
+        }
+
+        return $review;
+    }
+
+    private function get_reviews() {
+        $reviews = get_option(self::REVIEWS_OPTION, array());
+        return is_array($reviews) ? $reviews : array();
+    }
+
+    private function save_reviews($reviews) {
+        update_option(self::REVIEWS_OPTION, $reviews, false);
+    }
+
+    private function review_packet_url($review_id) {
+        return rest_url('wcp-delegation/v1/reviews/' . $review_id);
     }
 
     // ------------------------------------------------------------------

@@ -345,6 +345,10 @@ jQuery(document).ready(function($) {
                 show = type === 'task';
             } else if (filter === 'open') {
                 show = type === 'task' && status !== 'done';
+            } else if (filter === 'info') {
+                show = type === 'info';
+            } else if (filter === 'spec') {
+                show = type === 'spec';
             } else {
                 show = true;
             }
@@ -714,6 +718,7 @@ jQuery(document).ready(function($) {
         updateItem(itemId, { item_type: type });
         var $row = $(this).closest('.wcp-item-row');
         var $statusSelect = $row.find('.wcp-status-select');
+        var $specStatusSelect = $row.find('.wcp-spec-status-select');
         var $checkbox = $row.find('.wcp-task-checkbox');
         var $dueDate = $row.find('.wcp-due-date-input');
         $row.data('item-type', type);
@@ -735,6 +740,26 @@ jQuery(document).ready(function($) {
             $row.data('task-status', '').data('due-date', '');
             updateItem(itemId, { task_status: '', due_date: '' });
         }
+        if (type === 'spec') {
+            $specStatusSelect.show();
+            // Default spec status to 'draft' if not already set
+            if (!$specStatusSelect.val()) {
+                $specStatusSelect.val('draft');
+                $row.data('spec-status', 'draft');
+                updateItem(itemId, { spec_status: 'draft' });
+            }
+        } else {
+            $specStatusSelect.hide().val('');
+            $row.data('spec-status', '');
+            updateItem(itemId, { spec_status: '' });
+        }
+    });
+
+    $(document).on('change', '.wcp-spec-status-select', function() {
+        var itemId = $(this).data('item-id');
+        var status = $(this).val();
+        $(this).closest('.wcp-item-row').data('spec-status', status);
+        updateItem(itemId, { spec_status: status });
     });
 
     $(document).on('change', '.wcp-due-date-input', function() {

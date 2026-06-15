@@ -430,21 +430,24 @@
             }
 
             messages.forEach((msg) => {
-                this.appendMessage(msg.role, msg.content);
+                this.appendMessage(msg.role, msg.content, msg.metadata);
             });
 
             this.scrollToBottom();
         },
 
         /**
-         * Append message to conversation
+         * Append message to conversation.
+         * metadata.source === 'hermes' marks a delegation-review reply, which
+         * is stored with role 'assistant' (model-valid) but labelled "Hermes".
          */
-        appendMessage: function(role, content) {
+        appendMessage: function(role, content, metadata) {
             const $container = $('.wcp-ai-messages');
-            const className = 'wcp-ai-message-' + role;
+            const isHermes = metadata && metadata.source === 'hermes';
+            const className = isHermes ? 'wcp-ai-message-hermes' : 'wcp-ai-message-' + role;
 
             const $bubble = $('<div>').addClass('wcp-ai-message-content');
-            if (role === 'assistant' && typeof marked !== 'undefined') {
+            if ((role === 'assistant' || isHermes) && typeof marked !== 'undefined') {
                 $bubble.html(marked.parse(content));
             } else {
                 $bubble.text(content);
@@ -454,6 +457,10 @@
                 .addClass('wcp-ai-message')
                 .addClass(className)
                 .append($bubble);
+
+            if (isHermes) {
+                $message.prepend($('<div>').addClass('wcp-ai-message-label').text('Hermes'));
+            }
 
             $container.append($message);
             this.scrollToBottom();
@@ -476,6 +483,14 @@
 
             // Append user message immediately
             this.appendMessage('user', prompt);
+
+            // Agent review — hand the selected context to Hermes instead of the
+            // in-app AI. Hermes replies asynchronously; its feedback lands in
+            // this conversation (labelled "Hermes") next time the widget opens.
+            if (this.currentAction === 'agent_review') {
+                this.sendAgentReview(prompt);
+                return;
+            }
 
             // Build request data
             const data = {
@@ -508,6 +523,57 @@
                         this.handleActionResult(response.result);
                     } else {
                         this.showError(response.message || 'Action failed');
+                    }
+                },
+                error: (xhr) => {
+                    this.showLoading(false);
+                    $('.wcp-ai-send-btn').prop('disabled', false);
+                    this.showError('Connection error: ' + xhr.statusText);
+                }
+            });
+        },
+
+        /**
+         * Send the selected context to Hermes for review.
+         * Reuses the same context selection (mode + selected pages) gathered
+         * for the in-app AI. Feedback is delivered later into this conversation.
+         */
+        sendAgentReview: function(instruction) {
+            if (!wcpAiWidgetData.delegationEnabled) {
+                this.showLoading(false);
+                $('.wcp-ai-send-btn').prop('disabled', false);
+                this.showError('Agent review is not enabled.');
+                return;
+            }
+
+            const data = {
+                conversation_id: this.conversationId,
+                page_id: wcpAiWidgetData.pageId,
+                context_mode: this.contextMode,
+                instruction: instruction
+            };
+
+            if (this.contextMode === 'select') {
+                data.selected_pages = this.selectedPages;
+            }
+
+            $.ajax({
+                url: wcpAiWidgetData.delegationRestUrl + '/reviews',
+                method: 'POST',
+                beforeSend: (xhr) => {
+                    xhr.setRequestHeader('X-WP-Nonce', wcpAiWidgetData.nonce);
+                },
+                data: data,
+                success: (response) => {
+                    this.showLoading(false);
+                    $('.wcp-ai-send-btn').prop('disabled', false);
+                    $('.wcp-ai-action-chip').removeClass('active');
+                    this.currentAction = 'chat';
+
+                    if (response.success) {
+                        this.appendMessage('system', 'Sent to Hermes for review — feedback will appear here when ready.');
+                    } else {
+                        this.showError(response.message || 'Failed to send review to Hermes');
                     }
                 },
                 error: (xhr) => {

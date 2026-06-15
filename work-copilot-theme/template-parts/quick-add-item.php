@@ -15,6 +15,7 @@ if (!defined('ABSPATH')) exit;
             <option value="task"><?php _e('task', 'work-copilot-theme'); ?></option>
             <option value="info"><?php _e('info', 'work-copilot-theme'); ?></option>
             <option value="learning"><?php _e('learning', 'work-copilot-theme'); ?></option>
+            <option value="spec"><?php _e('spec', 'work-copilot-theme'); ?></option>
         </select>
         <select name="priority" class="wcp-inline-select">
             <option value=""><?php _e('prio', 'work-copilot-theme'); ?></option>

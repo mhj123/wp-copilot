@@ -71,6 +71,35 @@ class WCPD_REST_API {
             'callback'            => array($this, 'answer_delegation_question'),
             'permission_callback' => array($this, 'check_permission'),
         ));
+
+        // User-facing: create a context review from the AI assistant widget
+        register_rest_route($namespace, '/reviews', array(
+            array(
+                'methods'             => 'POST',
+                'callback'            => array($this, 'create_review'),
+                'permission_callback' => array($this, 'check_permission'),
+            ),
+            // Agent-facing: list reviews (polling fallback), ?status= filter
+            array(
+                'methods'             => 'GET',
+                'callback'            => array($this, 'list_reviews'),
+                'permission_callback' => array($this, 'check_permission'),
+            ),
+        ));
+
+        // Agent-facing: full review work packet
+        register_rest_route($namespace, '/reviews/(?P<review_id>[a-zA-Z0-9_-]+)', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'get_review_packet'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Agent-facing: review status update (+ report → appended to chat)
+        register_rest_route($namespace, '/reviews/(?P<review_id>[a-zA-Z0-9_-]+)/status', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'update_review_status'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
     }
 
     public function check_permission() {
@@ -157,5 +186,57 @@ class WCPD_REST_API {
         }
 
         return rest_ensure_response(array('success' => true, 'delegation' => $result));
+    }
+
+    public function create_review($request) {
+        $result = WCPD_Delegation_Manager::instance()->create_review(
+            $request->get_param('conversation_id') ?: '',
+            (int) $request->get_param('page_id'),
+            sanitize_key($request->get_param('context_mode') ?: 'page'),
+            $request->get_param('selected_pages') ?: array(),
+            $request->get_param('instruction') ?: ''
+        );
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return rest_ensure_response(array(
+            'success'        => true,
+            'review'         => $result['review'],
+            'telegram_sent'  => $result['telegram_sent'],
+            'telegram_error' => $result['telegram_error'],
+        ));
+    }
+
+    public function list_reviews($request) {
+        $status = sanitize_key($request->get_param('status') ?: '');
+        return rest_ensure_response(array(
+            'success' => true,
+            'reviews' => WCPD_Delegation_Manager::instance()->list_reviews($status),
+        ));
+    }
+
+    public function get_review_packet($request) {
+        $packet = WCPD_Delegation_Manager::instance()->build_review_packet($request->get_param('review_id'));
+        if (is_wp_error($packet)) {
+            return $packet;
+        }
+        return rest_ensure_response($packet);
+    }
+
+    public function update_review_status($request) {
+        $result = WCPD_Delegation_Manager::instance()->update_review_status(
+            $request->get_param('review_id'),
+            sanitize_key($request->get_param('status') ?: ''),
+            $request->get_param('message') ?: '',
+            $request->get_param('report') ?: ''
+        );
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return rest_ensure_response(array('success' => true, 'review' => $result));
     }
 }

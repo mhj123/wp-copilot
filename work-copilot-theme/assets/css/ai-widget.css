@@ -475,6 +475,29 @@ body.admin-bar .wcp-ai-widget.minimized {
     font-size: 13px;
 }
 
+/* Hermes (delegation review) messages — left-aligned, teal accent + label */
+.wcp-ai-message-hermes {
+    justify-content: flex-start;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.wcp-ai-message-hermes .wcp-ai-message-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #0f766e;
+    margin-bottom: 4px;
+}
+
+.wcp-ai-message-hermes .wcp-ai-message-content {
+    background: #f0fdfa;
+    color: #134e4a;
+    border: 1px solid #5eead4;
+    border-bottom-left-radius: 4px;
+}
+
 /* Input area */
 .wcp-ai-input-area {
     border-top: 1px solid #e0e0e0;
