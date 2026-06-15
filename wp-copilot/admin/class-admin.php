@@ -22,6 +22,7 @@ class WCP_Admin {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_scripts'));
         add_action('add_meta_boxes', array($this, 'add_ai_meta_boxes'));
+        add_action('admin_post_wcp_export_csv', array($this, 'handle_export_csv'));
     }
 
     public function add_admin_menu() {
@@ -52,6 +53,84 @@ class WCP_Admin {
             'work-copilot-ai-log',
             array($this, 'render_ai_log')
         );
+
+        add_submenu_page(
+            'work-copilot',
+            __('Import / Export', 'work-copilot'),
+            __('Import / Export', 'work-copilot'),
+            'edit_posts',
+            'work-copilot-import-export',
+            array($this, 'render_import_export')
+        );
+    }
+
+    /**
+     * Import / Export admin screen. Export is live; import is phase 2.
+     */
+    public function render_import_export() {
+        ?>
+        <div class="wrap">
+            <h1><?php _e('Work Copilot — Import / Export', 'work-copilot'); ?></h1>
+
+            <h2><?php _e('Export to CSV', 'work-copilot'); ?></h2>
+            <p class="description">
+                <?php _e('Exports your full knowledge tree — pages, subpages, headings and items (of each type) — preserving the structure as columns, with content, tags, status, priority, due dates, source URLs and subtasks.', 'work-copilot'); ?>
+            </p>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <input type="hidden" name="action" value="wcp_export_csv">
+                <?php wp_nonce_field('wcp_export_csv'); ?>
+                <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row"><?php _e('Format', 'work-copilot'); ?></th>
+                        <td>
+                            <fieldset>
+                                <label>
+                                    <input type="radio" name="mode" value="outline" checked>
+                                    <strong><?php _e('Full outline', 'work-copilot'); ?></strong> —
+                                    <?php _e('one row per page, heading and item (with a row_type column). Captures structural content and fully round-trips for re-import.', 'work-copilot'); ?>
+                                </label>
+                                <br>
+                                <label>
+                                    <input type="radio" name="mode" value="items">
+                                    <strong><?php _e('Items only', 'work-copilot'); ?></strong> —
+                                    <?php _e('one row per item, with the page / subpage / heading as columns. Tidier for spreadsheets and pivots.', 'work-copilot'); ?>
+                                </label>
+                            </fieldset>
+                        </td>
+                    </tr>
+                </table>
+                <?php submit_button(__('Download CSV', 'work-copilot')); ?>
+            </form>
+
+            <hr>
+
+            <h2><?php _e('Import from CSV', 'work-copilot'); ?></h2>
+            <p class="description">
+                <?php _e('Coming soon — import will accept the same CSV format and let you preview changes before applying them.', 'work-copilot'); ?>
+            </p>
+        </div>
+        <?php
+    }
+
+    /**
+     * Stream the CSV export as a file download.
+     */
+    public function handle_export_csv() {
+        if (!current_user_can('edit_posts')) {
+            wp_die(__('You do not have permission to export.', 'work-copilot'), '', array('response' => 403));
+        }
+        check_admin_referer('wcp_export_csv');
+
+        $mode = (isset($_POST['mode']) && $_POST['mode'] === 'items') ? 'items' : 'outline';
+
+        $filename = 'work-copilot-export-' . gmdate('Y-m-d') . '.csv';
+
+        nocache_headers();
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+
+        WCP_CSV_Exporter::instance()->stream($mode);
+        exit;
     }
 
     public function enqueue_scripts($hook) {
