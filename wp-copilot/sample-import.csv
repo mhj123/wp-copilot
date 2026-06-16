@@ -1,0 +1,8 @@
+row_type,id,page,subpage,heading,context_path,title,item_type,status,priority,pinned,content,tags,due_date,source_url,subtasks,menu_order
+page,,Projects,,,Projects,Projects,,,,,Top-level project hub,,,,,0
+page,,Projects,Website Redesign,,Projects > Website Redesign,Website Redesign,,,,,Redesign of the marketing site,,,,,0
+heading,,Projects,Website Redesign,Tasks,Projects > Website Redesign > Tasks,Tasks,,,,,,,,,,10
+item,,Projects,Website Redesign,Tasks,Projects > Website Redesign > Tasks,Set up staging site,task,to-do,high,,Provision a staging environment,infra,2026-07-01,,Create DNS:todo; Install WP:todo,10
+item,,Projects,Website Redesign,Tasks,Projects > Website Redesign > Tasks,Brand guidelines,info,,,,Where the brand kit lives,reference,,https://example.com/brand,,20
+item,,Projects,Website Redesign,Tasks,Projects > Website Redesign > Tasks,Lighthouse audit findings,learning,,,,Key takeaways from the perf audit,"performance,seo",,,,30
+item,,Projects,Website Redesign,Tasks,Projects > Website Redesign > Tasks,Homepage spec,spec,draft,medium,,Draft spec for the new homepage,,,,Define hero:todo; List sections:done,40
