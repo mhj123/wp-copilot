@@ -100,6 +100,64 @@ class WCPD_REST_API {
             'callback'            => array($this, 'update_review_status'),
             'permission_callback' => array($this, 'check_permission'),
         ));
+
+        // Agent-facing: create content. Gated by the extra wcpd_allow_create toggle.
+        register_rest_route($namespace, '/create/page', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'create_page'),
+            'permission_callback' => array($this, 'check_create_permission'),
+        ));
+
+        register_rest_route($namespace, '/create/heading', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'create_heading'),
+            'permission_callback' => array($this, 'check_create_permission'),
+        ));
+
+        register_rest_route($namespace, '/create/item', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'create_item'),
+            'permission_callback' => array($this, 'check_create_permission'),
+        ));
+    }
+
+    public function check_create_permission() {
+        return WCPD_Delegation_Manager::instance()->is_create_enabled() && current_user_can('edit_posts');
+    }
+
+    public function create_page($request) {
+        $result = WCPD_Delegation_Manager::instance()->create_page(
+            $request->get_param('title') ?: '',
+            $request->get_param('content') ?: '',
+            (int) $request->get_param('parent_id')
+        );
+        return is_wp_error($result) ? $result : rest_ensure_response($result);
+    }
+
+    public function create_heading($request) {
+        $result = WCPD_Delegation_Manager::instance()->create_heading(
+            $request->get_param('title') ?: '',
+            (int) $request->get_param('parent_id'),
+            sanitize_key($request->get_param('parent_type') ?: ''),
+            $request->get_param('content') ?: ''
+        );
+        return is_wp_error($result) ? $result : rest_ensure_response($result);
+    }
+
+    public function create_item($request) {
+        $result = WCPD_Delegation_Manager::instance()->create_item(array(
+            'title'             => $request->get_param('title') ?: '',
+            'content'           => $request->get_param('content') ?: '',
+            'item_type'         => $request->get_param('item_type') ?: '',
+            'status'            => $request->get_param('status') ?: '',
+            'priority'          => $request->get_param('priority') ?: '',
+            'tags'              => $request->get_param('tags') ?: '',
+            'due_date'          => $request->get_param('due_date') ?: '',
+            'context_id'        => (int) $request->get_param('context_id'),
+            'parent_heading_id' => (int) $request->get_param('parent_heading_id'),
+            'parent_page_id'    => (int) $request->get_param('parent_page_id'),
+        ));
+        return is_wp_error($result) ? $result : rest_ensure_response($result);
     }
 
     public function check_permission() {

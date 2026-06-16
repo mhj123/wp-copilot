@@ -35,6 +35,12 @@ class WCPD_Settings {
             'default'           => '',
         ));
 
+        register_setting('wcp_settings', 'wcpd_allow_create', array(
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+            'default'           => '',
+        ));
+
         register_setting('wcp_settings', 'wcpd_telegram_bot_token', array(
             'type'              => 'string',
             'sanitize_callback' => 'sanitize_text_field',
@@ -58,6 +64,14 @@ class WCPD_Settings {
             'wcpd_enabled',
             __('Enable Delegation', 'wcp-delegation'),
             array($this, 'render_enabled_field'),
+            'work-copilot-settings',
+            'wcpd_section'
+        );
+
+        add_settings_field(
+            'wcpd_allow_create',
+            __('Allow Hermes to create', 'wcp-delegation'),
+            array($this, 'render_allow_create_field'),
             'work-copilot-settings',
             'wcpd_section'
         );
@@ -105,6 +119,17 @@ class WCPD_Settings {
             <?php _e('Enable the Delegate action and agent REST endpoints', 'wcp-delegation'); ?>
         </label>
         <p class="description"><?php _e('When disabled, all delegation endpoints return 403 — a kill-switch for the agent surface.', 'wcp-delegation'); ?></p>
+        <?php
+    }
+
+    public function render_allow_create_field() {
+        $allow = get_option('wcpd_allow_create', '');
+        ?>
+        <label>
+            <input type="checkbox" name="wcpd_allow_create" value="1" <?php checked($allow, '1'); ?>>
+            <?php _e('Let Hermes create pages, sub-pages, headings and items', 'wcp-delegation'); ?>
+        </label>
+        <p class="description"><?php _e('Off by default. When on, the agent can write content directly via the create endpoints. Everything Hermes creates is colour-coded and filterable under Posts/Headings/Pages (Created by &rarr; Hermes) so you can review or bulk-delete it.', 'wcp-delegation'); ?></p>
         <?php
     }
 

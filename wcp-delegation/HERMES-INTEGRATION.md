@@ -222,6 +222,40 @@ Review packet shape:
 Review state machine: `pending → in_progress → completed | failed`
 (no `needs_input` / artifacts / answer loop — that's item delegations only).
 
+## 8. Creating content
+
+When the **Allow Hermes to create** setting is enabled (Settings → Delegation, off by
+default), the agent can write content directly. Everything Hermes creates is stamped
+`_wcp_created_by = hermes`, which colour-codes it on the site and makes it filterable in
+WP Admin (Posts / Headings / Pages → **Created by → Hermes**), so the user can review or
+bulk-delete it. While the toggle is off these endpoints return `403`.
+
+```bash
+# Page (optionally nested under a parent page)
+curl -u hermes:APP_PASSWORD -X POST \
+  "https://your-site.com/wp-json/wcp-delegation/v1/create/page" \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Marketing","content":"…","parent_id":0}'
+
+# Heading under a page (or another heading)
+curl -u hermes:APP_PASSWORD -X POST \
+  "https://your-site.com/wp-json/wcp-delegation/v1/create/heading" \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Goals","parent_id":12}'
+
+# Item attached to a heading (or page, or a wcp_context term id)
+curl -u hermes:APP_PASSWORD -X POST \
+  "https://your-site.com/wp-json/wcp-delegation/v1/create/item" \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Launch landing page","item_type":"task","status":"to-do","priority":"high","parent_heading_id":56}'
+```
+
+Each call returns `{ success, id, type, title, permalink }`. For items, attachment is resolved
+from `context_id` (a `wcp_context` term id), else `parent_heading_id`, else `parent_page_id`.
+Item fields accept the same vocabularies as elsewhere: `item_type` task|info|learning|spec;
+`status` to-do|in-progress|done (tasks) or draft|review|final (specs); `priority`
+critical|high|medium|low; `tags` comma-separated; `due_date` `YYYY-MM-DD`.
+
 ## Endpoint reference
 
 | Method | Path | Caller | Purpose |
@@ -236,3 +270,6 @@ Review state machine: `pending → in_progress → completed | failed`
 | `GET` | `/reviews?status=<s>` | agent | List reviews (polling fallback) |
 | `GET` | `/reviews/<id>` | agent | Full review packet |
 | `POST` | `/reviews/<id>/status` | agent | `status` (+ `message`, `report`); report is appended to the user's AI chat |
+| `POST` | `/create/page` | agent | Create a page (`title`, `content?`, `parent_id?`) — needs `wcpd_allow_create` |
+| `POST` | `/create/heading` | agent | Create a heading (`title`, `parent_id`, `parent_type?`, `content?`) — needs `wcpd_allow_create` |
+| `POST` | `/create/item` | agent | Create an item (`title`, `content?`, `item_type?`, `status?`, `priority?`, `tags?`, `due_date?`, `context_id?`/`parent_heading_id?`/`parent_page_id?`) — needs `wcpd_allow_create` |

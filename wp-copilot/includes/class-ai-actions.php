@@ -978,6 +978,8 @@ class WCP_AI_Actions {
                 return $heading_id;
             }
 
+            WCP_Post_Types::mark_creator($heading_id, 'copilot');
+
             // Link heading to its parent page
             update_post_meta($heading_id, '_wcp_parent_type', 'page');
             update_post_meta($heading_id, '_wcp_parent_id', $page_id);
@@ -1012,6 +1014,8 @@ class WCP_AI_Actions {
             if (is_wp_error($new_page_id)) {
                 return $new_page_id;
             }
+
+            WCP_Post_Types::mark_creator($new_page_id, 'copilot');
 
             // Apply parent page template if one exists (AI guardrail: template manager owns this)
             $template_manager = WCP_Page_Template_Manager::instance();
@@ -1049,6 +1053,8 @@ class WCP_AI_Actions {
             ));
 
             if (!is_wp_error($post_id)) {
+                WCP_Post_Types::mark_creator($post_id, 'copilot');
+
                 // Add to context if term exists
                 if ($context_term_id) {
                     wp_set_post_terms($post_id, array($context_term_id), 'wcp_context');

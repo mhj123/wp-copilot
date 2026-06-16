@@ -890,6 +890,23 @@ a.wcp-pill-tag:hover {
     color: #fff;
 }
 
+/* Creator provenance — accent the left edge by who created the content.
+   Copilot (in-app AI) = indigo; Hermes (delegation agent) = teal; manual = none. */
+.wcp-item-row.wcp-by-copilot,
+.wcp-heading-section.wcp-by-copilot {
+    border-left: 3px solid #6366f1;
+}
+
+.wcp-item-row.wcp-by-hermes,
+.wcp-heading-section.wcp-by-hermes {
+    border-left: 3px solid #14b8a6;
+}
+
+.wcp-item-row.wcp-by-copilot,
+.wcp-item-row.wcp-by-hermes {
+    padding-left: 8px;
+}
+
 .wcp-priority-high {
     background: #e74c3c;
     color: #fff;

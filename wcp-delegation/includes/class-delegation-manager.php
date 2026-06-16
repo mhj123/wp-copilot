@@ -602,6 +602,184 @@ class WCPD_Delegation_Manager {
     }
 
     // ------------------------------------------------------------------
+    // Content creation — Hermes writes pages/headings/items directly.
+    // Gated by wcpd_allow_create; every post is stamped _wcp_created_by=hermes
+    // (colour-coded + admin-filterable) so it stays visible and reversible.
+    // ------------------------------------------------------------------
+
+    public function is_create_enabled() {
+        return $this->is_enabled() && get_option('wcpd_allow_create') === '1';
+    }
+
+    public function create_page($title, $content = '', $parent_id = 0) {
+        $title = sanitize_text_field($title);
+        if ($title === '') {
+            return new WP_Error('missing_title', 'Title is required', array('status' => 400));
+        }
+
+        $parent_id = (int) $parent_id;
+        if ($parent_id) {
+            $parent = get_post($parent_id);
+            if (!$parent || $parent->post_type !== 'page') {
+                return new WP_Error('invalid_parent', 'parent_id must be a page', array('status' => 400));
+            }
+        }
+
+        $post_id = wp_insert_post(array(
+            'post_type'    => 'page',
+            'post_title'   => $title,
+            'post_content' => wp_kses_post((string) $content),
+            'post_status'  => 'publish',
+            'post_parent'  => $parent_id,
+        ), true);
+
+        if (is_wp_error($post_id)) {
+            return $post_id;
+        }
+
+        $this->mark_hermes($post_id);
+        return $this->created_response($post_id, 'page');
+    }
+
+    public function create_heading($title, $parent_id, $parent_type = '', $content = '') {
+        $title = sanitize_text_field($title);
+        if ($title === '') {
+            return new WP_Error('missing_title', 'Title is required', array('status' => 400));
+        }
+
+        $parent_id = (int) $parent_id;
+        $parent    = $parent_id ? get_post($parent_id) : null;
+        if (!$parent || !in_array($parent->post_type, array('page', 'wcp_heading'), true)) {
+            return new WP_Error('invalid_parent', 'parent_id must be a page or heading', array('status' => 400));
+        }
+        $parent_type = in_array($parent_type, array('page', 'wcp_heading'), true) ? $parent_type : $parent->post_type;
+
+        $post_id = wp_insert_post(array(
+            'post_type'    => 'wcp_heading',
+            'post_title'   => $title,
+            'post_content' => wp_kses_post((string) $content),
+            'post_status'  => 'publish',
+        ), true);
+
+        if (is_wp_error($post_id)) {
+            return $post_id;
+        }
+
+        // Parent linkage must be set before the sync builds the context term
+        // (save_post fired during insert before this meta existed).
+        update_post_meta($post_id, '_wcp_parent_type', $parent_type);
+        update_post_meta($post_id, '_wcp_parent_id', $parent_id);
+        if (class_exists('WCP_Taxonomy_Sync')) {
+            WCP_Taxonomy_Sync::instance()->sync_heading_to_taxonomy($post_id, get_post($post_id), true);
+        }
+
+        $this->mark_hermes($post_id);
+        return $this->created_response($post_id, 'heading');
+    }
+
+    /**
+     * @param array $args { title, content?, item_type?, status?, priority?, tags?,
+     *                       due_date?, context_id? | parent_heading_id? | parent_page_id? }
+     */
+    public function create_item($args) {
+        $title = sanitize_text_field($args['title'] ?? '');
+        if ($title === '') {
+            return new WP_Error('missing_title', 'Title is required', array('status' => 400));
+        }
+
+        // Resolve the wcp_context term the item attaches to.
+        $term_id = 0;
+        if (!empty($args['context_id'])) {
+            $term_id = (int) $args['context_id'];
+        } elseif (!empty($args['parent_heading_id'])) {
+            $term_id = $this->context_term_for_post((int) $args['parent_heading_id']);
+        } elseif (!empty($args['parent_page_id'])) {
+            $term_id = $this->context_term_for_post((int) $args['parent_page_id']);
+        }
+
+        $post_id = wp_insert_post(array(
+            'post_type'    => 'post',
+            'post_title'   => $title,
+            'post_content' => wp_kses_post((string) ($args['content'] ?? '')),
+            'post_status'  => 'publish',
+        ), true);
+
+        if (is_wp_error($post_id)) {
+            return $post_id;
+        }
+
+        if ($term_id) {
+            wp_set_post_terms($post_id, array($term_id), 'wcp_context');
+        }
+        $this->apply_item_meta($post_id, $args);
+        $this->mark_hermes($post_id);
+
+        $response = $this->created_response($post_id, 'item');
+        $response['attached_context'] = $term_id ?: null;
+        return $response;
+    }
+
+    private function apply_item_meta($post_id, $args) {
+        $type = sanitize_key($args['item_type'] ?? '');
+        if (in_array($type, array('task', 'info', 'learning', 'spec'), true)) {
+            wp_set_post_terms($post_id, array($type), 'item_type');
+        }
+
+        $status = sanitize_key($args['status'] ?? '');
+        if ($type === 'task' && in_array($status, array('to-do', 'in-progress', 'done'), true)) {
+            wp_set_post_terms($post_id, array($status), 'task_status');
+        } elseif ($type === 'spec' && in_array($status, array('draft', 'review', 'final'), true)) {
+            wp_set_post_terms($post_id, array($status), 'spec_status');
+        }
+
+        $priority = sanitize_key($args['priority'] ?? '');
+        if (in_array($priority, array('critical', 'high', 'medium', 'low'), true)) {
+            wp_set_post_terms($post_id, array($priority), 'priority');
+        }
+
+        $tags = trim((string) ($args['tags'] ?? ''));
+        if ($tags !== '') {
+            $names = array_filter(array_map('trim', explode(',', $tags)));
+            wp_set_post_terms($post_id, $names, 'post_tag');
+        }
+
+        $due = trim((string) ($args['due_date'] ?? ''));
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $due)) {
+            update_post_meta($post_id, '_wcp_due_date', $due);
+        }
+    }
+
+    private function context_term_for_post($post_id) {
+        $terms = get_terms(array(
+            'taxonomy'   => 'wcp_context',
+            'hide_empty' => false,
+            'number'     => 1,
+            'meta_query' => array(array('key' => 'wcp_ref_id', 'value' => $post_id)),
+        ));
+        return (!is_wp_error($terms) && !empty($terms)) ? (int) $terms[0]->term_id : 0;
+    }
+
+    private function mark_hermes($post_id) {
+        update_post_meta($post_id, '_wcp_created_by', 'hermes');
+        if (class_exists('WCP_AI_Logger')) {
+            WCP_AI_Logger::instance()->log_action('hermes_create', array(
+                'context_post_id' => $post_id,
+                'output'          => array('post_id' => $post_id, 'type' => get_post_type($post_id)),
+            ));
+        }
+    }
+
+    private function created_response($post_id, $type) {
+        return array(
+            'success'   => true,
+            'id'        => (int) $post_id,
+            'type'      => $type,
+            'title'     => get_the_title($post_id),
+            'permalink' => get_permalink($post_id),
+        );
+    }
+
+    // ------------------------------------------------------------------
     // Internals
     // ------------------------------------------------------------------
 

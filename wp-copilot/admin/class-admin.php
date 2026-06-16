@@ -25,6 +25,74 @@ class WCP_Admin {
         add_action('admin_post_wcp_export_csv', array($this, 'handle_export_csv'));
         add_action('admin_post_wcp_import_csv_preview', array($this, 'handle_import_preview'));
         add_action('admin_post_wcp_import_csv_commit', array($this, 'handle_import_commit'));
+
+        // Creator provenance: filter dropdown + column on the list screens.
+        add_action('restrict_manage_posts', array($this, 'render_creator_filter'));
+        add_action('pre_get_posts', array($this, 'filter_by_creator'));
+        foreach (array('post', 'page', 'wcp_heading') as $pt) {
+            add_filter("manage_{$pt}_posts_columns", array($this, 'add_creator_column'));
+            add_action("manage_{$pt}_posts_custom_column", array($this, 'render_creator_column'), 10, 2);
+        }
+    }
+
+    /** Post types that carry a creator marker. */
+    private function creator_screens() {
+        return array('post', 'page', 'wcp_heading');
+    }
+
+    /** "Created by" dropdown above the post list. */
+    public function render_creator_filter() {
+        $screen = get_current_screen();
+        if (!$screen || !in_array($screen->post_type, $this->creator_screens(), true)) {
+            return;
+        }
+        $current = isset($_GET['wcp_created_by']) ? sanitize_key($_GET['wcp_created_by']) : '';
+        $options = array(
+            ''        => __('All creators', 'work-copilot'),
+            'manual'  => __('Manual', 'work-copilot'),
+            'copilot' => __('Copilot (AI)', 'work-copilot'),
+            'hermes'  => __('Hermes', 'work-copilot'),
+        );
+        echo '<select name="wcp_created_by">';
+        foreach ($options as $val => $label) {
+            printf('<option value="%s"%s>%s</option>', esc_attr($val), selected($current, $val, false), esc_html($label));
+        }
+        echo '</select>';
+    }
+
+    /** Apply the creator filter to the admin list query. */
+    public function filter_by_creator($query) {
+        global $pagenow;
+        if (!is_admin() || $pagenow !== 'edit.php' || !$query->is_main_query()) {
+            return;
+        }
+        $pt = $query->get('post_type') ?: 'post';
+        if (!in_array($pt, $this->creator_screens(), true) || empty($_GET['wcp_created_by'])) {
+            return;
+        }
+        $val = sanitize_key($_GET['wcp_created_by']);
+        if ($val === 'manual') {
+            $query->set('meta_query', array(array('key' => '_wcp_created_by', 'compare' => 'NOT EXISTS')));
+        } elseif (in_array($val, array('copilot', 'hermes'), true)) {
+            $query->set('meta_query', array(array('key' => '_wcp_created_by', 'value' => $val)));
+        }
+    }
+
+    public function add_creator_column($columns) {
+        $columns['wcp_created_by'] = __('Creator', 'work-copilot');
+        return $columns;
+    }
+
+    public function render_creator_column($column, $post_id) {
+        if ($column !== 'wcp_created_by') {
+            return;
+        }
+        $by = get_post_meta($post_id, '_wcp_created_by', true);
+        if (!$by && get_post_meta($post_id, '_wcp_ai_generated', true)) {
+            $by = 'copilot';
+        }
+        $labels = array('copilot' => __('Copilot (AI)', 'work-copilot'), 'hermes' => __('Hermes', 'work-copilot'));
+        echo $by ? esc_html(isset($labels[$by]) ? $labels[$by] : $by) : '—';
     }
 
     public function add_admin_menu() {

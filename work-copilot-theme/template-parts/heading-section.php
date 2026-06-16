@@ -8,9 +8,12 @@
 $heading_id = $heading->ID;
 $heading_term = wcp_theme_get_heading_context_term($heading_id);
 $items = wcp_theme_get_heading_items($heading_id);
+
+$heading_created_by = get_post_meta($heading_id, '_wcp_created_by', true);
+$heading_creator_class = $heading_created_by === 'hermes' ? ' wcp-by-hermes' : ($heading_created_by === 'copilot' ? ' wcp-by-copilot' : '');
 ?>
 
-<div class="wcp-heading-section" data-heading-id="<?php echo esc_attr($heading_id); ?>">
+<div class="wcp-heading-section<?php echo esc_attr($heading_creator_class); ?>" data-heading-id="<?php echo esc_attr($heading_id); ?>">
     <div class="wcp-heading-header">
         <h3 class="wcp-heading-title">
             <span class="wcp-toggle-icon">▶</span>
