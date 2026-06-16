@@ -24,6 +24,18 @@ class WCP_Post_Types {
         add_action('save_post', array($this, 'save_heading_parent'), 10, 2);
     }
 
+    /**
+     * Record which agent created a post, for colour-coding and admin filtering.
+     * Source is one of 'copilot' (in-app AI) or 'hermes' (delegation agent);
+     * manually-created content carries no marker.
+     */
+    public static function mark_creator($post_id, $source) {
+        $source = in_array($source, array('copilot', 'hermes'), true) ? $source : '';
+        if ($source && $post_id && !is_wp_error($post_id)) {
+            update_post_meta($post_id, '_wcp_created_by', $source);
+        }
+    }
+
     public function register_post_types() {
         // Heading post type
         $labels = array(

@@ -815,6 +815,7 @@ class WCP_REST_API {
                     // Mark as AI-generated
                     update_post_meta($post_id, '_wcp_ai_generated', true);
                     update_post_meta($post_id, '_wcp_ai_action_id', $action_id);
+                    WCP_Post_Types::mark_creator($post_id, 'copilot');
 
                     // Apply taxonomies
                     if (!empty($candidate['contexts'])) {
@@ -2041,6 +2042,7 @@ class WCP_REST_API {
         update_post_meta( $heading_id, '_wcp_parent_id', $parent_id );
         // AI guardrail: flag this as a goal subtype so the UI can render it differently
         update_post_meta( $heading_id, '_wcp_is_goal', '1' );
+        WCP_Post_Types::mark_creator( $heading_id, 'copilot' );
 
         // Re-run taxonomy sync now that parent meta is in place (save_post fired
         // during wp_insert_post before the meta above was written).
@@ -2082,6 +2084,7 @@ class WCP_REST_API {
                     wp_set_post_terms( $item_id, array( 'task' ), 'item_type' );
                     // AI guardrail audit trail
                     update_post_meta( $item_id, '_wcp_ai_generated', '1' );
+                    WCP_Post_Types::mark_creator( $item_id, 'copilot' );
                     if ( $action_id ) {
                         update_post_meta( $item_id, '_wcp_ai_action_id', $action_id );
                     }

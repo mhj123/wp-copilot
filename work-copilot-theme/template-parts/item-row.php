@@ -13,6 +13,11 @@ $is_done = !empty($task_statuses) && $task_statuses[0] === 'done';
 $_item_type_slug    = !empty($item_types) ? $item_types[0] : '';
 $_task_status_slug  = !empty($task_statuses) ? $task_statuses[0] : '';
 $_is_spec           = $_item_type_slug === 'spec';
+$_created_by        = get_post_meta($item->ID, '_wcp_created_by', true);
+if (!$_created_by && get_post_meta($item->ID, '_wcp_ai_generated', true)) {
+    $_created_by = 'copilot'; // legacy content predating the _wcp_created_by marker
+}
+$_creator_class     = $_created_by === 'hermes' ? ' wcp-by-hermes' : ($_created_by === 'copilot' ? ' wcp-by-copilot' : '');
 $_spec_statuses     = wp_get_post_terms($item->ID, 'spec_status', array('fields' => 'slugs'));
 $_spec_statuses     = is_wp_error($_spec_statuses) ? array() : $_spec_statuses;
 $_spec_status_slug  = !empty($_spec_statuses) ? $_spec_statuses[0] : '';
@@ -29,7 +34,7 @@ $_delegation_labels = array(
     'failed'      => 'failed',
 );
 ?>
-<div class="wcp-item-row<?php echo $is_done ? ' wcp-task-done' : ''; ?>"
+<div class="wcp-item-row<?php echo $is_done ? ' wcp-task-done' : ''; echo esc_attr($_creator_class); ?>"
      data-item-id="<?php echo esc_attr($item->ID); ?>"
      data-item-type="<?php echo esc_attr($_item_type_slug); ?>"
      data-task-status="<?php echo esc_attr($_task_status_slug); ?>"
