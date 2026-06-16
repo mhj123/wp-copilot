@@ -23,6 +23,8 @@ class WCP_Admin {
         add_action('admin_enqueue_scripts', array($this, 'enqueue_scripts'));
         add_action('add_meta_boxes', array($this, 'add_ai_meta_boxes'));
         add_action('admin_post_wcp_export_csv', array($this, 'handle_export_csv'));
+        add_action('admin_post_wcp_import_csv_preview', array($this, 'handle_import_preview'));
+        add_action('admin_post_wcp_import_csv_commit', array($this, 'handle_import_commit'));
     }
 
     public function add_admin_menu() {
@@ -105,11 +107,186 @@ class WCP_Admin {
             <hr>
 
             <h2><?php _e('Import from CSV', 'work-copilot'); ?></h2>
-            <p class="description">
-                <?php _e('Coming soon — import will accept the same CSV format and let you preview changes before applying them.', 'work-copilot'); ?>
-            </p>
+            <?php
+            $token = isset($_GET['wcp_preview']) ? sanitize_key($_GET['wcp_preview']) : '';
+            $rkey  = isset($_GET['wcp_result']) ? sanitize_key($_GET['wcp_result']) : '';
+
+            if ($rkey) {
+                $this->render_import_result($rkey);
+            } elseif ($token) {
+                $this->render_import_preview($token);
+            } else {
+                $this->render_import_upload();
+            }
+            ?>
         </div>
         <?php
+    }
+
+    private function render_import_upload() {
+        ?>
+        <p class="description">
+            <?php _e('Upload a CSV in either export format. You will see a preview of what will be created or updated before anything is written. Matching is by the <code>id</code> column; rows without a matching id are created.', 'work-copilot'); ?>
+        </p>
+        <p class="description">
+            <?php _e('Note: pages and headings that already exist keep their current content (only their title, structure and order are updated). Only items have their content updated from the CSV.', 'work-copilot'); ?>
+        </p>
+        <p>
+            <a href="<?php echo esc_url(WCP_PLUGIN_URL . 'sample-import.csv'); ?>" download>
+                <?php _e('Download a sample CSV', 'work-copilot'); ?>
+            </a>
+            — <?php _e('covers a page, sub-page, heading and one item of each type. Required columns: row_type, title, context_path (leave id blank to create new).', 'work-copilot'); ?>
+        </p>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" enctype="multipart/form-data">
+            <input type="hidden" name="action" value="wcp_import_csv_preview">
+            <?php wp_nonce_field('wcp_import_csv'); ?>
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th scope="row"><?php _e('CSV file', 'work-copilot'); ?></th>
+                    <td><input type="file" name="import_file" accept=".csv,text/csv" required></td>
+                </tr>
+            </table>
+            <?php submit_button(__('Preview import', 'work-copilot')); ?>
+        </form>
+        <?php
+    }
+
+    private function render_import_preview($token) {
+        $payload = get_transient('wcp_import_' . $token);
+        if (!$payload || empty($payload['summary'])) {
+            echo '<div class="notice notice-warning inline"><p>' . esc_html__('Preview expired or not found. Please upload the file again.', 'work-copilot') . '</p></div>';
+            $this->render_import_upload();
+            return;
+        }
+
+        $s = $payload['summary'];
+        ?>
+        <p class="description"><?php printf(esc_html__('Detected format: %s', 'work-copilot'), '<strong>' . esc_html($payload['mode']) . '</strong>'); ?></p>
+        <table class="widefat striped" style="max-width:640px">
+            <tbody>
+                <tr><td><?php _e('Pages', 'work-copilot'); ?></td><td><?php printf(esc_html__('%d new, %d updated', 'work-copilot'), $s['pages_create'], $s['pages_update']); ?></td></tr>
+                <tr><td><?php _e('Headings', 'work-copilot'); ?></td><td><?php printf(esc_html__('%d new, %d updated', 'work-copilot'), $s['headings_create'], $s['headings_update']); ?></td></tr>
+                <tr><td><?php _e('Items', 'work-copilot'); ?></td><td><?php printf(esc_html__('%d new, %d updated', 'work-copilot'), $s['items_create'], $s['items_update']); ?></td></tr>
+                <tr><td><?php _e('Item content changes', 'work-copilot'); ?></td><td><?php echo (int) $s['content_changes']; ?></td></tr>
+                <tr><td><?php _e('Skipped rows', 'work-copilot'); ?></td><td><?php echo (int) $s['skipped']; ?></td></tr>
+            </tbody>
+        </table>
+
+        <?php if (!empty($s['warnings'])) : ?>
+            <div class="notice notice-warning inline">
+                <p><strong><?php _e('Warnings:', 'work-copilot'); ?></strong></p>
+                <ul style="list-style:disc;margin-left:20px">
+                    <?php foreach (array_slice($s['warnings'], 0, 50) as $w) : ?>
+                        <li><?php echo esc_html($w); ?></li>
+                    <?php endforeach; ?>
+                    <?php if (count($s['warnings']) > 50) : ?>
+                        <li><?php printf(esc_html__('…and %d more.', 'work-copilot'), count($s['warnings']) - 50); ?></li>
+                    <?php endif; ?>
+                </ul>
+            </div>
+        <?php endif; ?>
+
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <input type="hidden" name="action" value="wcp_import_csv_commit">
+            <input type="hidden" name="token" value="<?php echo esc_attr($token); ?>">
+            <?php wp_nonce_field('wcp_import_commit'); ?>
+            <?php submit_button(__('Confirm import', 'work-copilot'), 'primary'); ?>
+            <a href="<?php echo esc_url(admin_url('admin.php?page=work-copilot-import-export')); ?>" class="button"><?php _e('Cancel', 'work-copilot'); ?></a>
+        </form>
+        <?php
+    }
+
+    private function render_import_result($rkey) {
+        $r = get_transient('wcp_import_result_' . $rkey);
+        if (!$r) {
+            $this->render_import_upload();
+            return;
+        }
+        delete_transient('wcp_import_result_' . $rkey);
+        ?>
+        <div class="notice notice-success inline"><p><?php _e('Import complete.', 'work-copilot'); ?></p></div>
+        <table class="widefat striped" style="max-width:640px">
+            <tbody>
+                <tr><td><?php _e('Pages saved', 'work-copilot'); ?></td><td><?php echo (int) $r['pages']; ?></td></tr>
+                <tr><td><?php _e('Headings saved', 'work-copilot'); ?></td><td><?php echo (int) $r['headings']; ?></td></tr>
+                <tr><td><?php _e('Items saved', 'work-copilot'); ?></td><td><?php echo (int) $r['items']; ?></td></tr>
+                <tr><td><?php _e('Skipped', 'work-copilot'); ?></td><td><?php echo (int) $r['skipped']; ?></td></tr>
+            </tbody>
+        </table>
+        <?php if (!empty($r['errors'])) : ?>
+            <div class="notice notice-error inline">
+                <p><strong><?php _e('Errors:', 'work-copilot'); ?></strong></p>
+                <ul style="list-style:disc;margin-left:20px">
+                    <?php foreach ($r['errors'] as $e) : ?><li><?php echo esc_html($e); ?></li><?php endforeach; ?>
+                </ul>
+            </div>
+        <?php endif; ?>
+        <p><a href="<?php echo esc_url(admin_url('admin.php?page=work-copilot-import-export')); ?>" class="button"><?php _e('Import another file', 'work-copilot'); ?></a></p>
+        <?php
+    }
+
+    /**
+     * Parse the upload, build a dry-run plan, stash it in a transient, and
+     * redirect to the preview screen. No content is written here.
+     */
+    public function handle_import_preview() {
+        if (!current_user_can('edit_posts')) {
+            wp_die(__('You do not have permission to import.', 'work-copilot'), '', array('response' => 403));
+        }
+        check_admin_referer('wcp_import_csv');
+
+        $base = admin_url('admin.php?page=work-copilot-import-export');
+
+        if (empty($_FILES['import_file']) || !isset($_FILES['import_file']['error']) || $_FILES['import_file']['error'] !== UPLOAD_ERR_OK) {
+            wp_safe_redirect(add_query_arg('wcp_error', 'upload', $base));
+            exit;
+        }
+
+        $parsed = WCP_CSV_Importer::instance()->parse($_FILES['import_file']['tmp_name']);
+        if (is_wp_error($parsed)) {
+            wp_safe_redirect(add_query_arg('wcp_error', 'parse', $base));
+            exit;
+        }
+
+        $summary = WCP_CSV_Importer::instance()->build_plan($parsed['rows']);
+
+        $token = wp_generate_password(20, false);
+        set_transient('wcp_import_' . $token, array(
+            'mode'    => $parsed['mode'],
+            'rows'    => $parsed['rows'],
+            'summary' => $summary,
+        ), HOUR_IN_SECONDS);
+
+        wp_safe_redirect(add_query_arg('wcp_preview', $token, $base));
+        exit;
+    }
+
+    /**
+     * Commit a previously-previewed import.
+     */
+    public function handle_import_commit() {
+        if (!current_user_can('edit_posts')) {
+            wp_die(__('You do not have permission to import.', 'work-copilot'), '', array('response' => 403));
+        }
+        check_admin_referer('wcp_import_commit');
+
+        $base    = admin_url('admin.php?page=work-copilot-import-export');
+        $token   = isset($_POST['token']) ? sanitize_key($_POST['token']) : '';
+        $payload = $token ? get_transient('wcp_import_' . $token) : false;
+
+        if (!$payload || empty($payload['rows'])) {
+            wp_safe_redirect(add_query_arg('wcp_error', 'expired', $base));
+            exit;
+        }
+
+        $result = WCP_CSV_Importer::instance()->commit($payload['rows']);
+        delete_transient('wcp_import_' . $token);
+
+        $rkey = wp_generate_password(20, false);
+        set_transient('wcp_import_result_' . $rkey, $result, HOUR_IN_SECONDS);
+
+        wp_safe_redirect(add_query_arg('wcp_result', $rkey, $base));
+        exit;
     }
 
     /**
@@ -123,7 +300,8 @@ class WCP_Admin {
 
         $mode = (isset($_POST['mode']) && $_POST['mode'] === 'items') ? 'items' : 'outline';
 
-        $filename = 'work-copilot-export-' . gmdate('Y-m-d') . '.csv';
+        $label    = ($mode === 'items') ? 'compact' : 'full';
+        $filename = 'work-copilot-export-' . $label . '-' . gmdate('Y-m-d') . '.csv';
 
         nocache_headers();
         header('Content-Type: text/csv; charset=utf-8');
