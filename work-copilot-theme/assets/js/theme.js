@@ -529,7 +529,7 @@ jQuery(document).ready(function($) {
     var PRIORITY_ORDER = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3, '': 4 };
 
     function sortListByPriority($list) {
-        var $rows = $list.find('> .wcp-item-row').get();
+        var $rows = $list.children('.wcp-item-row').get();
         $rows.sort(function(a, b) {
             var pa = PRIORITY_ORDER[$(a).data('priority') || ''] ?? 4;
             var pb = PRIORITY_ORDER[$(b).data('priority') || ''] ?? 4;
@@ -561,7 +561,7 @@ jQuery(document).ready(function($) {
 
     // Sort items by due date within each items-list container
     function sortListByDueDate($list) {
-        var $rows = $list.find('> .wcp-item-row').get();
+        var $rows = $list.children('.wcp-item-row').get();
         $rows.sort(function(a, b) {
             var da = $(a).data('due-date') || '';
             var db = $(b).data('due-date') || '';
@@ -596,14 +596,16 @@ jQuery(document).ready(function($) {
         }
     });
 
-    // Sort items by created date within each items-list container — oldest first
-    // (ascending so the sort produces a visible change from the default newest-first WP order)
     function sortListByCreated($list) {
-        var $rows = $list.find('> .wcp-item-row').get();
+        var $rows = $list.children('.wcp-item-row').get();
         $rows.sort(function(a, b) {
             var ca = parseInt($(a).data('created'), 10) || 0;
             var cb = parseInt($(b).data('created'), 10) || 0;
-            return ca - cb;
+            if (ca !== cb) return cb - ca; // newest first
+            // tiebreak by post ID — auto-incremented so reflects insertion order
+            var ia = parseInt($(a).data('item-id'), 10) || 0;
+            var ib = parseInt($(b).data('item-id'), 10) || 0;
+            return ib - ia; // highest ID first
         });
         $.each($rows, function(i, row) { $list.append(row); });
     }

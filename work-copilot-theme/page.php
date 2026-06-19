@@ -89,7 +89,7 @@ get_header();
             </div>
             <button type="button" class="wcp-sort-priority wcp-edit-link" title="Sort by priority">sort by priority</button>
             <button type="button" class="wcp-sort-due-date wcp-edit-link" title="Sort by due date">sort by due date</button>
-            <button type="button" class="wcp-sort-created wcp-edit-link" title="Sort by created date (oldest first)">sort by created</button>
+            <button type="button" class="wcp-sort-created wcp-edit-link" title="Sort by created date (newest first)">sort by created</button>
             <button type="button" class="wcp-toggle-descriptions wcp-edit-link" title="Toggle descriptions">descriptions</button>
             <button type="button" class="wcp-toggle-actions wcp-edit-link" title="Toggle item actions">actions</button>
             <button type="button" id="wcp-select-mode-btn" class="wcp-edit-link" data-page-id="<?php echo esc_attr($page_id); ?>">select</button>
