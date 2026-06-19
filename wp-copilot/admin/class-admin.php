@@ -26,13 +26,9 @@ class WCP_Admin {
         add_action('admin_post_wcp_import_csv_preview', array($this, 'handle_import_preview'));
         add_action('admin_post_wcp_import_csv_commit', array($this, 'handle_import_commit'));
 
-        // Creator provenance: filter dropdown + column on the list screens.
+        // Creator provenance: filter dropdown on the list screens.
         add_action('restrict_manage_posts', array($this, 'render_creator_filter'));
         add_action('pre_get_posts', array($this, 'filter_by_creator'));
-        foreach (array('post', 'page', 'wcp_heading') as $pt) {
-            add_filter("manage_{$pt}_posts_columns", array($this, 'add_creator_column'));
-            add_action("manage_{$pt}_posts_custom_column", array($this, 'render_creator_column'), 10, 2);
-        }
     }
 
     /** Post types that carry a creator marker. */
