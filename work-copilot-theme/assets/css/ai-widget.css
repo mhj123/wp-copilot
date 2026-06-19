@@ -941,3 +941,52 @@ body.admin-bar .wcp-ai-widget.minimized {
     padding: 10px 12px;
     margin: 8px 0 12px;
 }
+
+/* Onboard chip — visually distinct */
+.wcp-ai-action-chip--onboard {
+    background: #f0f7ff;
+    border-color: #0073aa;
+    color: #0073aa;
+    font-weight: 600;
+}
+
+.wcp-ai-action-chip--onboard:hover {
+    background: #0073aa;
+    color: #fff;
+}
+
+/* Mission offer block rendered inline in the conversation */
+.wcp-ai-mission-offer {
+    margin: 10px 0;
+    padding: 12px 14px;
+    background: #f0f7ff;
+    border: 1px solid #b3d7f0;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.wcp-ai-mission-offer-text {
+    margin: 0 0 6px;
+    font-weight: 600;
+    color: #333;
+}
+
+.wcp-ai-mission-offer-editor {
+    display: block;
+    width: 100%;
+    margin: 6px 0 10px;
+    padding: 8px 10px;
+    background: #fff;
+    border: 1px solid #b3d7f0;
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #333;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+.wcp-ai-mission-offer-actions {
+    display: flex;
+    gap: 8px;
+}

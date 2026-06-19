@@ -166,6 +166,20 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // AI: Onboard — fetch context, summarise, greet
+        register_rest_route($namespace, '/ai/onboard', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'ai_onboard'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // Mission: Append text to page AI mission
+        register_rest_route($namespace, '/pages/(?P<page_id>\d+)/mission/append', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'append_page_mission'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // Memories: Extract from conversation
         register_rest_route($namespace, '/ai/memories/extract', array(
             'methods' => 'POST',
@@ -2676,5 +2690,59 @@ class WCP_REST_API {
         update_post_meta( $page_id, '_wcp_dynamic_listings', wp_json_encode($listings) );
 
         return rest_ensure_response( array('success' => true) );
+    }
+
+    /**
+     * POST /work-copilot/v1/ai/onboard
+     *
+     * Gathers context (global mission, page mission, structure), calls AI to
+     * produce a greeting summary, and optionally suggests an AI mission if none
+     * exists. All writes are human-in-the-loop: nothing is saved here.
+     */
+    public function ai_onboard( $request ) {
+        $page_id = intval( $request->get_param('page_id') );
+        $conversation_id = $request->get_param('conversation_id');
+
+        if ( ! $page_id ) {
+            return rest_ensure_response( array('success' => false, 'message' => 'Missing page_id') );
+        }
+
+        if ( ! get_option('wcp_ai_enabled', false) ) {
+            return rest_ensure_response( array('success' => false, 'message' => 'AI is not enabled') );
+        }
+
+        $ai_actions = WCP_AI_Actions::instance();
+        $result = $ai_actions->onboard( $page_id, $conversation_id );
+
+        if ( is_wp_error($result) ) {
+            return rest_ensure_response( array('success' => false, 'message' => $result->get_error_message()) );
+        }
+
+        return rest_ensure_response( array_merge( array('success' => true), $result ) );
+    }
+
+    /**
+     * POST /work-copilot/v1/pages/{page_id}/mission/append
+     *
+     * Appends (or sets) text on the page's AI mission meta.
+     * Human-in-the-loop: called only after explicit user confirmation.
+     */
+    public function append_page_mission( $request ) {
+        $page_id = intval( $request->get_param('page_id') );
+        $text    = sanitize_textarea_field( $request->get_param('text') );
+
+        if ( ! $page_id || ! $text ) {
+            return rest_ensure_response( array('success' => false, 'message' => 'Missing page_id or text') );
+        }
+
+        if ( ! current_user_can('edit_post', $page_id) ) {
+            return rest_ensure_response( array('success' => false, 'message' => 'Permission denied') );
+        }
+
+        $existing = get_post_meta( $page_id, '_wcp_ai_page_mission', true );
+        $updated  = $existing ? trim($existing) . "\n\n" . $text : $text;
+        update_post_meta( $page_id, '_wcp_ai_page_mission', $updated );
+
+        return rest_ensure_response( array('success' => true, 'mission' => $updated) );
     }
 }

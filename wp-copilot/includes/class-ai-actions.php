@@ -1883,6 +1883,114 @@ class WCP_AI_Actions {
     }
 
     /**
+     * Onboard action: gather context, summarise, greet, optionally suggest AI mission.
+     * AI guardrail: nothing is written here — any mission suggestion is a proposal.
+     *
+     * @param int    $page_id         Current page ID
+     * @param string $conversation_id Conversation ID (optional)
+     * @return array|WP_Error
+     */
+    public function onboard( $page_id, $conversation_id = null ) {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new WP_Error( 'auth_error', 'User not authenticated' );
+        }
+
+        $page = get_post( $page_id );
+        if ( ! $page || $page->post_type !== 'page' ) {
+            return new WP_Error( 'invalid_page', 'Invalid page ID' );
+        }
+
+        // Load missions
+        $mission_loader  = WCP_Mission_Loader::instance();
+        $global_mission  = $mission_loader->get_global_mission();
+        $page_mission    = $mission_loader->get_page_objectives( $page_id );
+        $has_page_mission = ! empty( trim( $page_mission ) );
+
+        // Build a compact structure snapshot (same helper used by generate_structure)
+        $page_term_id = $this->page_context_term_id( $page_id );
+        list( $structure_snapshot, ) = $this->build_structure_snapshot( $page_id, $page_term_id );
+
+        // Count items directly under this page
+        $item_count = count( get_posts( array(
+            'post_type'      => 'post',
+            'post_status'    => 'publish',
+            'posts_per_page' => -1,
+            'fields'         => 'ids',
+            'tax_query'      => array( array(
+                'taxonomy'         => 'wcp_context',
+                'field'            => 'term_id',
+                'terms'            => $page_term_id,
+                'include_children' => true,
+            ) ),
+        ) ) );
+
+        // System prompt
+        $system_prompt  = "You are an AI assistant embedded in a personal work management system. ";
+        $system_prompt .= "When asked to onboard onto a page, you:\n";
+        $system_prompt .= "1. Briefly summarise what you understand about the global mission and the page's purpose.\n";
+        $system_prompt .= "2. Note the page's current structure (headings, item count).\n";
+        $system_prompt .= "3. If there is no page AI mission defined, propose a concise one (2–4 sentences) in a JSON field called `suggested_mission`.\n";
+        $system_prompt .= "4. Close with an open, helpful question: 'How can I help?'\n\n";
+        $system_prompt .= "Keep the greeting to 150–250 words. Be direct and practical — not effusive.\n\n";
+        $system_prompt .= "Return JSON: { \"greeting\": \"<greeting text>\", \"suggested_mission\": \"<text or null>\" }";
+
+        // User message
+        $user_message  = "Page: {$page->post_title}\n\n";
+        $user_message .= "Global mission:\n" . ( $global_mission ?: '(none set)' ) . "\n\n";
+        $user_message .= "Page AI mission:\n" . ( $page_mission ?: '(none set)' ) . "\n\n";
+        $user_message .= "Current structure:\n{$structure_snapshot}\n\n";
+        $user_message .= "Total items on this page: {$item_count}\n\n";
+        $user_message .= "Please onboard onto this page.";
+
+        $ai_client = WCP_AI_Client::instance();
+        $response  = $ai_client->request_with_conversation( $system_prompt, $user_message, array(), 512, 30 );
+
+        if ( is_wp_error( $response ) ) {
+            return $response;
+        }
+
+        $parsed = $this->parse_json_response( $response['content'] );
+        if ( is_wp_error( $parsed ) ) {
+            // Fallback: treat raw content as greeting with no suggested mission
+            $parsed = array( 'greeting' => $response['content'], 'suggested_mission' => null );
+        }
+
+        $greeting          = isset( $parsed['greeting'] ) ? $parsed['greeting'] : $response['content'];
+        $suggested_mission = ( ! $has_page_mission && ! empty( $parsed['suggested_mission'] ) )
+            ? sanitize_textarea_field( $parsed['suggested_mission'] )
+            : null;
+
+        // Log action
+        $logger = WCP_AI_Logger::instance();
+        $logger->log_action( array(
+            'action_type'     => 'onboard',
+            'user_id'         => $user_id,
+            'model'           => $response['model'],
+            'prompt'          => 'onboard',
+            'input_context'   => json_encode( array( 'page_id' => $page_id, 'has_page_mission' => $has_page_mission ) ),
+            'output_snapshot' => $greeting,
+            'context_post_id' => $page_id,
+            'accepted_items'  => array(),
+            'dismissed_items' => array(),
+        ) );
+
+        if ( $conversation_id ) {
+            $mgr = WCP_Conversations_Manager::instance();
+            $mgr->add_message( $conversation_id, 'user', 'onboard' );
+            $mgr->add_message( $conversation_id, 'assistant', $greeting );
+        }
+
+        return array(
+            'outcome'           => 'onboard',
+            'message'           => $greeting,
+            'suggested_mission' => $suggested_mission,
+            'has_page_mission'  => $has_page_mission,
+            'metadata'          => array( 'model' => $response['model'] ),
+        );
+    }
+
+    /**
      * Get version for debugging
      */
     public static function get_version() {

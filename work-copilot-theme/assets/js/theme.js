@@ -428,6 +428,48 @@ jQuery(document).ready(function($) {
         localStorage.setItem('wcp_actions_hidden', actionsHidden ? '1' : '0');
     });
 
+    // Heading collapse toggle
+    var COLLAPSE_KEY = 'wcp_collapsed_headings_' + (window.wcpThemeData && wcpThemeData.pageId ? wcpThemeData.pageId : '0');
+
+    function getCollapsedSet() {
+        try { return new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '[]')); }
+        catch(e) { return new Set(); }
+    }
+
+    function saveCollapsedSet(set) {
+        try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(Array.from(set))); }
+        catch(e) {}
+    }
+
+    // Restore collapsed state on load
+    getCollapsedSet().forEach(function(hid) {
+        var $group = $('.wcp-heading-group[data-heading-id="' + hid + '"]');
+        if ($group.length) {
+            $group.addClass('wcp-heading-collapsed');
+            $group.find('.wcp-heading-collapse-toggle').attr('aria-expanded', 'false');
+        }
+    });
+
+    $(document).on('click', '.wcp-heading-collapse-toggle', function(e) {
+        e.stopPropagation();
+        var $btn   = $(this);
+        var hid    = $btn.data('heading-id');
+        var $group = $btn.closest('.wcp-heading-group');
+        var collapsed = $group.hasClass('wcp-heading-collapsed');
+        var set    = getCollapsedSet();
+
+        if (collapsed) {
+            $group.removeClass('wcp-heading-collapsed');
+            $btn.attr('aria-expanded', 'true');
+            set.delete(String(hid));
+        } else {
+            $group.addClass('wcp-heading-collapsed');
+            $btn.attr('aria-expanded', 'false');
+            set.add(String(hid));
+        }
+        saveCollapsedSet(set);
+    });
+
     // Inline heading title edit — click title text to edit
     $(document).on('click', '.wcp-heading-title-text', function() {
         var $span  = $(this);

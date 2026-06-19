@@ -71,6 +71,7 @@ function wcp_theme_scripts() {
         'homeUrl' => home_url(),
         'adminUrl' => admin_url(),
         'isLoggedIn' => is_user_logged_in(),
+        'pageId' => get_queried_object_id(),
     ));
 }
 add_action('wp_enqueue_scripts', 'wcp_theme_scripts');

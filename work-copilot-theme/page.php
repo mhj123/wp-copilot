@@ -168,6 +168,7 @@ get_header();
             <div class="wcp-heading-group<?php echo $is_goal ? ' wcp-goal-group' : ''; ?>" data-heading-id="<?php echo esc_attr($heading_id); ?>">
                 <h3 class="wcp-heading-title-simple">
                     <span class="wcp-heading-drag-handle" title="Drag to reorder">⠿</span>
+                    <button type="button" class="wcp-heading-collapse-toggle" data-heading-id="<?php echo esc_attr($heading_id); ?>" aria-expanded="true" title="Collapse items">▾</button>
                     <?php if ($is_goal) : ?>
                         <span class="wcp-goal-badge">Goal</span>
                     <?php endif; ?>
@@ -179,30 +180,32 @@ get_header();
                     <div class="wcp-goal-description"><?php echo wpautop(esc_html($heading->post_content)); ?></div>
                 <?php endif; ?>
 
-                <div class="wcp-items-list" data-context-id="<?php echo esc_attr($heading_context_id); ?>">
-                    <?php foreach ($items as $item) :
-                        $item_types    = wp_get_post_terms($item->ID, 'item_type', array('fields' => 'names'));
-                        $priorities    = wp_get_post_terms($item->ID, 'priority', array('fields' => 'names'));
-                        $task_statuses = wp_get_post_terms($item->ID, 'task_status', array('fields' => 'slugs'));
-                        $item_tags     = wp_get_post_terms($item->ID, 'post_tag', array('fields' => 'names'));
-                        $item_contexts = array_values(array_map(
-                            function($t) { return $t->name; },
-                            array_filter(
-                                wp_get_post_terms($item->ID, 'wcp_context'),
-                                function($t) use ($local_context_ids) { return !in_array($t->term_id, $local_context_ids); }
-                            )
-                        ));
-                    ?>
-                        <?php include(locate_template('template-parts/item-row.php')); ?>
-                    <?php endforeach; ?>
-                </div>
+                <div class="wcp-heading-body">
+                    <div class="wcp-items-list" data-context-id="<?php echo esc_attr($heading_context_id); ?>">
+                        <?php foreach ($items as $item) :
+                            $item_types    = wp_get_post_terms($item->ID, 'item_type', array('fields' => 'names'));
+                            $priorities    = wp_get_post_terms($item->ID, 'priority', array('fields' => 'names'));
+                            $task_statuses = wp_get_post_terms($item->ID, 'task_status', array('fields' => 'slugs'));
+                            $item_tags     = wp_get_post_terms($item->ID, 'post_tag', array('fields' => 'names'));
+                            $item_contexts = array_values(array_map(
+                                function($t) { return $t->name; },
+                                array_filter(
+                                    wp_get_post_terms($item->ID, 'wcp_context'),
+                                    function($t) use ($local_context_ids) { return !in_array($t->term_id, $local_context_ids); }
+                                )
+                            ));
+                        ?>
+                            <?php include(locate_template('template-parts/item-row.php')); ?>
+                        <?php endforeach; ?>
+                    </div>
 
-                <!-- Quick-add item under this heading -->
-                <?php if ($heading_context_id) :
-                    $page_context_id = $heading_context_id; // reuse partial
-                    include(locate_template('template-parts/quick-add-item.php'));
-                    $page_context_id = $page_context_term ? $page_context_term->term_id : 0; // restore
-                endif; ?>
+                    <!-- Quick-add item under this heading -->
+                    <?php if ($heading_context_id) :
+                        $page_context_id = $heading_context_id; // reuse partial
+                        include(locate_template('template-parts/quick-add-item.php'));
+                        $page_context_id = $page_context_term ? $page_context_term->term_id : 0; // restore
+                    endif; ?>
+                </div>
             </div>
         <?php endforeach; ?>
         </div><!-- #wcp-headings-sortable -->
