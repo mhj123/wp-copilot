@@ -2876,6 +2876,16 @@ a.wcp-tag:hover {
     color: #c0392b;
 }
 
+.wcp-goal-truncation-warning {
+    font-size: 12px;
+    color: #7a5c00;
+    background: #fffbe6;
+    border: 1px solid #f0d060;
+    border-radius: 4px;
+    padding: 6px 10px;
+    margin-bottom: 12px;
+}
+
 /* ==========================================================================
    Selection bar + per-item AI panel
    ========================================================================== */

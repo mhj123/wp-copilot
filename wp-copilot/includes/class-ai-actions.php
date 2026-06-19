@@ -1516,10 +1516,28 @@ class WCP_AI_Actions {
         }
 
         $context_builder = WCP_Context_Builder::instance();
+        $item_char_limit = 50000;
         $context_data    = $context_builder->build_hierarchical_context( $page_id, array(
             'include_items' => true,
-            'item_limit'    => 10,
+            'item_limit'    => 25,
+            'limits'        => array(
+                'max_chars_per_item'      => $item_char_limit,
+                'max_chars_page_summary'  => 8000,
+            ),
         ) );
+
+        // Detect which items were truncated so the UI can warn the user
+        $truncated_items = array();
+        foreach ( $context_data['items'] as $item ) {
+            $len = strlen( wp_strip_all_tags( $item['content'] ) );
+            if ( $len > $item_char_limit ) {
+                $truncated_items[] = array(
+                    'title'      => $item['title'],
+                    'actual_len' => $len,
+                    'limit'      => $item_char_limit,
+                );
+            }
+        }
 
         $prompt_builder = WCP_Prompt_Builder::instance();
         $system_prompt  = $prompt_builder->build_system_prompt( 'plan-goal', $page_id );
@@ -1551,9 +1569,9 @@ class WCP_AI_Actions {
         ) );
 
         return array(
-            'success'       => true,
-            'understanding' => sanitize_textarea_field( $parsed['understanding'] ),
-            'action_items'  => array_values( array_filter( array_map( function( $item ) {
+            'success'         => true,
+            'understanding'   => sanitize_textarea_field( $parsed['understanding'] ),
+            'action_items'    => array_values( array_filter( array_map( function( $item ) {
                 $title = sanitize_text_field( $item['title'] ?? '' );
                 if ( empty( $title ) ) return null;
                 return array(
@@ -1561,7 +1579,8 @@ class WCP_AI_Actions {
                     'content' => sanitize_textarea_field( $item['content'] ?? '' ),
                 );
             }, (array) $parsed['action_items'] ) ) ),
-            'action_id'     => $action_id,
+            'action_id'       => $action_id,
+            'truncated_items' => $truncated_items,
         );
     }
 
@@ -1952,11 +1971,23 @@ class WCP_AI_Actions {
 
         $parsed = $this->parse_json_response( $response['content'] );
         if ( is_wp_error( $parsed ) ) {
-            // Regex fallback: extract greeting field even if surrounding text broke JSON parse
+            // Regex fallback: AI may embed actual newlines in string values, breaking json_decode.
+            // Capture the raw escaped content and re-decode it as a standalone JSON string.
             if ( preg_match( '/"greeting"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/s', $response['content'], $m ) ) {
+                // Re-encode the captured fragment as a JSON string so json_decode handles \n etc.
+                $raw = preg_replace( '/\r\n|\r|\n/', '\\n', $m[1] ); // normalise real newlines
+                $greeting_text = json_decode( '"' . $raw . '"' );
+                if ( $greeting_text === null ) {
+                    $greeting_text = $m[1]; // last resort: keep as-is
+                }
+                $mission_text = null;
+                if ( preg_match( '/"suggested_mission"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/s', $response['content'], $mm ) ) {
+                    $raw_m = preg_replace( '/\r\n|\r|\n/', '\\n', $mm[1] );
+                    $mission_text = json_decode( '"' . $raw_m . '"' ) ?: $mm[1];
+                }
                 $parsed = array(
-                    'greeting'          => stripslashes( $m[1] ),
-                    'suggested_mission' => null,
+                    'greeting'          => $greeting_text,
+                    'suggested_mission' => $mission_text,
                 );
             } else {
                 $parsed = array( 'greeting' => $response['content'], 'suggested_mission' => null );

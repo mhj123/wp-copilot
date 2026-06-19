@@ -1970,6 +1970,15 @@ jQuery(document).ready(function($) {
             $('#wcp-goal-title').val(titleSuggestion);
             $('#wcp-goal-understanding').val(understanding);
 
+            // Show truncation warning if any item was cut
+            var $truncWarning = $('#wcp-goal-truncation-warning').empty().hide();
+            if (data.truncated_items && data.truncated_items.length > 0) {
+                var names = data.truncated_items.map(function(t) {
+                    return '"' + t.title + '" (' + Math.round(t.actual_len / 1000) + 'k chars, limit ' + Math.round(t.limit / 1000) + 'k)';
+                }).join(', ');
+                $truncWarning.text('⚠ Content truncated: ' + names + '. The AI worked with a partial version of this item.').show();
+            }
+
             // Render action item checklist
             var $list = $('#wcp-goal-action-items').empty();
             (data.action_items || []).forEach(function(item, idx) {
