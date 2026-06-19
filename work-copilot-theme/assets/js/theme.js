@@ -596,13 +596,14 @@ jQuery(document).ready(function($) {
         }
     });
 
-    // Sort items by created date within each items-list container — most recent first
+    // Sort items by created date within each items-list container — oldest first
+    // (ascending so the sort produces a visible change from the default newest-first WP order)
     function sortListByCreated($list) {
         var $rows = $list.find('> .wcp-item-row').get();
         $rows.sort(function(a, b) {
             var ca = parseInt($(a).data('created'), 10) || 0;
             var cb = parseInt($(b).data('created'), 10) || 0;
-            return cb - ca;
+            return ca - cb;
         });
         $.each($rows, function(i, row) { $list.append(row); });
     }
