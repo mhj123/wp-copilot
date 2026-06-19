@@ -79,6 +79,17 @@ usort($overdue_posts, function($a, $b) use ($prio_order, $overdue_data) {
 });
 $overdue_ids = array_column($overdue_posts, 'ID');
 
+// Split into strictly-overdue (due before today) and due-today.
+$today_posts        = array();
+$strict_overdue_posts = array();
+foreach ($overdue_posts as $p) {
+    if ($overdue_data[$p->ID]['due_date'] === $today) {
+        $today_posts[] = $p;
+    } else {
+        $strict_overdue_posts[] = $p;
+    }
+}
+
 // ────────────────────────────────────────────────────────────────
 // Section 2: Critical / High — no (or future) due date
 // ────────────────────────────────────────────────────────────────
@@ -127,6 +138,26 @@ foreach ($upcoming_posts as $p) {
     $by_day[$d][] = $p;
 }
 ksort($by_day);
+
+// ────────────────────────────────────────────────────────────────
+// Section 3b: Pinned items (from any page)
+// ────────────────────────────────────────────────────────────────
+$pinned_posts = get_posts(array(
+    'post_type'      => 'post',
+    'post_status'    => 'publish',
+    'posts_per_page' => -1,
+    'tax_query'      => array(
+        'relation' => 'AND',
+        array('taxonomy' => 'pinned', 'field' => 'slug', 'terms' => 'yes'),
+        $not_done,
+    ),
+));
+$pinned_data = wcp_db_prefetch($pinned_posts);
+usort($pinned_posts, function($a, $b) use ($prio_order, $pinned_data) {
+    $oa = $prio_order[$pinned_data[$a->ID]['priority']] ?? 4;
+    $ob = $prio_order[$pinned_data[$b->ID]['priority']] ?? 4;
+    return $oa - $ob;
+});
 
 // ────────────────────────────────────────────────────────────────
 // Section 4: Scheduled pages (next 14 days)
@@ -203,91 +234,97 @@ foreach ($cal_events as $ev) {
     <!-- ── Row 1: three task columns ─────────────────────────────── -->
     <div class="wcp-dash-row wcp-dash-three-col">
 
-        <!-- Overdue & due today -->
-        <div class="wcp-dash-card">
-            <h2 class="wcp-dash-card-title">
-                <?php if (!empty($overdue_posts)) : ?>
-                    <span class="wcp-dash-badge wcp-dash-badge-red"><?php echo count($overdue_posts); ?></span>
-                <?php endif; ?>
-                Overdue &amp; due today
-            </h2>
-            <?php if (empty($overdue_posts)) : ?>
-                <p class="wcp-dash-empty">Nothing overdue.</p>
-            <?php else : ?>
-                <ul class="wcp-dash-task-list">
-                <?php foreach ($overdue_posts as $item) :
-                    $d = $overdue_data[$item->ID];
-                    $due_label = wcp_due_label($d['due_date']);
-                    $page_url  = wcp_theme_get_item_page_url($item->ID);
-                ?>
-                    <li class="wcp-dash-task<?php echo $d['priority'] === 'critical' ? ' wcp-dash-critical' : ''; ?>">
-                        <div class="wcp-dash-task-main">
-                            <?php if ($d['priority']) : ?>
-                                <span class="wcp-dash-prio wcp-dash-prio-<?php echo esc_attr($d['priority']); ?>"><?php echo esc_html($d['priority']); ?></span>
-                            <?php endif; ?>
-                            <a href="<?php echo esc_url($page_url); ?>" class="wcp-dash-task-title"><?php echo esc_html($item->post_title); ?></a>
-                        </div>
-                        <div class="wcp-dash-task-meta">
-                            <?php if (!empty($d['contexts'])) : ?>
-                                <span class="wcp-dash-ctx"><?php echo esc_html($d['contexts'][0]); ?></span>
-                            <?php endif; ?>
-                            <span class="wcp-dash-due wcp-dash-overdue"><?php echo esc_html($due_label); ?></span>
-                        </div>
-                    </li>
-                <?php endforeach; ?>
-                </ul>
-            <?php endif; ?>
-        </div>
+        <!-- LEFT COLUMN: Overdue + Critical -->
+        <div class="wcp-dash-col">
 
-        <!-- Critical / High (no due date) -->
-        <div class="wcp-dash-card">
-            <h2 class="wcp-dash-card-title">
-                <?php if (!empty($urgent_posts)) : ?>
-                    <span class="wcp-dash-badge"><?php echo count($urgent_posts); ?></span>
-                <?php endif; ?>
-                Critical &amp; high priority
-            </h2>
-            <?php if (empty($urgent_posts)) : ?>
-                <p class="wcp-dash-empty">No critical or high priority tasks.</p>
-            <?php else : ?>
-                <ul class="wcp-dash-task-list">
-                <?php foreach ($urgent_posts as $item) :
-                    $d = $urgent_data[$item->ID];
-                ?>
-                    <li class="wcp-dash-task<?php echo $d['priority'] === 'critical' ? ' wcp-dash-critical' : ''; ?>">
-                        <div class="wcp-dash-task-main">
-                            <span class="wcp-dash-prio wcp-dash-prio-<?php echo esc_attr($d['priority']); ?>"><?php echo esc_html($d['priority']); ?></span>
-                            <a href="<?php echo esc_url(wcp_theme_get_item_page_url($item->ID)); ?>" class="wcp-dash-task-title"><?php echo esc_html($item->post_title); ?></a>
-                        </div>
-                        <?php if (!empty($d['contexts'])) : ?>
-                        <div class="wcp-dash-task-meta">
-                            <span class="wcp-dash-ctx"><?php echo esc_html($d['contexts'][0]); ?></span>
-                            <?php if ($d['status'] && $d['status'] !== 'to-do') : ?>
-                                <span class="wcp-dash-status"><?php echo esc_html($d['status']); ?></span>
-                            <?php endif; ?>
-                        </div>
-                        <?php endif; ?>
-                    </li>
-                <?php endforeach; ?>
-                </ul>
-            <?php endif; ?>
-        </div>
-
-        <!-- Upcoming week -->
-        <div class="wcp-dash-card">
-            <h2 class="wcp-dash-card-title">This week</h2>
-            <?php if (empty($by_day) || array_sum(array_map('count', $by_day)) === 0) : ?>
-                <p class="wcp-dash-empty">No tasks due this week.</p>
-            <?php else : ?>
-                <?php foreach ($by_day as $date => $day_tasks) :
-                    if (empty($day_tasks)) continue;
-                    $day_label = date('D j M', strtotime($date));
-                ?>
-                <div class="wcp-dash-day-group">
-                    <h3 class="wcp-dash-day-label"><?php echo esc_html($day_label); ?></h3>
+            <!-- Overdue -->
+            <div class="wcp-dash-card">
+                <h2 class="wcp-dash-card-title">
+                    <?php if (!empty($strict_overdue_posts)) : ?>
+                        <span class="wcp-dash-badge wcp-dash-badge-red"><?php echo count($strict_overdue_posts); ?></span>
+                    <?php endif; ?>
+                    Overdue
+                </h2>
+                <?php if (empty($strict_overdue_posts)) : ?>
+                    <p class="wcp-dash-empty">Nothing overdue.</p>
+                <?php else : ?>
                     <ul class="wcp-dash-task-list">
-                    <?php foreach ($day_tasks as $item) :
-                        $d = $upcoming_data[$item->ID];
+                    <?php foreach ($strict_overdue_posts as $item) :
+                        $d = $overdue_data[$item->ID];
+                        $due_label = wcp_due_label($d['due_date']);
+                    ?>
+                        <li class="wcp-dash-task<?php echo $d['priority'] === 'critical' ? ' wcp-dash-critical' : ''; ?>">
+                            <div class="wcp-dash-task-main">
+                                <?php if ($d['priority']) : ?>
+                                    <span class="wcp-dash-prio wcp-dash-prio-<?php echo esc_attr($d['priority']); ?>"><?php echo esc_html($d['priority']); ?></span>
+                                <?php endif; ?>
+                                <a href="<?php echo esc_url(wcp_theme_get_item_page_url($item->ID)); ?>" class="wcp-dash-task-title"><?php echo esc_html($item->post_title); ?></a>
+                            </div>
+                            <div class="wcp-dash-task-meta">
+                                <?php if (!empty($d['contexts'])) : ?>
+                                    <span class="wcp-dash-ctx"><?php echo esc_html($d['contexts'][0]); ?></span>
+                                <?php endif; ?>
+                                <span class="wcp-dash-due wcp-dash-overdue"><?php echo esc_html($due_label); ?></span>
+                            </div>
+                        </li>
+                    <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+            </div>
+
+            <!-- Critical / High -->
+            <div class="wcp-dash-card">
+                <h2 class="wcp-dash-card-title">
+                    <?php if (!empty($urgent_posts)) : ?>
+                        <span class="wcp-dash-badge"><?php echo count($urgent_posts); ?></span>
+                    <?php endif; ?>
+                    Critical &amp; high priority
+                </h2>
+                <?php if (empty($urgent_posts)) : ?>
+                    <p class="wcp-dash-empty">No critical or high priority tasks.</p>
+                <?php else : ?>
+                    <ul class="wcp-dash-task-list">
+                    <?php foreach ($urgent_posts as $item) :
+                        $d = $urgent_data[$item->ID];
+                    ?>
+                        <li class="wcp-dash-task<?php echo $d['priority'] === 'critical' ? ' wcp-dash-critical' : ''; ?>">
+                            <div class="wcp-dash-task-main">
+                                <span class="wcp-dash-prio wcp-dash-prio-<?php echo esc_attr($d['priority']); ?>"><?php echo esc_html($d['priority']); ?></span>
+                                <a href="<?php echo esc_url(wcp_theme_get_item_page_url($item->ID)); ?>" class="wcp-dash-task-title"><?php echo esc_html($item->post_title); ?></a>
+                            </div>
+                            <?php if (!empty($d['contexts'])) : ?>
+                            <div class="wcp-dash-task-meta">
+                                <span class="wcp-dash-ctx"><?php echo esc_html($d['contexts'][0]); ?></span>
+                                <?php if ($d['status'] && $d['status'] !== 'to-do') : ?>
+                                    <span class="wcp-dash-status"><?php echo esc_html($d['status']); ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <?php endif; ?>
+                        </li>
+                    <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+            </div>
+
+        </div><!-- left column -->
+
+        <!-- CENTER COLUMN: Today + This week -->
+        <div class="wcp-dash-col">
+
+            <!-- Today -->
+            <div class="wcp-dash-card">
+                <h2 class="wcp-dash-card-title">
+                    <?php if (!empty($today_posts)) : ?>
+                        <span class="wcp-dash-badge"><?php echo count($today_posts); ?></span>
+                    <?php endif; ?>
+                    Today
+                </h2>
+                <?php if (empty($today_posts)) : ?>
+                    <p class="wcp-dash-empty">Nothing due today.</p>
+                <?php else : ?>
+                    <ul class="wcp-dash-task-list">
+                    <?php foreach ($today_posts as $item) :
+                        $d = $overdue_data[$item->ID];
                     ?>
                         <li class="wcp-dash-task<?php echo $d['priority'] === 'critical' ? ' wcp-dash-critical' : ''; ?>">
                             <div class="wcp-dash-task-main">
@@ -304,10 +341,87 @@ foreach ($cal_events as $ev) {
                         </li>
                     <?php endforeach; ?>
                     </ul>
-                </div>
-                <?php endforeach; ?>
-            <?php endif; ?>
-        </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- Upcoming week -->
+            <div class="wcp-dash-card">
+                <h2 class="wcp-dash-card-title">This week</h2>
+                <?php if (empty($by_day) || array_sum(array_map('count', $by_day)) === 0) : ?>
+                    <p class="wcp-dash-empty">No tasks due this week.</p>
+                <?php else : ?>
+                    <?php foreach ($by_day as $date => $day_tasks) :
+                        if (empty($day_tasks)) continue;
+                        $day_label = date('D j M', strtotime($date));
+                    ?>
+                    <div class="wcp-dash-day-group">
+                        <h3 class="wcp-dash-day-label"><?php echo esc_html($day_label); ?></h3>
+                        <ul class="wcp-dash-task-list">
+                        <?php foreach ($day_tasks as $item) :
+                            $d = $upcoming_data[$item->ID];
+                        ?>
+                            <li class="wcp-dash-task<?php echo $d['priority'] === 'critical' ? ' wcp-dash-critical' : ''; ?>">
+                                <div class="wcp-dash-task-main">
+                                    <?php if ($d['priority']) : ?>
+                                        <span class="wcp-dash-prio wcp-dash-prio-<?php echo esc_attr($d['priority']); ?>"><?php echo esc_html($d['priority']); ?></span>
+                                    <?php endif; ?>
+                                    <a href="<?php echo esc_url(wcp_theme_get_item_page_url($item->ID)); ?>" class="wcp-dash-task-title"><?php echo esc_html($item->post_title); ?></a>
+                                </div>
+                                <?php if (!empty($d['contexts'])) : ?>
+                                <div class="wcp-dash-task-meta">
+                                    <span class="wcp-dash-ctx"><?php echo esc_html($d['contexts'][0]); ?></span>
+                                </div>
+                                <?php endif; ?>
+                            </li>
+                        <?php endforeach; ?>
+                        </ul>
+                    </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+
+        </div><!-- center column -->
+
+        <!-- RIGHT COLUMN: Pinned (from any page) -->
+        <div class="wcp-dash-col">
+            <div class="wcp-dash-card">
+                <h2 class="wcp-dash-card-title">
+                    <?php if (!empty($pinned_posts)) : ?>
+                        <span class="wcp-dash-badge"><?php echo count($pinned_posts); ?></span>
+                    <?php endif; ?>
+                    Pinned
+                </h2>
+                <?php if (empty($pinned_posts)) : ?>
+                    <p class="wcp-dash-empty">No pinned items.</p>
+                <?php else : ?>
+                    <ul class="wcp-dash-task-list">
+                    <?php foreach ($pinned_posts as $item) :
+                        $d         = $pinned_data[$item->ID];
+                        $pg_id     = wcp_theme_get_item_page_id($item->ID);
+                        $pg_label  = $pg_id ? get_the_title($pg_id) : (!empty($d['contexts']) ? $d['contexts'][0] : '');
+                        $due_label = wcp_due_label($d['due_date']);
+                    ?>
+                        <li class="wcp-dash-task wcp-dash-pinned<?php echo $d['priority'] === 'critical' ? ' wcp-dash-critical' : ''; ?>">
+                            <?php if ($pg_label) : ?>
+                                <span class="wcp-dash-ctx-inset"><?php echo esc_html($pg_label); ?></span>
+                            <?php endif; ?>
+                            <div class="wcp-dash-task-main">
+                                <?php if ($d['priority']) : ?>
+                                    <span class="wcp-dash-prio wcp-dash-prio-<?php echo esc_attr($d['priority']); ?>"><?php echo esc_html($d['priority']); ?></span>
+                                <?php endif; ?>
+                                <a href="<?php echo esc_url(wcp_theme_get_item_page_url($item->ID)); ?>" class="wcp-dash-task-title"><?php echo esc_html($item->post_title); ?></a>
+                            </div>
+                            <?php if ($due_label) : ?>
+                            <div class="wcp-dash-task-meta">
+                                <span class="wcp-dash-due<?php echo (strtotime($d['due_date']) < strtotime('today midnight')) ? ' wcp-dash-overdue' : ''; ?>"><?php echo esc_html($due_label); ?></span>
+                            </div>
+                            <?php endif; ?>
+                        </li>
+                    <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+            </div>
+        </div><!-- right column -->
 
     </div><!-- .wcp-dash-three-col -->
 

@@ -319,6 +319,7 @@ jQuery(document).ready(function($) {
             priority: $form.find('select[name="priority"]').val()
         };
         if (tags.length) data.tags = tags;
+        if ($form.find('input[name="pinned"]').is(':checked')) data.pinned = 'yes';
 
         $btn.prop('disabled', true).text('Adding...');
         $status.removeClass('error').text('');
@@ -546,6 +547,38 @@ jQuery(document).ready(function($) {
             } else {
                 $('.wcp-items-section .wcp-items-list, .wcp-dynamic-listing .wcp-items-list').each(function() {
                     sortListByDueDate($(this));
+                });
+            }
+        } else {
+            location.reload();
+        }
+    });
+
+    // Sort items by created date within each items-list container — most recent first
+    function sortListByCreated($list) {
+        var $rows = $list.find('> .wcp-item-row').get();
+        $rows.sort(function(a, b) {
+            var ca = parseInt($(a).data('created'), 10) || 0;
+            var cb = parseInt($(b).data('created'), 10) || 0;
+            return cb - ca;
+        });
+        $.each($rows, function(i, row) { $list.append(row); });
+    }
+
+    $(document).on('click', '.wcp-sort-created', function() {
+        var $btn   = $(this);
+        var active = $btn.hasClass('active');
+        var scope  = $btn.data('scope');
+        $btn.toggleClass('active', !active);
+        if (!active) {
+            if (scope === 'listing') {
+                var listingId = $btn.data('listing-id');
+                $('[data-listing-id="' + listingId + '"].wcp-dynamic-listing .wcp-items-list').each(function() {
+                    sortListByCreated($(this));
+                });
+            } else {
+                $('.wcp-items-section .wcp-items-list, .wcp-dynamic-listing .wcp-items-list').each(function() {
+                    sortListByCreated($(this));
                 });
             }
         } else {
@@ -843,6 +876,15 @@ jQuery(document).ready(function($) {
         var prio   = $(this).val();
         $(this).closest('.wcp-item-row').data('priority', prio);
         updateItem(itemId, { priority: prio });
+    });
+
+    // Pin / unpin — reload so the item moves into or out of the pinned block.
+    $(document).on('change', '.wcp-pin-checkbox', function() {
+        var $cb    = $(this);
+        var itemId = $cb.data('item-id');
+        var pinned = $cb.is(':checked') ? 'yes' : 'no';
+        $cb.closest('.wcp-item-row').toggleClass('wcp-pinned', pinned === 'yes');
+        updateItem(itemId, { pinned: pinned }).always(function() { location.reload(); });
     });
 
     $(document).on('change', '.wcp-status-select', function() {

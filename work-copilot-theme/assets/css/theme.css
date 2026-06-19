@@ -836,6 +836,53 @@ a.wcp-pill-tag:hover {
     word-break: break-word;
 }
 
+.wcp-item-created {
+    font-size: 11px;
+    color: #999;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Pin toggle + pinned state */
+.wcp-pin-toggle {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    opacity: 0.55;
+}
+
+.wcp-pin-toggle:hover,
+.wcp-item-row.wcp-pinned .wcp-pin-toggle {
+    opacity: 1;
+}
+
+.wcp-pin-icon {
+    font-size: 12px;
+    line-height: 1;
+}
+
+.wcp-item-row.wcp-pinned {
+    outline: 2px solid #e74c3c;
+    outline-offset: -2px;
+    border-radius: 4px;
+}
+
+.wcp-pinned-items {
+    margin-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.wcp-quick-pin {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
 .wcp-task-done .wcp-item-title {
     text-decoration: line-through;
     opacity: 0.5;
@@ -1026,6 +1073,15 @@ a.wcp-pill-tag:hover {
 
 .wcp-dash-three-col {
     grid-template-columns: repeat(3, 1fr);
+    align-items: start;
+}
+
+/* Each column can stack multiple cards vertically. */
+.wcp-dash-col {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
 }
 
 .wcp-dash-card {
@@ -1140,6 +1196,20 @@ a.wcp-pill-tag:hover {
 .wcp-dash-ctx {
     font-size: 11px;
     color: #888;
+}
+
+/* Page-context label inset above a pinned dashboard item. */
+.wcp-dash-ctx-inset {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: #6366f1;
+    background: #eef0fe;
+    border-radius: 3px;
+    padding: 1px 6px;
+    margin-bottom: 4px;
 }
 
 .wcp-dash-due {
