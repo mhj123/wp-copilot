@@ -1059,6 +1059,121 @@ a.wcp-pill-tag:hover {
 
 .wcp-dash-panel { margin-top: 20px; }
 
+/* ── Recent activity tab ─────────────────────────────────────── */
+
+.wcp-activity-panel {
+    max-width: 800px;
+}
+
+.wcp-activity-intro {
+    font-size: 13px;
+    color: #888;
+    margin: 0 0 20px;
+}
+
+.wcp-activity-page-group {
+    margin-bottom: 32px;
+}
+
+.wcp-activity-page-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1e1e1e;
+    margin: 0 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.wcp-activity-page-title a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.wcp-activity-page-title a:hover {
+    text-decoration: underline;
+}
+
+.wcp-activity-page-count {
+    font-size: 12px;
+    font-weight: 500;
+    color: #fff;
+    background: #bbb;
+    border-radius: 10px;
+    padding: 1px 7px;
+    line-height: 1.6;
+}
+
+.wcp-activity-item-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-left: 2px solid #eee;
+    padding-left: 14px;
+}
+
+.wcp-activity-item {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    padding: 5px 0;
+    border-bottom: 1px solid #f4f4f4;
+    font-size: 13px;
+}
+
+.wcp-activity-item:last-child {
+    border-bottom: none;
+}
+
+.wcp-activity-badge {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.wcp-activity-badge--new {
+    background: #e6f4ea;
+    color: #2e7d32;
+}
+
+.wcp-activity-badge--edited {
+    background: #fff3e0;
+    color: #e65100;
+}
+
+.wcp-activity-type {
+    font-size: 11px;
+    color: #aaa;
+    flex-shrink: 0;
+}
+
+.wcp-activity-item-title {
+    color: #1e1e1e;
+    text-decoration: none;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wcp-activity-item-title:hover {
+    text-decoration: underline;
+}
+
+.wcp-activity-date {
+    font-size: 11px;
+    color: #aaa;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* ── End Recent activity tab ─────────────────────────────────── */
+
 .wcp-dashboard-date {
     margin: 0 0 4px;
     font-size: 22px;
@@ -2440,6 +2555,36 @@ a.wcp-tag:hover {
 
 .wcp-drag-handle:active {
     cursor: grabbing;
+}
+
+.wcp-heading-collapse-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    font-size: 16px;
+    color: #bbb;
+    line-height: 1;
+    transition: color 0.15s, transform 0.15s;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.wcp-heading-collapse-toggle:hover {
+    color: #666;
+}
+
+.wcp-heading-collapse-toggle[aria-expanded="false"] {
+    transform: rotate(-90deg);
+}
+
+.wcp-heading-body {
+    overflow: hidden;
+}
+
+.wcp-heading-group.wcp-heading-collapsed .wcp-heading-body {
+    display: none;
 }
 
 .wcp-heading-drag-handle {

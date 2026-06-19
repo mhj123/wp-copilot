@@ -103,6 +103,11 @@
                     $('#wcp-btn-new-goal').trigger('click');
                     return;
                 }
+                if (action === 'onboard') {
+                    // Fires immediately — no user prompt needed
+                    this.runOnboard();
+                    return;
+                }
                 if ($chip.hasClass('active')) {
                     $chip.removeClass('active');
                     this.currentAction = 'chat';
@@ -111,6 +116,11 @@
                     $chip.addClass('active');
                     this.currentAction = action;
                 }
+            });
+
+            // Save-as-mission offer — rendered dynamically after onboard
+            $(document).on('click', '.wcp-ai-save-mission-btn', () => {
+                this.saveSuggestedMission();
             });
 
             // Send message
@@ -598,6 +608,13 @@
          * Handle action result
          */
         handleActionResult: function(result) {
+            if (result.outcome === 'onboard') {
+                this.appendMessage('assistant', result.message);
+                if (result.suggested_mission) {
+                    this.showMissionOffer(result.suggested_mission);
+                }
+                return;
+            }
             if (result.outcome === 'chat') {
                 this.appendMessage('assistant', result.message);
                 if (this.conversationId) {
@@ -1057,6 +1074,103 @@
 
             $('.wcp-ai-approval-panel').slideDown();
             this.appendMessage('assistant', 'I extracted ' + proposals.length + ' memory(s) from our conversation. Review and accept the ones you want to keep.');
+        },
+
+        /**
+         * Fire the onboard action immediately (no user prompt required)
+         */
+        runOnboard: function() {
+            this.showLoading(true);
+            $('.wcp-ai-action-chip').removeClass('active');
+
+            $.ajax({
+                url: wcpAiWidgetData.restUrl + '/ai/onboard',
+                method: 'POST',
+                beforeSend: (xhr) => {
+                    xhr.setRequestHeader('X-WP-Nonce', wcpAiWidgetData.nonce);
+                },
+                data: {
+                    page_id: wcpAiWidgetData.pageId,
+                    conversation_id: this.conversationId
+                },
+                success: (response) => {
+                    this.showLoading(false);
+                    if (response.success) {
+                        this.handleActionResult(response);
+                    } else {
+                        this.showError(response.message || 'Onboard failed');
+                    }
+                },
+                error: (xhr) => {
+                    this.showLoading(false);
+                    this.showError('Connection error: ' + xhr.statusText);
+                }
+            });
+        },
+
+        /**
+         * Show a mission-save offer after onboard suggests a mission
+         */
+        showMissionOffer: function(suggestedMission) {
+            const $textarea = $('<textarea>')
+                .addClass('wcp-ai-mission-offer-editor')
+                .val(suggestedMission)
+                .attr('rows', 4);
+
+            const $offer = $('<div>').addClass('wcp-ai-mission-offer')
+                .append(
+                    $('<p>').addClass('wcp-ai-mission-offer-text')
+                        .text('No AI mission is set for this page. Edit and save:'),
+                    $textarea,
+                    $('<div>').addClass('wcp-ai-mission-offer-actions')
+                        .append(
+                            $('<button>').addClass('wcp-ai-save-mission-btn button button-primary')
+                                .text('Save as AI Mission'),
+                            $('<button>').addClass('wcp-ai-dismiss-mission-btn button')
+                                .text('Dismiss')
+                        )
+                );
+
+            $('.wcp-ai-messages').append($offer);
+            this.scrollToBottom();
+
+            $(document).one('click', '.wcp-ai-dismiss-mission-btn', () => {
+                $offer.remove();
+            });
+        },
+
+        /**
+         * Save the mission offer textarea value to the page
+         */
+        saveSuggestedMission: function() {
+            const mission = $('.wcp-ai-mission-offer-editor').val().trim();
+            if (!mission) return;
+            const $btn = $('.wcp-ai-save-mission-btn');
+            $btn.prop('disabled', true).text('Saving…');
+
+            $.ajax({
+                url: wcpAiWidgetData.restUrl + '/pages/' + wcpAiWidgetData.pageId + '/mission/append',
+                method: 'POST',
+                beforeSend: (xhr) => {
+                    xhr.setRequestHeader('X-WP-Nonce', wcpAiWidgetData.nonce);
+                },
+                data: { text: mission },
+                success: (response) => {
+                    if (response.success) {
+                        $('.wcp-ai-mission-offer').remove();
+                        this.appendMessage('assistant', 'AI mission saved for this page.');
+                        // Refresh mission indicator
+                        this.fetchActiveMission();
+                    } else {
+                        $btn.prop('disabled', false).text('Save as AI Mission');
+                        this.showError(response.message || 'Could not save mission');
+                    }
+                },
+                error: () => {
+                    $btn.prop('disabled', false).text('Save as AI Mission');
+                    this.showError('Could not save — please try again.');
+                }
+            });
         }
     };
 

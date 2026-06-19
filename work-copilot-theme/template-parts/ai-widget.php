@@ -89,6 +89,7 @@ if (empty($saved_prompts)) {
 
         <!-- Action toggles — select one to set the intent for the next send -->
         <div class="wcp-ai-action-chips">
+            <button type="button" class="wcp-ai-action-chip wcp-ai-action-chip--onboard" data-action="onboard"><?php _e('Onboard', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="generate_structure"><?php _e('Generate structure', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="generate_pages"><?php _e('Create sub-pages', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="create_goal"><?php _e('Create goal', 'work-copilot'); ?></button>

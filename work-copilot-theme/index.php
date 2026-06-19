@@ -182,14 +182,53 @@ $sched_pages = get_posts(array(
 // ────────────────────────────────────────────────────────────────
 // Section 5: Recent activity
 // ────────────────────────────────────────────────────────────────
+$seven_days_ago = date('Y-m-d H:i:s', strtotime('-7 days'));
+
 $recent_items = get_posts(array(
     'post_type'      => 'post',
     'post_status'    => 'publish',
-    'posts_per_page' => 15,
+    'posts_per_page' => -1,
     'orderby'        => 'modified',
     'order'          => 'DESC',
     'date_query'     => array(array('after' => '7 days ago', 'column' => 'post_modified')),
 ));
+
+// Group by page, preserving most-recently-modified order within each page
+$activity_by_page = array();   // page_id => ['title','url','items'=> [...]]
+$activity_no_page = array();   // items without a page context
+
+foreach ($recent_items as $item) {
+    $item_types = wp_get_post_terms($item->ID, 'item_type', array('fields' => 'names'));
+    $item_type  = !empty($item_types) && !is_wp_error($item_types) ? $item_types[0] : '';
+    $is_new     = strtotime($item->post_date) >= strtotime($seven_days_ago);
+
+    $entry = array(
+        'id'       => $item->ID,
+        'title'    => $item->post_title,
+        'url'      => wcp_theme_get_item_page_url($item->ID),
+        'type'     => $item_type,
+        'is_new'   => $is_new,
+        'modified' => $item->post_modified,
+    );
+
+    $page_id = wcp_theme_get_item_page_id($item->ID);
+    if ($page_id) {
+        if (!isset($activity_by_page[$page_id])) {
+            $activity_by_page[$page_id] = array(
+                'title'       => get_the_title($page_id),
+                'url'         => get_permalink($page_id),
+                'latest_mod'  => $item->post_modified,
+                'items'       => array(),
+            );
+        }
+        $activity_by_page[$page_id]['items'][] = $entry;
+    } else {
+        $activity_no_page[] = $entry;
+    }
+}
+
+// Sort pages by most-recently-modified item (already ordered DESC from query)
+// — the first item per page is already the latest, so array order is correct.
 
 // ────────────────────────────────────────────────────────────────
 // Section 7: Calendar
@@ -218,6 +257,63 @@ foreach ($cal_events as $ev) {
         <div class="wcp-dash-tabs" role="tablist">
             <button type="button" class="wcp-dash-tab active" data-tab="dashboard" role="tab">Dashboard</button>
             <button type="button" class="wcp-dash-tab" data-tab="structure" role="tab">Structure</button>
+            <button type="button" class="wcp-dash-tab" data-tab="activity" role="tab">Recent activity</button>
+        </div>
+    </div>
+
+    <!-- Activity tab panel -->
+    <div id="wcp-dash-panel-activity" class="wcp-dash-panel" style="display:none;">
+        <div class="wcp-activity-panel">
+            <p class="wcp-activity-intro">Items added or edited in the last 7 days.</p>
+
+            <?php if (empty($activity_by_page) && empty($activity_no_page)) : ?>
+                <p class="wcp-dash-empty">No items were added or edited in the last 7 days.</p>
+            <?php else : ?>
+
+                <?php foreach ($activity_by_page as $pg_id => $pg) : ?>
+                <div class="wcp-activity-page-group">
+                    <h2 class="wcp-activity-page-title">
+                        <a href="<?php echo esc_url($pg['url']); ?>"><?php echo esc_html($pg['title']); ?></a>
+                        <span class="wcp-activity-page-count"><?php echo count($pg['items']); ?></span>
+                    </h2>
+                    <ul class="wcp-activity-item-list">
+                        <?php foreach ($pg['items'] as $entry) : ?>
+                        <li class="wcp-activity-item">
+                            <span class="wcp-activity-badge <?php echo $entry['is_new'] ? 'wcp-activity-badge--new' : 'wcp-activity-badge--edited'; ?>">
+                                <?php echo $entry['is_new'] ? 'new' : 'edited'; ?>
+                            </span>
+                            <?php if ($entry['type']) : ?>
+                                <span class="wcp-activity-type"><?php echo esc_html($entry['type']); ?></span>
+                            <?php endif; ?>
+                            <a href="<?php echo esc_url($entry['url']); ?>" class="wcp-activity-item-title"><?php echo esc_html($entry['title']); ?></a>
+                            <span class="wcp-activity-date"><?php echo esc_html(human_time_diff(strtotime($entry['modified']), current_time('timestamp')) . ' ago'); ?></span>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+                <?php endforeach; ?>
+
+                <?php if (!empty($activity_no_page)) : ?>
+                <div class="wcp-activity-page-group">
+                    <h2 class="wcp-activity-page-title">Uncategorised</h2>
+                    <ul class="wcp-activity-item-list">
+                        <?php foreach ($activity_no_page as $entry) : ?>
+                        <li class="wcp-activity-item">
+                            <span class="wcp-activity-badge <?php echo $entry['is_new'] ? 'wcp-activity-badge--new' : 'wcp-activity-badge--edited'; ?>">
+                                <?php echo $entry['is_new'] ? 'new' : 'edited'; ?>
+                            </span>
+                            <?php if ($entry['type']) : ?>
+                                <span class="wcp-activity-type"><?php echo esc_html($entry['type']); ?></span>
+                            <?php endif; ?>
+                            <a href="<?php echo esc_url($entry['url']); ?>" class="wcp-activity-item-title"><?php echo esc_html($entry['title']); ?></a>
+                            <span class="wcp-activity-date"><?php echo esc_html(human_time_diff(strtotime($entry['modified']), current_time('timestamp')) . ' ago'); ?></span>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+                <?php endif; ?>
+
+            <?php endif; ?>
         </div>
     </div>
 
