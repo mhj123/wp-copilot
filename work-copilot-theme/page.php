@@ -308,6 +308,8 @@ get_header();
                             <textarea id="wcp-goal-understanding" rows="3" class="wcp-form-control"></textarea>
                         </div>
 
+                        <p id="wcp-goal-truncation-warning" class="wcp-goal-truncation-warning" style="display:none;"></p>
+
                         <div class="wcp-form-group">
                             <label><?php _e('Action items (uncheck any you don\'t want)', 'work-copilot-theme'); ?></label>
                             <ul id="wcp-goal-action-items" class="wcp-goal-items-list"></ul>

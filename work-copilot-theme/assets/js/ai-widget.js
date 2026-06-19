@@ -610,10 +610,11 @@
         handleActionResult: function(result) {
             if (result.outcome === 'onboard') {
                 let message = result.message || '';
-                // Safety net: if PHP JSON parsing failed, raw JSON may have been passed through
+                // Safety net: PHP JSON parsing can fail if the AI embeds actual newlines
+                // in string values. Try JSON.parse first; fall back to regex extraction.
                 if (message.trim().startsWith('{') || message.trim().startsWith('```')) {
+                    const clean = message.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
                     try {
-                        const clean = message.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
                         const p = JSON.parse(clean);
                         if (p && p.greeting) {
                             message = p.greeting;
@@ -621,7 +622,23 @@
                                 result.suggested_mission = p.suggested_mission;
                             }
                         }
-                    } catch (e) {}
+                    } catch (e) {
+                        // JSON invalid (likely unescaped newlines) — extract with regex
+                        const m = clean.match(/"greeting"\s*:\s*"((?:[^"\\]|\\[\s\S])*)"/);
+                        if (m) {
+                            message = m[1]
+                                .replace(/\\n/g, '\n')
+                                .replace(/\\t/g, '\t')
+                                .replace(/\\"/g, '"')
+                                .replace(/\\\\/g, '\\');
+                        }
+                        const ms = clean.match(/"suggested_mission"\s*:\s*"((?:[^"\\]|\\[\s\S])*)"/);
+                        if (ms && !result.suggested_mission) {
+                            result.suggested_mission = ms[1]
+                                .replace(/\\n/g, '\n')
+                                .replace(/\\"/g, '"');
+                        }
+                    }
                 }
                 this.appendMessage('assistant', message);
                 if (result.suggested_mission) {
