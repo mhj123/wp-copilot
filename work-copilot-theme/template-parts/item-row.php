@@ -18,6 +18,8 @@ if (!$_created_by && get_post_meta($item->ID, '_wcp_ai_generated', true)) {
     $_created_by = 'copilot'; // legacy content predating the _wcp_created_by marker
 }
 $_creator_class     = $_created_by === 'hermes' ? ' wcp-by-hermes' : ($_created_by === 'copilot' ? ' wcp-by-copilot' : '');
+$_pinned_slugs      = wp_get_post_terms($item->ID, 'pinned', array('fields' => 'slugs'));
+$_is_pinned         = !is_wp_error($_pinned_slugs) && in_array('yes', $_pinned_slugs, true);
 $_spec_statuses     = wp_get_post_terms($item->ID, 'spec_status', array('fields' => 'slugs'));
 $_spec_statuses     = is_wp_error($_spec_statuses) ? array() : $_spec_statuses;
 $_spec_status_slug  = !empty($_spec_statuses) ? $_spec_statuses[0] : '';
@@ -34,7 +36,7 @@ $_delegation_labels = array(
     'failed'      => 'failed',
 );
 ?>
-<div class="wcp-item-row<?php echo $is_done ? ' wcp-task-done' : ''; echo esc_attr($_creator_class); ?>"
+<div class="wcp-item-row<?php echo $is_done ? ' wcp-task-done' : ''; echo esc_attr($_creator_class); echo $_is_pinned ? ' wcp-pinned' : ''; ?>"
      id="wcp-item-<?php echo esc_attr($item->ID); ?>"
      data-item-id="<?php echo esc_attr($item->ID); ?>"
      data-item-type="<?php echo esc_attr($_item_type_slug); ?>"
@@ -42,15 +44,21 @@ $_delegation_labels = array(
      data-spec-status="<?php echo esc_attr($_spec_status_slug); ?>"
      data-due-date="<?php echo esc_attr($_due_date); ?>"
      data-priority="<?php echo esc_attr(!empty($priorities) ? $priorities[0] : ''); ?>"
+     data-created="<?php echo esc_attr(get_post_time('U', true, $item)); ?>"
      data-context-ids="<?php echo esc_attr(implode(',', $_context_ids)); ?>"
      data-tags="<?php echo esc_attr(implode(',', $item_tags)); ?>">
     <span class="wcp-drag-handle" title="Drag to reorder">&#8942;</span>
+    <label class="wcp-pin-toggle" title="Pin to top of page">
+        <input type="checkbox" class="wcp-pin-checkbox" data-item-id="<?php echo esc_attr($item->ID); ?>" <?php checked($_is_pinned); ?>>
+        <span class="wcp-pin-icon" aria-hidden="true">&#128204;</span>
+    </label>
     <input type="checkbox"
            class="wcp-task-checkbox"
            data-item-id="<?php echo esc_attr($item->ID); ?>"
            <?php checked($is_done); ?>
            style="<?php echo $is_task ? '' : 'display:none;'; ?>">
     <span class="wcp-item-title"><?php echo esc_html($item->post_title); ?></span>
+    <span class="wcp-item-created" title="<?php echo esc_attr(get_the_time('j M Y', $item)); ?>"><?php echo esc_html(human_time_diff(get_post_time('U', true, $item))); ?> ago</span>
     <a href="<?php echo esc_url(get_permalink($item->ID)); ?>" class="wcp-item-view-link wcp-edit-link" title="View item">[view]</a>
     <button type="button" class="wcp-item-ai-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>" title="AI actions">[ai]</button>
     <input type="checkbox" class="wcp-item-select-cb" data-item-id="<?php echo esc_attr($item->ID); ?>" data-item-title="<?php echo esc_attr($item->post_title); ?>" style="display:none;">

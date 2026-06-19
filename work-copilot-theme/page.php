@@ -89,6 +89,7 @@ get_header();
             </div>
             <button type="button" class="wcp-sort-priority wcp-edit-link" title="Sort by priority">sort by priority</button>
             <button type="button" class="wcp-sort-due-date wcp-edit-link" title="Sort by due date">sort by due date</button>
+            <button type="button" class="wcp-sort-created wcp-edit-link" title="Sort by created date (most recent first)">sort by created</button>
             <button type="button" class="wcp-toggle-descriptions wcp-edit-link" title="Toggle descriptions">descriptions</button>
             <button type="button" class="wcp-toggle-actions wcp-edit-link" title="Toggle item actions">actions</button>
             <button type="button" id="wcp-select-mode-btn" class="wcp-edit-link" data-page-id="<?php echo esc_attr($page_id); ?>">select</button>
@@ -107,6 +108,29 @@ get_header();
             if ($_ht) $local_context_ids[] = $_ht->term_id;
         }
         ?>
+
+        <!-- Pinned items — lifted to the top of the page -->
+        <?php $pinned_items = wcp_theme_get_page_pinned_items($page_id); ?>
+        <?php if (!empty($pinned_items)) : ?>
+        <div class="wcp-pinned-items">
+            <?php foreach ($pinned_items as $item) :
+                $item_types    = wp_get_post_terms($item->ID, 'item_type', array('fields' => 'names'));
+                $priorities    = wp_get_post_terms($item->ID, 'priority', array('fields' => 'names'));
+                $task_statuses = wp_get_post_terms($item->ID, 'task_status', array('fields' => 'slugs'));
+                $item_tags     = wp_get_post_terms($item->ID, 'post_tag', array('fields' => 'names'));
+                // Show the heading/page it's pinned from, but not the page's own term.
+                $item_contexts = array_values(array_map(
+                    function($t) { return $t->name; },
+                    array_filter(
+                        wp_get_post_terms($item->ID, 'wcp_context'),
+                        function($t) use ($page_context_id) { return $t->term_id != $page_context_id; }
+                    )
+                ));
+            ?>
+                <?php include(locate_template('template-parts/item-row.php')); ?>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
 
         <!-- Page-level items (not under any heading) -->
         <div class="wcp-items-list" data-context-id="<?php echo esc_attr($page_context_id); ?>">

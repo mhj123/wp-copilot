@@ -172,6 +172,61 @@ function wcp_theme_exclude_done_clause() {
     );
 }
 
+/**
+ * tax_query clause that excludes pinned items. Pinned items are lifted out of
+ * their normal lists and shown in a "Pinned" block at the top of the page.
+ */
+function wcp_theme_exclude_pinned_clause() {
+    return array(
+        'taxonomy' => 'pinned',
+        'field'    => 'slug',
+        'terms'    => array('yes'),
+        'operator' => 'NOT IN',
+    );
+}
+
+/**
+ * Pinned items for a page: those marked pinned within this page's own context
+ * or any of its (live) heading contexts — the same scope the page renders.
+ * Done tasks stay hidden even when pinned.
+ */
+function wcp_theme_get_page_pinned_items($page_id) {
+    $page_term = wcp_theme_get_page_context_term($page_id);
+    if (!$page_term) {
+        return array();
+    }
+
+    $term_ids = array($page_term->term_id);
+    foreach (wcp_theme_get_page_headings($page_id) as $heading) {
+        $term = wcp_theme_get_heading_context_term($heading->ID);
+        if ($term) {
+            $term_ids[] = $term->term_id;
+        }
+    }
+
+    return get_posts(array(
+        'post_type'      => 'post',
+        'post_status'    => 'publish',
+        'posts_per_page' => -1,
+        'orderby'        => array('menu_order' => 'ASC', 'date' => 'DESC'),
+        'tax_query'      => array(
+            'relation' => 'AND',
+            array(
+                'taxonomy'         => 'wcp_context',
+                'field'            => 'term_id',
+                'terms'            => $term_ids,
+                'include_children' => false,
+            ),
+            array(
+                'taxonomy' => 'pinned',
+                'field'    => 'slug',
+                'terms'    => array('yes'),
+            ),
+            wcp_theme_exclude_done_clause(),
+        ),
+    ));
+}
+
 function wcp_theme_get_page_items($page_id, $filters = array()) {
     $context_term = wcp_theme_get_page_context_term($page_id);
 
@@ -320,6 +375,7 @@ function wcp_theme_get_heading_items($heading_id) {
                 'terms' => $heading_term->term_id,
             ),
             wcp_theme_exclude_done_clause(),
+            wcp_theme_exclude_pinned_clause(),
         ),
         'orderby' => array('menu_order' => 'ASC', 'date' => 'ASC'),
     ));
@@ -394,6 +450,7 @@ function wcp_theme_get_page_only_items($page_id) {
     }
 
     $tax_query[] = wcp_theme_exclude_done_clause();
+    $tax_query[] = wcp_theme_exclude_pinned_clause();
 
     return get_posts(array(
         'post_type'      => 'post',
@@ -497,16 +554,19 @@ function wcp_theme_get_item_breadcrumbs($post_id) {
  * item in its page context — where it can be interacted with — rather than the
  * standalone single-item view. Falls back to the item permalink if unresolved.
  */
-function wcp_theme_get_item_page_url($item_id) {
+/**
+ * Resolve the id of the page an item is situated on (walking up through any
+ * nested headings). Returns 0 if it can't be resolved.
+ */
+function wcp_theme_get_item_page_id($item_id) {
     $terms = wp_get_post_terms($item_id, 'wcp_context');
     if (empty($terms) || is_wp_error($terms)) {
-        return get_permalink($item_id);
+        return 0;
     }
 
     $ref_type = get_term_meta($terms[0]->term_id, 'wcp_ref_type', true);
     $ref_id   = (int) get_term_meta($terms[0]->term_id, 'wcp_ref_id', true);
 
-    // An item may live under a heading (possibly nested); walk up to its page.
     $guard = 0;
     while ($ref_type === 'wcp_heading' && $ref_id && $guard++ < 20) {
         $parent_type = get_post_meta($ref_id, '_wcp_parent_type', true);
@@ -514,10 +574,12 @@ function wcp_theme_get_item_page_url($item_id) {
         $ref_type    = $parent_type;
     }
 
-    if ($ref_type === 'page' && $ref_id) {
-        return get_permalink($ref_id) . '#wcp-item-' . $item_id;
-    }
-    return get_permalink($item_id);
+    return ($ref_type === 'page' && $ref_id) ? $ref_id : 0;
+}
+
+function wcp_theme_get_item_page_url($item_id) {
+    $page_id = wcp_theme_get_item_page_id($item_id);
+    return $page_id ? get_permalink($page_id) . '#wcp-item-' . $item_id : get_permalink($item_id);
 }
 
 /**

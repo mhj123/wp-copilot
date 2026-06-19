@@ -1923,6 +1923,12 @@ class WCP_REST_API {
             update_post_meta($item_id, '_wcp_due_date', $safe);
         }
 
+        $pinned = $request->get_param('pinned');
+        if ($pinned !== null) {
+            $val = ($pinned === 'yes' || $pinned === '1' || $pinned === true || $pinned === 1) ? 'yes' : 'no';
+            wp_set_post_terms($item_id, array($val), 'pinned');
+        }
+
         // Re-embed immediately, bypassing the 60-second save_post throttle
         if (get_option('wcp_ai_enabled', false)) {
             WCP_Embeddings_Manager::instance()->generate_embedding($item_id);

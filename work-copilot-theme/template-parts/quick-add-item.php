@@ -24,6 +24,7 @@ if (!defined('ABSPATH')) exit;
             <option value="low"><?php _e('low', 'work-copilot-theme'); ?></option>
         </select>
         <input type="text" name="tags" class="wcp-quick-tags" placeholder="<?php esc_attr_e('tags...', 'work-copilot-theme'); ?>">
+        <label class="wcp-quick-pin" title="<?php esc_attr_e('Pin to top', 'work-copilot-theme'); ?>"><input type="checkbox" name="pinned"> <span aria-hidden="true">&#128204;</span></label>
         <button type="submit" class="wcp-btn wcp-btn-primary wcp-btn-sm"><?php _e('Add', 'work-copilot-theme'); ?></button>
         <button type="button" class="wcp-btn-cancel-quick wcp-edit-link"><?php _e('cancel', 'work-copilot-theme'); ?></button>
         <div class="wcp-form-context-section">
