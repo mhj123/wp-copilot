@@ -638,6 +638,70 @@ body.admin-bar .wcp-ai-widget.minimized {
     margin-bottom: 15px;
 }
 
+/* Structure proposal (combined headings + placed items) */
+.wcp-struct-group {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    background: #fff;
+}
+
+.wcp-struct-grouplabel {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #888;
+    margin-bottom: 4px;
+}
+
+.wcp-struct-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    padding: 3px 0;
+    cursor: pointer;
+}
+
+.wcp-struct-heading {
+    font-weight: 600;
+}
+
+.wcp-struct-child {
+    padding-left: 22px;
+}
+
+.wcp-struct-item-cb:disabled + .wcp-struct-type,
+.wcp-struct-item-cb:disabled ~ * {
+    opacity: 0.4;
+}
+
+.wcp-struct-badge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #6366f1;
+    background: #eef0fe;
+    border-radius: 3px;
+    padding: 1px 5px;
+}
+
+.wcp-struct-type {
+    font-size: 10px;
+    text-transform: uppercase;
+    color: #555;
+    background: #f0f0f0;
+    border-radius: 3px;
+    padding: 1px 5px;
+}
+
+.wcp-struct-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+}
+
 .wcp-ai-proposal-card {
     background: #fff;
     border: 1px solid #ddd;

@@ -162,6 +162,16 @@
                 this.updateProposalSelection(e.target);
             });
 
+            // Structure proposal: new-heading checkbox cascades to its child items.
+            $(document).on('change', '.wcp-struct-heading-cb', (e) => {
+                const $cb = $(e.target);
+                const on = $cb.is(':checked');
+                $cb.closest('.wcp-struct-group').find('.wcp-struct-item-cb')
+                    .prop('disabled', !on).prop('checked', on);
+            });
+            $(document).on('click', '.wcp-struct-create', () => this.acceptStructure());
+            $(document).on('click', '.wcp-struct-dismiss', () => this.dismissStructure());
+
             // Mission toggle
             $(document).on('click', '.wcp-mission-toggle', () => {
                 $('.wcp-mission-content').slideToggle();
@@ -596,6 +606,9 @@
             } else if (result.outcome === 'create_items') {
                 this.currentBatchId = result.batch_id || null;
                 this.showProposals(result.proposals);
+            } else if (result.outcome === 'create_structure') {
+                this.currentBatchId = result.batch_id || null;
+                this.showStructureProposal(result.plan || {});
             } else if (result.outcome === 'create_memories') {
                 this.currentBatchId = result.batch_id || null;
                 this.showMemoryProposals(result.proposals);
@@ -693,6 +706,91 @@
             // Append system message
             const itemWord = proposals.length === 1 ? 'item' : 'items';
             this.appendMessage('assistant', `I've generated ${proposals.length} ${itemWord} for your review. Select the ones you want to create.`);
+        },
+
+        /**
+         * Render a structure proposal: new headings (with their child items),
+         * "under <existing heading>" groups, and page-level items — each row a
+         * checkbox. Unchecking a new heading disables its child items.
+         */
+        showStructureProposal: function(plan) {
+            const esc = (s) => $('<span>').text(s == null ? '' : s).html();
+            const $c = $('.wcp-ai-proposals');
+            let html = '<div class="wcp-struct">';
+
+            (plan.new_headings || []).forEach((h) => {
+                html += '<div class="wcp-struct-group">';
+                html += '<label class="wcp-struct-row wcp-struct-heading">'
+                    + '<input type="checkbox" class="wcp-struct-heading-cb" data-ref="' + esc(h.ref) + '" data-proposal-id="' + esc(h.proposal_id) + '" checked> '
+                    + '<span class="wcp-struct-badge">+ heading</span> ' + esc(h.title) + '</label>';
+                (h.items || []).forEach((it) => {
+                    html += '<label class="wcp-struct-row wcp-struct-item wcp-struct-child" data-ref="' + esc(h.ref) + '">'
+                        + '<input type="checkbox" class="wcp-struct-item-cb" data-proposal-id="' + esc(it.proposal_id) + '" checked> '
+                        + '<span class="wcp-struct-type">' + esc(it.item_type) + '</span> ' + esc(it.title) + '</label>';
+                });
+                html += '</div>';
+            });
+
+            (plan.existing_groups || []).forEach((g) => {
+                html += '<div class="wcp-struct-group"><div class="wcp-struct-grouplabel">under ' + esc(g.title) + '</div>';
+                (g.items || []).forEach((it) => {
+                    html += '<label class="wcp-struct-row wcp-struct-item">'
+                        + '<input type="checkbox" class="wcp-struct-item-cb" data-proposal-id="' + esc(it.proposal_id) + '" checked> '
+                        + '<span class="wcp-struct-type">' + esc(it.item_type) + '</span> ' + esc(it.title) + '</label>';
+                });
+                html += '</div>';
+            });
+
+            if ((plan.page_items || []).length) {
+                html += '<div class="wcp-struct-group"><div class="wcp-struct-grouplabel">page level</div>';
+                plan.page_items.forEach((it) => {
+                    html += '<label class="wcp-struct-row wcp-struct-item">'
+                        + '<input type="checkbox" class="wcp-struct-item-cb" data-proposal-id="' + esc(it.proposal_id) + '" checked> '
+                        + '<span class="wcp-struct-type">' + esc(it.item_type) + '</span> ' + esc(it.title) + '</label>';
+                });
+                html += '</div>';
+            }
+
+            html += '<div class="wcp-struct-actions">'
+                + '<button type="button" class="button button-primary wcp-struct-create">Create selected</button> '
+                + '<button type="button" class="button wcp-struct-dismiss">Dismiss</button>'
+                + '</div></div>';
+
+            $c.html(html);
+            // This panel reuses the approval container but supplies its own buttons.
+            $('.wcp-ai-approval-panel .wcp-ai-approval-actions').hide();
+            $('.wcp-ai-approval-panel').slideDown();
+            this.appendMessage('assistant', 'Proposed a structure update — review and create what you want.');
+        },
+
+        acceptStructure: function() {
+            const headingIds = $('.wcp-struct-heading-cb:checked').map(function() { return $(this).data('proposal-id'); }).get();
+            const itemIds = $('.wcp-struct-item-cb:checked').filter(function() { return !$(this).prop('disabled'); }).map(function() { return $(this).data('proposal-id'); }).get();
+            if (!headingIds.length && !itemIds.length) { this.showError('Nothing selected.'); return; }
+
+            $.ajax({
+                url: wcpAiWidgetData.restUrl + '/ai/structure/accept',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ batch_id: this.currentBatchId, heading_ids: headingIds, item_ids: itemIds }),
+                beforeSend: (xhr) => { xhr.setRequestHeader('X-WP-Nonce', wcpAiWidgetData.nonce); },
+                success: (r) => {
+                    if (r.success) {
+                        this.appendMessage('system', 'Created ' + r.created_headings + ' heading(s) and ' + r.created_items + ' item(s).');
+                        this.dismissStructure();
+                        setTimeout(() => location.reload(), 700);
+                    } else {
+                        this.showError(r.message || 'Could not create structure.');
+                    }
+                },
+                error: () => this.showError('Connection error.')
+            });
+        },
+
+        dismissStructure: function() {
+            $('.wcp-ai-proposals').empty();
+            $('.wcp-ai-approval-panel').slideUp();
+            $('.wcp-ai-approval-panel .wcp-ai-approval-actions').show();
         },
 
         /**

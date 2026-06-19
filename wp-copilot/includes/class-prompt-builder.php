@@ -154,6 +154,18 @@ MD;
                 . '[{"title": "Key Outcomes"}, {"title": "Open Questions"}, {"title": "Next Steps"}]\n\n'
                 . "Start your response with [ and end with ].",
 
+            'generate-structure' => "You add headings and/or items to the CURRENT PAGE based on the user's request. "
+                . "You are given the page's existing structure, including each existing heading's id and the items already under it. "
+                . "You may create new headings, new items, or both, and place each new item under a NEW heading, an EXISTING heading (by its id), or at PAGE level. "
+                . "Do exactly what the user asks — headings only, items only, or a mix — and do not duplicate existing items.\n\n"
+                . "IMPORTANT: Respond with ONLY a valid JSON object. No text before or after. Format:\n"
+                . '{"headings":[{"ref":"h1","title":"Heading title"}],"items":[{"title":"Item title","content":"Detail or empty","item_type":"task","target":{"type":"new","ref":"h1"}}]}' . "\n\n"
+                . "Rules: item_type is one of task|info|learning|spec. target.type is one of: "
+                . "\"new\" (also give \"ref\" matching a heading in your headings list), "
+                . "\"existing\" (also give \"id\" = an existing heading id from the structure), or "
+                . "\"page\" (page level). Use an empty headings array if creating no new headings. "
+                . "Start your response with { and end with }.",
+
             'generate-pages' => "Generate sub-page proposals to be created as child pages under the current page. "
                 . "Each page should represent a distinct area of work or topic that warrants its own dedicated space. "
                 . "Page titles should be clear and descriptive. Content is optional — a brief description of the page's purpose is ideal.\n\n"
