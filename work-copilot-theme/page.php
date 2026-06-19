@@ -246,6 +246,7 @@ get_header();
         <div id="wcp-selection-bar" style="display:none;" data-page-id="<?php echo esc_attr($page_id); ?>">
             <span id="wcp-selection-count">0 items selected</span>
             <button type="button" id="wcp-goal-from-selected-btn" class="wcp-btn wcp-btn-primary wcp-btn-sm" disabled>Create goal from selected</button>
+            <button type="button" id="wcp-delete-selected-btn" class="wcp-btn wcp-btn-danger wcp-btn-sm" disabled>Delete selected</button>
             <button type="button" id="wcp-selection-cancel-btn" class="wcp-edit-link">cancel</button>
         </div>
 

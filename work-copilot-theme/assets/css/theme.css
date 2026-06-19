@@ -448,6 +448,20 @@ textarea.wcp-form-control {
     background: #135e96;
 }
 
+.wcp-btn-danger {
+    background: #c0392b;
+    color: #fff;
+}
+
+.wcp-btn-danger:hover {
+    background: #a52f23;
+}
+
+.wcp-btn-danger:disabled {
+    background: #e0b4ae;
+    cursor: default;
+}
+
 .wcp-form-status {
     font-size: 14px;
     color: #666;
@@ -888,6 +902,16 @@ a.wcp-pill-tag:hover {
 .wcp-type-spec {
     background: #9b59b6;
     color: #fff;
+}
+
+/* Deep-link target flash — when arriving from a dashboard task link. */
+.wcp-item-row.wcp-item-highlight {
+    animation: wcpItemFlash 2.5s ease;
+}
+
+@keyframes wcpItemFlash {
+    0%, 35% { background: #fff3cd; box-shadow: 0 0 0 2px #ffd54f; }
+    100% { background: transparent; box-shadow: none; }
 }
 
 /* Creator provenance — accent the left edge by who created the content.
@@ -2104,6 +2128,55 @@ a.wcp-tree-label:hover {
     border-radius: 3px;
     font-size: 13px;
     color: #555;
+    text-decoration: none;
+}
+
+a.wcp-tag:hover {
+    background: #e2e2e2;
+}
+
+/* Item taxonomy — "Belongs to" (structural membership) + tags */
+.wcp-item-taxonomy {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.wcp-item-belongs .wcp-section-label,
+.wcp-item-taxonomy .wcp-item-tags .wcp-section-label {
+    display: block;
+    margin-bottom: 6px;
+}
+
+.wcp-belongs-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.wcp-belongs-path {
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.wcp-belongs-path a {
+    color: #2271b1;
+    text-decoration: none;
+}
+
+.wcp-belongs-path a:hover {
+    text-decoration: underline;
+}
+
+.wcp-belongs-sep {
+    color: #aaa;
+    margin: 0 6px;
 }
 
 .wcp-item-actions {

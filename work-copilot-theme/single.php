@@ -57,18 +57,42 @@ get_header();
                 <?php the_content(); ?>
             </div>
 
-            <?php if (function_exists('wcpg_connections_panel')) wcpg_connections_panel(get_the_ID()); ?>
+            <?php
+            // Belongs to: every structural location this item sits in (it may be
+            // assigned to several pages/headings), each as a linked path.
+            $context_paths = wcp_theme_get_item_context_paths(get_the_ID());
+            ?>
+            <?php if (!empty($context_paths) || !empty($tags)) : ?>
+            <section class="wcp-item-taxonomy">
+                <?php if (!empty($context_paths)) : ?>
+                <div class="wcp-item-belongs">
+                    <span class="wcp-section-label"><?php _e('Belongs to', 'work-copilot-theme'); ?></span>
+                    <ul class="wcp-belongs-list">
+                        <?php foreach ($context_paths as $trail) : ?>
+                        <li class="wcp-belongs-path">
+                            <?php foreach ($trail as $i => $crumb) : ?>
+                                <?php if ($i > 0) : ?><span class="wcp-belongs-sep">›</span><?php endif; ?>
+                                <a href="<?php echo esc_url($crumb['url']); ?>"><?php echo esc_html($crumb['title']); ?></a>
+                            <?php endforeach; ?>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+                <?php endif; ?>
 
-            <?php if (!empty($tags)) : ?>
-            <footer class="wcp-item-footer">
+                <?php if (!empty($tags)) : ?>
                 <div class="wcp-item-tags">
-                    <strong>Tags:</strong>
+                    <span class="wcp-section-label"><?php _e('Tags', 'work-copilot-theme'); ?></span>
                     <?php foreach ($tags as $tag) : ?>
-                        <span class="wcp-tag"><?php echo esc_html($tag); ?></span>
+                        <a class="wcp-tag" href="<?php echo esc_url(home_url('/?tag=' . urlencode(sanitize_title($tag)))); ?>"><?php echo esc_html($tag); ?></a>
                     <?php endforeach; ?>
                 </div>
-            </footer>
+                <?php endif; ?>
+            </section>
             <?php endif; ?>
+
+            <?php // Related to: semantic + structural connections (graph add-on). ?>
+            <?php if (function_exists('wcpg_connections_panel')) wcpg_connections_panel(get_the_ID()); ?>
 
             <div class="wcp-item-actions">
                 <?php
