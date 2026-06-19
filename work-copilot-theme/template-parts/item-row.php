@@ -35,6 +35,7 @@ $_delegation_labels = array(
 );
 ?>
 <div class="wcp-item-row<?php echo $is_done ? ' wcp-task-done' : ''; echo esc_attr($_creator_class); ?>"
+     id="wcp-item-<?php echo esc_attr($item->ID); ?>"
      data-item-id="<?php echo esc_attr($item->ID); ?>"
      data-item-type="<?php echo esc_attr($_item_type_slug); ?>"
      data-task-status="<?php echo esc_attr($_task_status_slug); ?>"
@@ -163,6 +164,7 @@ $_delegation_labels = array(
             <div class="wcp-item-ai-chips">
                 <button type="button" class="wcp-item-ai-chip" data-action="action_plan">Action plan</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="improve_phrasing">Improve phrasing</button>
+                <button type="button" class="wcp-item-ai-chip" data-action="freeform">Freeform…</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="suggest_subtasks">Add subtasks</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="suggest_contexts">Auto-associate</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="to_goal">Convert to goal</button>

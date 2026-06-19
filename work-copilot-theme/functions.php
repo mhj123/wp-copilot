@@ -158,6 +158,20 @@ function wcp_theme_get_page_context_term($page_id) {
 }
 
 // Get items for a page
+/**
+ * tax_query clause that excludes Done tasks. Done items are hidden everywhere in
+ * the frontend UI (they remain findable in WP Admin). NOT IN also keeps every
+ * post that has no task_status at all — info/learning/spec and open tasks.
+ */
+function wcp_theme_exclude_done_clause() {
+    return array(
+        'taxonomy' => 'task_status',
+        'field'    => 'slug',
+        'terms'    => array('done'),
+        'operator' => 'NOT IN',
+    );
+}
+
 function wcp_theme_get_page_items($page_id, $filters = array()) {
     $context_term = wcp_theme_get_page_context_term($page_id);
 
@@ -185,6 +199,8 @@ function wcp_theme_get_page_items($page_id, $filters = array()) {
         'orderby' => 'date',
         'order' => 'ASC',
     );
+
+    $args['tax_query'][] = wcp_theme_exclude_done_clause();
 
     // Apply filters
     if (!empty($filters['item_type'])) {
@@ -303,6 +319,7 @@ function wcp_theme_get_heading_items($heading_id) {
                 'field' => 'term_id',
                 'terms' => $heading_term->term_id,
             ),
+            wcp_theme_exclude_done_clause(),
         ),
         'orderby' => array('menu_order' => 'ASC', 'date' => 'ASC'),
     ));
@@ -375,6 +392,8 @@ function wcp_theme_get_page_only_items($page_id) {
             'operator' => 'NOT IN',
         );
     }
+
+    $tax_query[] = wcp_theme_exclude_done_clause();
 
     return get_posts(array(
         'post_type'      => 'post',
@@ -472,6 +491,64 @@ function wcp_theme_get_item_breadcrumbs($post_id) {
     return array();
 }
 
+/**
+ * Resolve the URL of the page where an item is situated, anchored to the item
+ * row (#wcp-item-<id>). Used by the dashboard so clicking a task lands on the
+ * item in its page context — where it can be interacted with — rather than the
+ * standalone single-item view. Falls back to the item permalink if unresolved.
+ */
+function wcp_theme_get_item_page_url($item_id) {
+    $terms = wp_get_post_terms($item_id, 'wcp_context');
+    if (empty($terms) || is_wp_error($terms)) {
+        return get_permalink($item_id);
+    }
+
+    $ref_type = get_term_meta($terms[0]->term_id, 'wcp_ref_type', true);
+    $ref_id   = (int) get_term_meta($terms[0]->term_id, 'wcp_ref_id', true);
+
+    // An item may live under a heading (possibly nested); walk up to its page.
+    $guard = 0;
+    while ($ref_type === 'wcp_heading' && $ref_id && $guard++ < 20) {
+        $parent_type = get_post_meta($ref_id, '_wcp_parent_type', true);
+        $ref_id      = (int) get_post_meta($ref_id, '_wcp_parent_id', true);
+        $ref_type    = $parent_type;
+    }
+
+    if ($ref_type === 'page' && $ref_id) {
+        return get_permalink($ref_id) . '#wcp-item-' . $item_id;
+    }
+    return get_permalink($item_id);
+}
+
+/**
+ * All structural locations an item belongs to: one breadcrumb trail per
+ * wcp_context term it is assigned to (an item can live on several pages or
+ * headings). Each trail is an array of {id, title, url}, root-to-leaf.
+ */
+function wcp_theme_get_item_context_paths($item_id) {
+    $terms = wp_get_post_terms($item_id, 'wcp_context');
+    if (empty($terms) || is_wp_error($terms)) {
+        return array();
+    }
+
+    $paths = array();
+    foreach ($terms as $term) {
+        $ref_type = get_term_meta($term->term_id, 'wcp_ref_type', true);
+        $ref_id   = (int) get_term_meta($term->term_id, 'wcp_ref_id', true);
+
+        $trail = array();
+        if ($ref_type === 'page' && $ref_id) {
+            $trail = wcp_theme_get_page_breadcrumbs($ref_id);
+        } elseif ($ref_type === 'wcp_heading' && $ref_id) {
+            $trail = wcp_theme_get_heading_breadcrumbs($ref_id);
+        }
+        if (!empty($trail)) {
+            $paths[] = $trail;
+        }
+    }
+    return $paths;
+}
+
 // Run a dynamic listing query and return matching posts
 function wcp_theme_query_dynamic_listing($listing) {
     $tax_query = array('relation' => 'AND');
@@ -490,6 +567,9 @@ function wcp_theme_query_dynamic_listing($listing) {
             'field'    => 'slug',
             'terms'    => $listing['task_status'],
         );
+    } else {
+        // Hide Done tasks unless this listing deliberately targets a status.
+        $tax_query[] = wcp_theme_exclude_done_clause();
     }
 
     if (!empty($listing['parent_page_id'])) {

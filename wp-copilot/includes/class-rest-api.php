@@ -502,11 +502,39 @@ class WCP_REST_API {
         $pinned = $request->get_param('pinned');
         $tags = $request->get_param('tags');
 
+        // Place the new item at the bottom of its list: one step past the
+        // highest menu_order currently in its primary context. (New items
+        // otherwise default to menu_order 0 and land mid-list once any
+        // sibling has been drag-reordered.)
+        $contexts = !empty($contexts) ? (is_array($contexts) ? $contexts : array($contexts)) : array();
+        $menu_order = 0;
+        if (!empty($contexts)) {
+            $primary_ctx = (int) $contexts[0];
+            if ($primary_ctx) {
+                $last = get_posts(array(
+                    'post_type'      => 'post',
+                    'post_status'    => 'publish',
+                    'posts_per_page' => 1,
+                    'orderby'        => 'menu_order',
+                    'order'          => 'DESC',
+                    'fields'         => 'ids',
+                    'tax_query'      => array(array(
+                        'taxonomy'         => 'wcp_context',
+                        'field'            => 'term_id',
+                        'terms'            => $primary_ctx,
+                        'include_children' => false,
+                    )),
+                ));
+                $menu_order = !empty($last) ? ((int) get_post_field('menu_order', $last[0]) + 10) : 10;
+            }
+        }
+
         $post_id = wp_insert_post(array(
             'post_type'    => 'post',
             'post_title'   => $title,
             'post_content' => isset($content) && $content !== null ? $content : '',
             'post_status'  => 'publish',
+            'menu_order'   => $menu_order,
         ));
 
         if (is_wp_error($post_id)) {
@@ -2156,6 +2184,25 @@ class WCP_REST_API {
                     'success'  => true,
                     'action'   => 'improve_phrasing',
                     'proposal' => $parsed ?: array('title' => $resp['content'], 'content' => ''),
+                ));
+
+            case 'freeform':
+                $user_prompt = sanitize_textarea_field( $request->get_param('prompt') );
+                if ( $user_prompt === '' ) {
+                    return new WP_Error( 'missing_prompt', 'A prompt is required', array('status' => 400) );
+                }
+                $sys  = "You are editing a single knowledge/work item. Apply the user's instruction to it "
+                      . "(most often rephrasing or rewriting). Return ONLY a JSON object: {\"title\": \"...\", \"content\": \"...\"}. "
+                      . "Preserve the item's meaning unless the instruction says otherwise. Keep 'content' an empty string "
+                      . "if the item had no content and the instruction does not call for any.";
+                $usr  = "User instruction: {$user_prompt}\n\n{$item_text}";
+                $resp = $ai_client->request_with_conversation( $sys, $usr, array(), 512 );
+                if ( is_wp_error($resp) ) return $resp;
+                $parsed = json_decode( $resp['content'], true );
+                return rest_ensure_response(array(
+                    'success'  => true,
+                    'action'   => 'freeform',
+                    'proposal' => is_array($parsed) ? $parsed : array('title' => $resp['content'], 'content' => ''),
                 ));
 
             case 'suggest_subtasks':

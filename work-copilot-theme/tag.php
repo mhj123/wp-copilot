@@ -15,6 +15,7 @@ $items = $tag ? get_posts(array(
     'posts_per_page' => -1,
     'tag'            => $tag_slug,
     'orderby'        => array('menu_order' => 'ASC', 'date' => 'ASC'),
+    'tax_query'      => array(wcp_theme_exclude_done_clause()),
 )) : array();
 ?>
 

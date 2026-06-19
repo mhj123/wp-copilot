@@ -259,6 +259,27 @@ jQuery(document).ready(function($) {
         });
     });
 
+    // Rapid entry: after adding an item the page reloads to render the new row.
+    // Reopen the same quick-add form, keep the chosen type, and put the cursor
+    // in the title so another item of the same type can be added straight away.
+    (function resumeQuickAdd() {
+        var raw;
+        try { raw = sessionStorage.getItem('wcpQuickAddResume'); } catch (e) { return; }
+        if (!raw) { return; }
+        try { sessionStorage.removeItem('wcpQuickAddResume'); } catch (e) {}
+        var state;
+        try { state = JSON.parse(raw); } catch (e) { return; }
+        if (!state || !state.contextId) { return; }
+
+        var $form = $('.wcp-quick-item-form[data-context-id="' + state.contextId + '"]').first();
+        if (!$form.length) { return; }
+        $form.show();
+        if (state.itemType) { $form.find('select[name="item_type"]').val(state.itemType); }
+        var $title = $form.find('.wcp-quick-title');
+        if ($title.length && $title[0].scrollIntoView) { $title[0].scrollIntoView({ block: 'center' }); }
+        $title.focus();
+    })();
+
     // Toggle the page-association tree inside a quick-add form
     $(document).on('click', '.wcp-toggle-form-contexts', function() {
         $(this).next('.wcp-form-contexts').slideToggle(150);
@@ -312,6 +333,14 @@ jQuery(document).ready(function($) {
             },
             success: function(response) {
                 if (response.success) {
+                    // Rapid entry: remember this form + chosen type so that after
+                    // the reload we reopen it, ready for the next item.
+                    try {
+                        sessionStorage.setItem('wcpQuickAddResume', JSON.stringify({
+                            contextId: String($form.data('context-id')),
+                            itemType: $form.find('select[name="item_type"]').val() || ''
+                        }));
+                    } catch (e) {}
                     location.reload();
                 } else {
                     $status.addClass('error').text(response.message || 'Error');
@@ -355,6 +384,27 @@ jQuery(document).ready(function($) {
             $row.toggle(show);
         });
     });
+
+    // Done tasks are hidden from the frontend UI — once a task is marked done,
+    // drop its row immediately (it won't return on reload; it's filtered server-
+    // side and remains accessible in WP Admin).
+    function wcpRemoveDoneRow($row) {
+        $row.stop(true, true).fadeOut(250, function() { $(this).remove(); });
+    }
+
+    // Deep-link from the dashboard: when the URL carries #wcp-item-<id>, scroll
+    // to that item and flash it so the user can find and interact with it.
+    function wcpFocusHashItem() {
+        var m = (window.location.hash || '').match(/^#wcp-item-(\d+)$/);
+        if (!m) { return; }
+        var $row = $('#wcp-item-' + m[1]);
+        if (!$row.length) { return; }
+        $row.show(); // override any active filter so the target is visible
+        $('html, body').animate({ scrollTop: $row.offset().top - 80 }, 350);
+        $row.addClass('wcp-item-highlight');
+        setTimeout(function() { $row.removeClass('wcp-item-highlight'); }, 2500);
+    }
+    wcpFocusHashItem();
 
     // Toggle description visibility
     $(document).on('click', '.wcp-toggle-descriptions', function() {
@@ -651,6 +701,18 @@ jQuery(document).ready(function($) {
     }
 
     // Click title to edit inline
+    // Open the quick-add form for the list a given item row sits in, focused —
+    // so editing a title and pressing Enter flows straight into adding the next
+    // item (same rapid-entry behaviour as the add form itself).
+    function wcpOpenQuickAddForRow($row) {
+        var contextId = $row.closest('.wcp-items-list').data('context-id');
+        if (contextId == null || contextId === '') { return; }
+        var $form = $('.wcp-quick-item-form[data-context-id="' + contextId + '"]').first();
+        if (!$form.length) { return; }
+        $form.show();
+        $form.find('.wcp-quick-title').focus();
+    }
+
     $(document).on('click', '.wcp-item-title', function() {
         var $title = $(this);
         var $row = $title.closest('.wcp-item-row');
@@ -664,6 +726,7 @@ jQuery(document).ready(function($) {
     $(document).on('keydown', '.wcp-item-title-input', function(e) {
         if (e.which === 13) {
             e.preventDefault();
+            $(this).data('wcpEnter', true); // flag so blur opens the next add form
             $(this).blur();
         } else if (e.which === 27) {
             var $input = $(this);
@@ -681,10 +744,13 @@ jQuery(document).ready(function($) {
         var $title = $row.find('.wcp-item-title');
         var itemId = $row.data('item-id');
         var newTitle = $input.val().trim();
+        var viaEnter = $input.data('wcpEnter');
+        $input.removeData('wcpEnter');
 
         if (!newTitle || newTitle === $title.text()) {
             $input.val($title.text()).hide();
             $title.show();
+            if (viaEnter) { wcpOpenQuickAddForRow($row); }
             return;
         }
 
@@ -697,6 +763,7 @@ jQuery(document).ready(function($) {
             .always(function() {
                 $input.hide();
                 $title.show();
+                if (viaEnter) { wcpOpenQuickAddForRow($row); }
             });
     });
 
@@ -710,6 +777,7 @@ jQuery(document).ready(function($) {
         $row.find('.wcp-status-select').val(status);
         $row.toggleClass('wcp-task-done', done);
         $row.data('task-status', status);
+        if (done) { wcpRemoveDoneRow($row); }
     });
 
     $(document).on('change', '.wcp-type-select', function() {
@@ -786,6 +854,7 @@ jQuery(document).ready(function($) {
         $row.find('.wcp-task-checkbox').prop('checked', done);
         $row.toggleClass('wcp-task-done', done);
         $row.data('task-status', status);
+        if (done) { wcpRemoveDoneRow($row); }
     });
 
     // Delete item
@@ -851,6 +920,7 @@ jQuery(document).ready(function($) {
         var n = checked.length;
         $('#wcp-selection-count').text(n + ' item' + (n !== 1 ? 's' : '') + ' selected');
         $('#wcp-goal-from-selected-btn').prop('disabled', n === 0);
+        $('#wcp-delete-selected-btn').prop('disabled', n === 0);
     });
 
     $(document).on('click', '#wcp-selection-cancel-btn', function() {
@@ -858,6 +928,31 @@ jQuery(document).ready(function($) {
         $('#wcp-select-mode-btn').removeClass('active').text('select');
         $('.wcp-item-select-cb').hide().prop('checked', false);
         $('#wcp-selection-bar').hide();
+    });
+
+    $(document).on('click', '#wcp-delete-selected-btn', function() {
+        var $checked = $('.wcp-item-select-cb:checked');
+        var n = $checked.length;
+        if (!n) return;
+        if (!confirm('Delete ' + n + ' selected item' + (n !== 1 ? 's' : '') + '? This cannot be undone from here.')) return;
+
+        $checked.each(function() {
+            var itemId = $(this).data('item-id');
+            var $row   = $(this).closest('.wcp-item-row');
+            $.ajax({
+                url: wcpThemeData.restUrl + '/items/' + itemId + '/delete',
+                method: 'POST',
+                beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+                success: function(response) {
+                    if (response && response.success) {
+                        $row.fadeOut(200, function() { $(this).remove(); });
+                    }
+                }
+            });
+        });
+
+        // Exit select mode (rows fade out as their requests return).
+        $('#wcp-selection-cancel-btn').trigger('click');
     });
 
     $(document).on('click', '#wcp-goal-from-selected-btn', function() {
@@ -876,6 +971,22 @@ jQuery(document).ready(function($) {
     // ==========================================================================
     // Per-item AI actions
     // ==========================================================================
+
+    // Render a {title, content} rewrite proposal with Accept/Dismiss — shared by
+    // the "Improve phrasing" and "Freeform" item AI actions.
+    function wcpRenderItemProposal($result, itemId, p) {
+        var esc = function(s) { return $('<span>').text(s == null ? '' : s).html(); };
+        $result.html(
+            '<div class="wcp-item-ai-proposal">'
+            + '<strong>' + esc(p.title) + '</strong>'
+            + (p.content ? '<br><span style="color:#666;font-size:12px;">' + esc(p.content) + '</span>' : '')
+            + '</div>'
+            + '<div style="margin-top:6px;">'
+            + '<button class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-item-ai-accept" data-item-id="' + itemId + '" data-title="' + esc(p.title) + '" data-content="' + esc(p.content || '') + '">Accept</button>'
+            + ' <button class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
+            + '</div>'
+        );
+    }
 
     $(document).on('click', '.wcp-item-ai-btn', function() {
         var $row   = $(this).closest('.wcp-item-row');
@@ -930,6 +1041,20 @@ jQuery(document).ready(function($) {
             return;
         }
 
+        if (action === 'freeform') {
+            // Collect a freeform instruction first, then run on demand.
+            $result.show().html(
+                '<div class="wcp-item-ai-freeform">'
+                + '<textarea class="wcp-freeform-prompt" rows="2" placeholder="Tell the AI what to do — e.g. rephrase this more concisely…"></textarea>'
+                + '<div style="margin-top:6px;">'
+                + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-freeform-run" data-item-id="' + itemId + '">Run</button>'
+                + ' <button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Cancel</button>'
+                + '</div></div>'
+            );
+            $result.find('.wcp-freeform-prompt').focus();
+            return;
+        }
+
         $result.show().html('<em style="color:#aaa;font-size:12px;">Thinking…</em>');
 
         $.ajax({
@@ -942,17 +1067,7 @@ jQuery(document).ready(function($) {
                 if (!r.success) { $result.html('<em style="color:#c0392b;">Error</em>'); return; }
 
                 if (action === 'improve_phrasing') {
-                    var p = r.proposal;
-                    $result.html(
-                        '<div class="wcp-item-ai-proposal">'
-                        + '<strong>' + $('<span>').text(p.title).html() + '</strong>'
-                        + (p.content ? '<br><span style="color:#666;font-size:12px;">' + $('<span>').text(p.content).html() + '</span>' : '')
-                        + '</div>'
-                        + '<div style="margin-top:6px;">'
-                        + '<button class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-item-ai-accept" data-item-id="' + itemId + '" data-title="' + $('<span>').text(p.title).html() + '" data-content="' + $('<span>').text(p.content || '').html() + '">Accept</button>'
-                        + ' <button class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
-                        + '</div>'
-                    );
+                    wcpRenderItemProposal($result, itemId, r.proposal);
                 } else if (action === 'suggest_subtasks') {
                     var items = r.subtasks.map(function(st) {
                         return '<li><label><input type="checkbox" class="wcp-ai-sub-cb" checked data-title="' + $('<span>').text(st).html() + '"> ' + $('<span>').text(st).html() + '</label></li>';
@@ -1050,6 +1165,29 @@ jQuery(document).ready(function($) {
     });
 
     // Accept improved phrasing
+    // Run a freeform item instruction and show the result as a rewrite proposal.
+    $(document).on('click', '.wcp-freeform-run', function() {
+        var $btn    = $(this);
+        var itemId  = $btn.data('item-id');
+        var $result = $btn.closest('.wcp-item-ai-result');
+        var prompt  = $result.find('.wcp-freeform-prompt').val().trim();
+        if (!prompt) { $result.find('.wcp-freeform-prompt').focus(); return; }
+
+        $result.html('<em style="color:#aaa;font-size:12px;">Thinking…</em>');
+        $.ajax({
+            url: wcpThemeData.restUrl + '/items/' + itemId + '/ai',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ action: 'freeform', prompt: prompt }),
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(r) {
+                if (!r.success || !r.proposal) { $result.html('<em style="color:#c0392b;">Error</em>'); return; }
+                wcpRenderItemProposal($result, itemId, r.proposal);
+            },
+            error: function() { $result.html('<em style="color:#c0392b;">Error</em>'); }
+        });
+    });
+
     $(document).on('click', '.wcp-item-ai-accept', function() {
         var $btn  = $(this);
         var id    = $btn.data('item-id');

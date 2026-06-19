@@ -218,7 +218,7 @@ foreach ($cal_events as $ev) {
                 <?php foreach ($overdue_posts as $item) :
                     $d = $overdue_data[$item->ID];
                     $due_label = wcp_due_label($d['due_date']);
-                    $page_url  = get_permalink($item->ID);
+                    $page_url  = wcp_theme_get_item_page_url($item->ID);
                 ?>
                     <li class="wcp-dash-task<?php echo $d['priority'] === 'critical' ? ' wcp-dash-critical' : ''; ?>">
                         <div class="wcp-dash-task-main">
@@ -257,7 +257,7 @@ foreach ($cal_events as $ev) {
                     <li class="wcp-dash-task<?php echo $d['priority'] === 'critical' ? ' wcp-dash-critical' : ''; ?>">
                         <div class="wcp-dash-task-main">
                             <span class="wcp-dash-prio wcp-dash-prio-<?php echo esc_attr($d['priority']); ?>"><?php echo esc_html($d['priority']); ?></span>
-                            <a href="<?php echo esc_url(get_permalink($item->ID)); ?>" class="wcp-dash-task-title"><?php echo esc_html($item->post_title); ?></a>
+                            <a href="<?php echo esc_url(wcp_theme_get_item_page_url($item->ID)); ?>" class="wcp-dash-task-title"><?php echo esc_html($item->post_title); ?></a>
                         </div>
                         <?php if (!empty($d['contexts'])) : ?>
                         <div class="wcp-dash-task-meta">
@@ -294,7 +294,7 @@ foreach ($cal_events as $ev) {
                                 <?php if ($d['priority']) : ?>
                                     <span class="wcp-dash-prio wcp-dash-prio-<?php echo esc_attr($d['priority']); ?>"><?php echo esc_html($d['priority']); ?></span>
                                 <?php endif; ?>
-                                <a href="<?php echo esc_url(get_permalink($item->ID)); ?>" class="wcp-dash-task-title"><?php echo esc_html($item->post_title); ?></a>
+                                <a href="<?php echo esc_url(wcp_theme_get_item_page_url($item->ID)); ?>" class="wcp-dash-task-title"><?php echo esc_html($item->post_title); ?></a>
                             </div>
                             <?php if (!empty($d['contexts'])) : ?>
                             <div class="wcp-dash-task-meta">
