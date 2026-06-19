@@ -609,7 +609,21 @@
          */
         handleActionResult: function(result) {
             if (result.outcome === 'onboard') {
-                this.appendMessage('assistant', result.message);
+                let message = result.message || '';
+                // Safety net: if PHP JSON parsing failed, raw JSON may have been passed through
+                if (message.trim().startsWith('{') || message.trim().startsWith('```')) {
+                    try {
+                        const clean = message.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+                        const p = JSON.parse(clean);
+                        if (p && p.greeting) {
+                            message = p.greeting;
+                            if (!result.suggested_mission && p.suggested_mission) {
+                                result.suggested_mission = p.suggested_mission;
+                            }
+                        }
+                    } catch (e) {}
+                }
+                this.appendMessage('assistant', message);
                 if (result.suggested_mission) {
                     this.showMissionOffer(result.suggested_mission);
                 }

@@ -1952,8 +1952,15 @@ class WCP_AI_Actions {
 
         $parsed = $this->parse_json_response( $response['content'] );
         if ( is_wp_error( $parsed ) ) {
-            // Fallback: treat raw content as greeting with no suggested mission
-            $parsed = array( 'greeting' => $response['content'], 'suggested_mission' => null );
+            // Regex fallback: extract greeting field even if surrounding text broke JSON parse
+            if ( preg_match( '/"greeting"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/s', $response['content'], $m ) ) {
+                $parsed = array(
+                    'greeting'          => stripslashes( $m[1] ),
+                    'suggested_mission' => null,
+                );
+            } else {
+                $parsed = array( 'greeting' => $response['content'], 'suggested_mission' => null );
+            }
         }
 
         $greeting          = isset( $parsed['greeting'] ) ? $parsed['greeting'] : $response['content'];
