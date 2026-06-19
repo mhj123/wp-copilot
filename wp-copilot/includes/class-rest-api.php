@@ -117,6 +117,13 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // AI: Accept a structure proposal (headings + placed items, in order)
+        register_rest_route($namespace, '/ai/structure/accept', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'accept_structure'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // AI: Accept/dismiss (LEGACY - generic pattern, must be AFTER specific routes)
         register_rest_route($namespace, '/ai/(?P<action_id>[a-zA-Z0-9_-]+)/decide', array(
             'methods' => 'POST',
@@ -1236,6 +1243,10 @@ class WCP_REST_API {
                 $result = $ai_actions->generate_headings($prompt, $page_id, $context_mode, $selected_pages, $conversation_id, $item_count);
                 break;
 
+            case 'generate_structure':
+                $result = $ai_actions->generate_structure($prompt, $page_id, $context_mode, $selected_pages, $conversation_id);
+                break;
+
             case 'generate_pages':
                 $item_count = intval($request->get_param('item_count') ?? 0);
                 $result = $ai_actions->generate_pages($prompt, $page_id, $context_mode, $selected_pages, $conversation_id, $item_count);
@@ -1378,6 +1389,117 @@ class WCP_REST_API {
                 'debug' => $received_params,
             ));
         }
+    }
+
+    /**
+     * Accept a structure proposal: create selected new headings first (building a
+     * ref → context-term map), then create selected items into their resolved
+     * target (new heading, existing heading, or page level). Dependency-ordered.
+     */
+    public function accept_structure($request) {
+        $batch_id    = sanitize_text_field($request->get_param('batch_id'));
+        $heading_ids = array_map('sanitize_text_field', (array) $request->get_param('heading_ids'));
+        $item_ids    = array_map('sanitize_text_field', (array) $request->get_param('item_ids'));
+
+        $batch = $batch_id ? get_transient('wcp_batch_' . $batch_id) : false;
+        if (!$batch) {
+            return new WP_Error('batch_not_found', 'Proposal batch expired or not found', array('status' => 404));
+        }
+        $page_id = (int) $batch['page_id'];
+
+        // 1. New headings first → ref => term_id.
+        $ref_term         = array();
+        $created_headings = 0;
+        foreach ($heading_ids as $pid) {
+            $prop = get_transient('wcp_proposal_' . $pid);
+            if (!$prop || ($prop['action_type'] ?? '') !== 'structure_heading') {
+                continue;
+            }
+            $hid = wp_insert_post(array(
+                'post_type' => 'wcp_heading', 'post_title' => $prop['title'], 'post_content' => '',
+                'post_status' => 'publish', 'post_author' => get_current_user_id(),
+            ));
+            if (is_wp_error($hid)) {
+                continue;
+            }
+            update_post_meta($hid, '_wcp_parent_type', 'page');
+            update_post_meta($hid, '_wcp_parent_id', $page_id);
+            WCP_Taxonomy_Sync::instance()->sync_heading_to_taxonomy($hid, get_post($hid), true);
+            WCP_Post_Types::mark_creator($hid, 'copilot');
+            $term_id = $this->resolve_heading_term($hid);
+            if ($term_id) {
+                $ref_term[$prop['ref']] = $term_id;
+            }
+            $created_headings++;
+            delete_transient('wcp_proposal_' . $pid);
+        }
+
+        $page_term_id = $this->resolve_page_term($page_id);
+
+        // 2. Items into their resolved target.
+        $created_items = 0;
+        foreach ($item_ids as $pid) {
+            $prop = get_transient('wcp_proposal_' . $pid);
+            if (!$prop || ($prop['action_type'] ?? '') !== 'structure_item') {
+                continue;
+            }
+            $target  = $prop['target'] ?? array('type' => 'page');
+            $term_id = 0;
+            if ($target['type'] === 'new') {
+                $term_id = $ref_term[$target['ref']] ?? 0;
+                if (!$term_id) {
+                    continue; // parent new heading wasn't created
+                }
+            } elseif ($target['type'] === 'existing') {
+                $term_id = (int) $target['id'];
+            } else {
+                $term_id = $page_term_id;
+            }
+
+            $item = $prop['item'];
+            $iid  = wp_insert_post(array(
+                'post_type' => 'post', 'post_title' => $item['title'], 'post_content' => $item['content'] ?? '',
+                'post_status' => 'publish', 'post_author' => get_current_user_id(),
+            ));
+            if (is_wp_error($iid)) {
+                continue;
+            }
+            if ($term_id) {
+                wp_set_post_terms($iid, array($term_id), 'wcp_context');
+            }
+            $type = $item['item_type'] ?? '';
+            if (in_array($type, array('task', 'info', 'learning', 'spec'), true)) {
+                wp_set_post_terms($iid, array($type), 'item_type');
+                if ($type === 'task') {
+                    wp_set_post_terms($iid, array('to-do'), 'task_status');
+                } elseif ($type === 'spec') {
+                    wp_set_post_terms($iid, array('draft'), 'spec_status');
+                }
+            }
+            WCP_Post_Types::mark_creator($iid, 'copilot');
+            $created_items++;
+            delete_transient('wcp_proposal_' . $pid);
+        }
+
+        delete_transient('wcp_batch_' . $batch_id);
+
+        return rest_ensure_response(array(
+            'success'          => true,
+            'created_headings' => $created_headings,
+            'created_items'    => $created_items,
+        ));
+    }
+
+    private function resolve_page_term($page_id) {
+        $terms = get_terms(array('taxonomy' => 'wcp_context', 'hide_empty' => false, 'number' => 1,
+            'meta_query' => array(array('key' => 'wcp_ref_type', 'value' => 'page'), array('key' => 'wcp_ref_id', 'value' => $page_id))));
+        return (!is_wp_error($terms) && !empty($terms)) ? (int) $terms[0]->term_id : 0;
+    }
+
+    private function resolve_heading_term($heading_id) {
+        $terms = get_terms(array('taxonomy' => 'wcp_context', 'hide_empty' => false, 'number' => 1,
+            'meta_query' => array(array('key' => 'wcp_ref_type', 'value' => 'wcp_heading'), array('key' => 'wcp_ref_id', 'value' => $heading_id, 'type' => 'NUMERIC'))));
+        return (!is_wp_error($terms) && !empty($terms)) ? (int) $terms[0]->term_id : 0;
     }
 
     /**

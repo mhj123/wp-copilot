@@ -773,6 +773,205 @@ class WCP_AI_Actions {
     }
 
     /**
+     * Structure-aware generation: the model sees the current page's existing
+     * headings (with ids) and items, and proposes new headings and/or items
+     * placed under new headings, existing headings, or page level. Combines the
+     * old generate_items + generate_headings into one action.
+     * AI guardrail: everything is a proposal — nothing is written here.
+     */
+    public function generate_structure($prompt, $page_id, $context_mode = 'page', $selected_pages = array(), $conversation_id = null) {
+        set_time_limit(120);
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new WP_Error('auth_error', 'User not authenticated');
+        }
+
+        $page_term_id = $this->page_context_term_id($page_id);
+        list($snapshot, $valid_heading_terms) = $this->build_structure_snapshot($page_id, $page_term_id);
+
+        $prompt_builder = WCP_Prompt_Builder::instance();
+        $system_prompt  = $prompt_builder->build_system_prompt('generate-structure', $page_id);
+        $user_message   = trim($prompt) . "\n\nCURRENT PAGE STRUCTURE (use these ids for existing headings):\n" . $snapshot;
+
+        $conversation_history = array();
+        if ($conversation_id) {
+            $cm = WCP_Conversations_Manager::instance();
+            foreach ($cm->get_messages($conversation_id, 10) as $msg) {
+                $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
+            }
+        }
+
+        $ai_client = WCP_AI_Client::instance();
+        $response  = $ai_client->request_with_conversation($system_prompt, $user_message, $conversation_history, 4096, 90);
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        if ($conversation_id) {
+            WCP_Conversations_Manager::instance()->add_message($conversation_id, 'user', $prompt);
+        }
+
+        $parsed = $this->parse_json_response($response['content']);
+        if (is_wp_error($parsed)) {
+            if ($conversation_id) {
+                WCP_Conversations_Manager::instance()->add_message($conversation_id, 'system', 'Failed to parse AI response: ' . $parsed->get_error_message());
+            }
+            return $parsed;
+        }
+
+        $headings_in = (isset($parsed['headings']) && is_array($parsed['headings'])) ? $parsed['headings'] : array();
+        $items_in    = (isset($parsed['items']) && is_array($parsed['items']))       ? $parsed['items']    : array();
+        if (empty($headings_in) && empty($items_in)) {
+            return new WP_Error('invalid_response', 'AI did not return any headings or items');
+        }
+
+        $batch_id         = wp_generate_uuid4();
+        $valid_item_types = array('task', 'info', 'learning', 'spec');
+
+        // New headings → proposals + ref map for the plan tree.
+        $headings   = array();
+        $ref_titles = array();
+        foreach ($headings_in as $h) {
+            $title = isset($h['title']) ? sanitize_text_field($h['title']) : '';
+            $ref   = isset($h['ref'])   ? sanitize_text_field($h['ref'])   : '';
+            if ($title === '' || $ref === '') {
+                continue;
+            }
+            $pid  = wp_generate_uuid4();
+            set_transient('wcp_proposal_' . $pid, array(
+                'proposal_id' => $pid, 'batch_id' => $batch_id, 'action_type' => 'structure_heading',
+                'ref' => $ref, 'title' => $title, 'page_id' => $page_id, 'created_at' => current_time('mysql'),
+            ), HOUR_IN_SECONDS);
+            $ref_titles[$ref] = $title;
+            $headings[] = array('proposal_id' => $pid, 'ref' => $ref, 'title' => $title, 'items' => array());
+        }
+
+        // Items → proposals with validated targets, grouped for the plan tree.
+        $page_items      = array();
+        $existing_groups = array();
+        foreach ($items_in as $it) {
+            $title = isset($it['title']) ? sanitize_text_field($it['title']) : '';
+            if ($title === '') {
+                continue;
+            }
+            $content = isset($it['content']) ? wp_kses_post($it['content']) : '';
+            $type    = isset($it['item_type']) ? sanitize_key($it['item_type']) : '';
+            if (!in_array($type, $valid_item_types, true)) {
+                $type = 'task';
+            }
+
+            $target   = (isset($it['target']) && is_array($it['target'])) ? $it['target'] : array('type' => 'page');
+            $ttype    = isset($target['type']) ? $target['type'] : 'page';
+            $resolved = array('type' => 'page');
+            if ($ttype === 'new' && !empty($target['ref']) && isset($ref_titles[$target['ref']])) {
+                $resolved = array('type' => 'new', 'ref' => sanitize_text_field($target['ref']));
+            } elseif ($ttype === 'existing' && !empty($target['id']) && in_array((int) $target['id'], $valid_heading_terms, true)) {
+                $resolved = array('type' => 'existing', 'id' => (int) $target['id']);
+            }
+
+            $pid = wp_generate_uuid4();
+            set_transient('wcp_proposal_' . $pid, array(
+                'proposal_id' => $pid, 'batch_id' => $batch_id, 'action_type' => 'structure_item',
+                'item' => array('title' => $title, 'content' => $content, 'item_type' => $type),
+                'target' => $resolved, 'page_id' => $page_id, 'created_at' => current_time('mysql'),
+            ), HOUR_IN_SECONDS);
+
+            $entry = array('proposal_id' => $pid, 'title' => $title, 'content' => $content, 'item_type' => $type);
+            if ($resolved['type'] === 'new') {
+                foreach ($headings as &$hh) {
+                    if ($hh['ref'] === $resolved['ref']) { $hh['items'][] = $entry; break; }
+                }
+                unset($hh);
+            } elseif ($resolved['type'] === 'existing') {
+                $tid = $resolved['id'];
+                if (!isset($existing_groups[$tid])) {
+                    $term = get_term($tid, 'wcp_context');
+                    $existing_groups[$tid] = array('term_id' => $tid, 'title' => ($term && !is_wp_error($term)) ? $term->name : 'Heading', 'items' => array());
+                }
+                $existing_groups[$tid]['items'][] = $entry;
+            } else {
+                $page_items[] = $entry;
+            }
+        }
+
+        set_transient('wcp_batch_' . $batch_id, array('page_id' => $page_id, 'conversation_id' => $conversation_id), HOUR_IN_SECONDS);
+
+        if ($conversation_id) {
+            WCP_Conversations_Manager::instance()->add_message($conversation_id, 'assistant', 'Proposed a structure update for your review', array('batch_id' => $batch_id));
+        }
+
+        $logger = WCP_AI_Logger::instance();
+        $logger->log_action(array(
+            'action_type' => 'generate_structure', 'user_id' => $user_id, 'model' => $response['model'],
+            'prompt' => $prompt, 'input_context' => json_encode(array('page_id' => $page_id)),
+            'output_snapshot' => $response['content'], 'context_post_id' => $page_id,
+            'accepted_items' => array(), 'dismissed_items' => array(),
+        ));
+
+        return array(
+            'outcome'  => 'create_structure',
+            'batch_id' => $batch_id,
+            'plan'     => array(
+                'new_headings'    => $headings,
+                'existing_groups' => array_values($existing_groups),
+                'page_items'      => $page_items,
+            ),
+            'metadata' => array('model' => $response['model']),
+        );
+    }
+
+    private function page_context_term_id($page_id) {
+        $terms = get_terms(array('taxonomy' => 'wcp_context', 'hide_empty' => false, 'number' => 1,
+            'meta_query' => array(array('key' => 'wcp_ref_type', 'value' => 'page'), array('key' => 'wcp_ref_id', 'value' => $page_id))));
+        return (!is_wp_error($terms) && !empty($terms)) ? (int) $terms[0]->term_id : 0;
+    }
+
+    private function heading_context_term_id($heading_id) {
+        $terms = get_terms(array('taxonomy' => 'wcp_context', 'hide_empty' => false, 'number' => 1,
+            'meta_query' => array(array('key' => 'wcp_ref_type', 'value' => 'wcp_heading'), array('key' => 'wcp_ref_id', 'value' => $heading_id, 'type' => 'NUMERIC'))));
+        return (!is_wp_error($terms) && !empty($terms)) ? (int) $terms[0]->term_id : 0;
+    }
+
+    private function item_titles_for_term($term_id, $limit = 30) {
+        if (!$term_id) {
+            return array();
+        }
+        $ids = get_posts(array('post_type' => 'post', 'post_status' => 'publish', 'posts_per_page' => $limit, 'fields' => 'ids',
+            'tax_query' => array(array('taxonomy' => 'wcp_context', 'field' => 'term_id', 'terms' => $term_id, 'include_children' => false))));
+        return array_map('get_the_title', $ids);
+    }
+
+    private function build_structure_snapshot($page_id, $page_term_id) {
+        $lines = array();
+        $valid = array();
+        $page  = get_post($page_id);
+        $lines[] = 'PAGE: ' . ($page ? $page->post_title : '');
+
+        $pl = $this->item_titles_for_term($page_term_id);
+        $lines[] = 'PAGE-LEVEL ITEMS:' . (empty($pl) ? ' (none)' : '');
+        foreach ($pl as $t) {
+            $lines[] = '  - ' . $t;
+        }
+
+        $headings = get_posts(array('post_type' => 'wcp_heading', 'post_status' => 'publish', 'posts_per_page' => -1,
+            'orderby' => 'menu_order', 'order' => 'ASC',
+            'meta_query' => array(array('key' => '_wcp_parent_type', 'value' => 'page'), array('key' => '_wcp_parent_id', 'value' => $page_id))));
+        foreach ($headings as $h) {
+            $tid = $this->heading_context_term_id($h->ID);
+            if (!$tid) {
+                continue;
+            }
+            $valid[] = $tid;
+            $lines[] = 'HEADING [id:' . $tid . ']: ' . $h->post_title;
+            foreach ($this->item_titles_for_term($tid) as $t) {
+                $lines[] = '  - ' . $t;
+            }
+        }
+
+        return array(implode("\n", $lines), $valid);
+    }
+
+    /**
      * Generate sub-page proposals under the current page.
      * AI guardrail: pages are proposals only — never written directly.
      */
