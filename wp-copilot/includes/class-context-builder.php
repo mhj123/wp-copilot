@@ -45,7 +45,7 @@ class WCP_Context_Builder {
             'query' => '',
             'rag_limit' => 10,
             'limits' => array(
-                'max_chars_per_item' => 500,
+                'max_chars_per_item' => 50000,
                 'max_chars_page_summary' => 8000
             )
         );
@@ -132,7 +132,7 @@ class WCP_Context_Builder {
             'include_items' => true,
             'item_limit' => 20,
             'limits' => array(
-                'max_chars_per_item' => 500,
+                'max_chars_per_item' => 50000,
                 'max_chars_page_summary' => 8000
             )
         );
@@ -479,7 +479,7 @@ class WCP_Context_Builder {
     public function format_for_prompt($context_data, $limits = array()) {
         // Set default limits
         $defaults = array(
-            'max_chars_per_item' => 500,
+            'max_chars_per_item' => 50000,
             'max_chars_page_summary' => 8000
         );
 

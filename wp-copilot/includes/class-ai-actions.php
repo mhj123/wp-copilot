@@ -49,7 +49,7 @@ class WCP_AI_Actions {
             'query' => $prompt,
             'rag_limit' => 10,
             'limits' => array(
-                'max_chars_per_item' => 500,
+                'max_chars_per_item' => 50000,
                 'max_chars_page_summary' => 8000
             )
         ));
@@ -142,7 +142,7 @@ class WCP_AI_Actions {
             'query' => $prompt,
             'rag_limit' => 10,
             'limits' => array(
-                'max_chars_per_item' => 500,
+                'max_chars_per_item' => 50000,
                 'max_chars_page_summary' => 8000
             )
         ));
@@ -273,7 +273,7 @@ class WCP_AI_Actions {
             'include_items' => true,
             'item_limit' => 20,
             'limits' => array(
-                'max_chars_per_item' => 500,
+                'max_chars_per_item' => 50000,
                 'max_chars_page_summary' => 8000
             )
         ));
@@ -398,7 +398,7 @@ class WCP_AI_Actions {
             'include_items' => true,
             'item_limit' => 10,
             'limits' => array(
-                'max_chars_per_item' => 500,
+                'max_chars_per_item' => 50000,
                 'max_chars_page_summary' => 8000
             )
         ));
@@ -413,7 +413,7 @@ class WCP_AI_Actions {
 
         // Add context with character limits applied
         $formatted_context = $context_builder->format_for_prompt($context_data, array(
-            'max_chars_per_item' => 500,
+            'max_chars_per_item' => 50000,
             'max_chars_page_summary' => 8000
         ));
         if (!empty($formatted_context)) {
@@ -506,7 +506,7 @@ class WCP_AI_Actions {
             'include_items' => true,
             'item_limit' => 20,
             'limits' => array(
-                'max_chars_per_item' => 500,
+                'max_chars_per_item' => 50000,
                 'max_chars_page_summary' => 8000
             )
         ));
@@ -668,7 +668,7 @@ class WCP_AI_Actions {
             'include_items' => true,
             'item_limit' => 20,
             'limits' => array(
-                'max_chars_per_item' => 500,
+                'max_chars_per_item' => 50000,
                 'max_chars_page_summary' => 8000
             )
         ));
@@ -988,7 +988,7 @@ class WCP_AI_Actions {
             'include_items' => false,
             'item_limit' => 0,
             'limits' => array(
-                'max_chars_per_item' => 500,
+                'max_chars_per_item' => 50000,
                 'max_chars_page_summary' => 8000
             )
         ));
