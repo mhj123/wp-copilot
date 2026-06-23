@@ -37,15 +37,9 @@ $dl_items = wcp_theme_query_dynamic_listing($listing);
     <?php if (!empty($dl_items)) : ?>
         <div class="wcp-items-list wcp-dynamic-listing-items">
             <?php foreach ($dl_items as $item) :
-                $item_types    = wp_get_post_terms($item->ID, 'item_type',   array('fields' => 'names'));
-                $priorities    = wp_get_post_terms($item->ID, 'priority',    array('fields' => 'names'));
-                $task_statuses = wp_get_post_terms($item->ID, 'task_status', array('fields' => 'slugs'));
-                $item_tags     = wp_get_post_terms($item->ID, 'post_tag',    array('fields' => 'names'));
-                // Show all wcp_context terms so the user can see where each item lives
-                $item_contexts = wp_get_post_terms($item->ID, 'wcp_context', array('fields' => 'names'));
-            ?>
-                <?php include locate_template('template-parts/item-row.php'); ?>
-            <?php endforeach; ?>
+                // Pass empty filter array — dynamic listings show all context terms
+                wcp_theme_render_item_tree( $item, 0, array() );
+            endforeach; ?>
         </div>
     <?php else : ?>
         <p class="wcp-dynamic-listing-empty">No items match this query.</p>

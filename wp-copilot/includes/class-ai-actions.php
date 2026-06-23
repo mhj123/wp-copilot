@@ -789,9 +789,20 @@ class WCP_AI_Actions {
         $page_term_id = $this->page_context_term_id($page_id);
         list($snapshot, $valid_heading_terms) = $this->build_structure_snapshot($page_id, $page_term_id);
 
+        // Build item content section so the AI can reason about what already exists
+        $context_builder = WCP_Context_Builder::instance();
+        $context_data    = $context_builder->build_hierarchical_context( $page_id, array(
+            'include_items' => true,
+            'item_limit'    => 25,
+        ) );
+        $context_data['pages'] = array(); // pages already covered by snapshot above
+        $items_context = $context_builder->format_for_prompt( $context_data );
+
         $prompt_builder = WCP_Prompt_Builder::instance();
         $system_prompt  = $prompt_builder->build_system_prompt('generate-structure', $page_id);
-        $user_message   = trim($prompt) . "\n\nCURRENT PAGE STRUCTURE (use these ids for existing headings):\n" . $snapshot;
+        $user_message   = trim($prompt)
+            . "\n\nCURRENT PAGE STRUCTURE (use these ids for existing headings):\n" . $snapshot
+            . ( $items_context ? "\n\n" . $items_context : '' );
 
         $conversation_history = array();
         if ($conversation_id) {
@@ -1628,7 +1639,8 @@ class WCP_AI_Actions {
         $context_data = $context_builder->build_context_by_mode( $page_id, $context_mode, array(
             'selected_pages' => $selected_pages,
             'query' => $prompt,
-            'include_items' => false,
+            'include_items' => true,
+            'item_limit'    => 25,
         ) );
 
         $prompt_builder = WCP_Prompt_Builder::instance();
@@ -1672,7 +1684,8 @@ class WCP_AI_Actions {
         $context_data = $context_builder->build_context_by_mode( $page_id, $context_mode, array(
             'selected_pages' => $selected_pages,
             'query' => $prompt,
-            'include_items' => false,
+            'include_items' => true,
+            'item_limit'    => 25,
         ) );
 
         $prompt_builder = WCP_Prompt_Builder::instance();

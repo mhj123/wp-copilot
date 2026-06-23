@@ -812,8 +812,50 @@ jQuery(document).ready(function($) {
             var $title = $row.find('.wcp-item-title');
             $input.val($title.text()).hide();
             $title.show();
+        } else if (e.which === 221 && (e.ctrlKey || e.metaKey)) {
+            // Ctrl+] or Cmd+] — indent
+            e.preventDefault();
+            indentItem($(this).closest('.wcp-item-row'));
+        } else if (e.which === 219 && (e.ctrlKey || e.metaKey)) {
+            // Ctrl+[ or Cmd+[ — outdent
+            e.preventDefault();
+            outdentItem($(this).closest('.wcp-item-row'));
+        } else if (e.which === 39) {
+            var el = this;
+            // Only jump to next field when cursor is at the very end with no active selection
+            if (el.selectionStart === el.selectionEnd && el.selectionStart === el.value.length) {
+                e.preventDefault();
+                focusNextItemField($(this).closest('.wcp-item-row'));
+            }
         }
     });
+
+    function indentItem($row) {
+        var $prev = $row.prevAll('.wcp-item-row').first();
+        if (!$prev.length) return;
+
+        var itemId   = parseInt($row.data('item-id'), 10);
+        var parentId = parseInt($prev.data('item-id'), 10);
+        var contexts = ($prev.data('context-ids') || '').toString().split(',').map(Number).filter(Boolean);
+        var tags     = ($prev.data('tags') || '').toString().split(',').map(function(t){ return t.trim(); }).filter(Boolean);
+
+        updateItem(itemId, { post_parent: parentId, contexts: contexts, tags: tags })
+            .done(function() { location.reload(); });
+    }
+
+    function outdentItem($row) {
+        var itemId   = parseInt($row.data('item-id'), 10);
+        var parentId = parseInt($row.data('parent-id'), 10);
+        if (!parentId) return;
+
+        updateItem(itemId, { post_parent: 0 })
+            .done(function() { location.reload(); });
+    }
+
+    function focusNextItemField($row) {
+        var $fields = $row.find('select, input[type="date"]').filter(':visible');
+        if ($fields.length) { $fields.first().focus(); }
+    }
 
     // Save on blur
     $(document).on('blur', '.wcp-item-title-input', function() {
@@ -2139,20 +2181,62 @@ jQuery(document).ready(function($) {
     function getListState(el) {
         return {
             context_id: parseInt(el.dataset.contextId, 10),
-            item_ids: Array.from(el.querySelectorAll('.wcp-item-row')).map(function(row) {
+            // Only direct-child rows — don't include rows nested inside .wcp-subitems-list
+            item_ids: Array.from(el.children).filter(function(c) {
+                return c.classList.contains('wcp-item-row');
+            }).map(function(row) {
                 return parseInt(row.dataset.itemId, 10);
             })
         };
     }
 
+    var _dragStartX     = 0;
+    var _dragPrevItemId = 0;
+    var _dragParentId   = 0;
+
+    // Capture true drag-start X on mousedown (SortableJS onStart fires late)
+    $(document).on('mousedown', '.wcp-drag-handle', function(e) {
+        _dragStartX     = e.clientX || 0;
+        var $row        = $(this).closest('.wcp-item-row');
+        var $prev       = $row.prevAll('.wcp-item-row').first();
+        _dragPrevItemId = $prev.length ? (parseInt($prev.data('item-id'), 10) || 0) : 0;
+        _dragParentId   = parseInt($row.data('parent-id'), 10) || 0;
+    });
+
     document.querySelectorAll('.wcp-items-list').forEach(function(list) {
         Sortable.create(list, {
             group: 'wcp-items',
             handle: '.wcp-drag-handle',
+            draggable: '.wcp-item-row',   // only rows are draggable, not .wcp-subitems-list
             animation: 150,
             ghostClass: 'wcp-drag-ghost',
             dragClass: 'wcp-dragging',
             onEnd: function(evt) {
+                var oe   = evt.originalEvent;
+                var endX = oe ? (oe.clientX || (oe.changedTouches && oe.changedTouches[0] && oe.changedTouches[0].clientX) || 0) : 0;
+                var dx   = endX - _dragStartX;
+                var THRESHOLD = 40;
+
+                if (dx > THRESHOLD && _dragPrevItemId) {
+                    // Dragged right — indent under the item that was above it
+                    var itemId   = parseInt(evt.item.dataset.itemId, 10);
+                    var $prevRow = $('[data-item-id="' + _dragPrevItemId + '"]').first();
+                    var contexts = ($prevRow.data('context-ids') || '').toString().split(',').map(Number).filter(Boolean);
+                    var tags     = ($prevRow.data('tags') || '').toString().split(',').map(function(t){ return t.trim(); }).filter(Boolean);
+                    updateItem(itemId, { post_parent: _dragPrevItemId, contexts: contexts, tags: tags })
+                        .done(function() { location.reload(); });
+                    return;
+                }
+
+                if (dx < -THRESHOLD && _dragParentId) {
+                    // Dragged left — outdent
+                    var itemId = parseInt(evt.item.dataset.itemId, 10);
+                    updateItem(itemId, { post_parent: 0 })
+                        .done(function() { location.reload(); });
+                    return;
+                }
+
+                // Normal reorder
                 if (evt.from === evt.to && evt.oldIndex === evt.newIndex) return;
                 var lists = [];
                 var seen = new Set();

@@ -515,13 +515,26 @@ class WCP_REST_API {
      * Quick create item
      */
     public function create_item($request) {
-        $title = $request->get_param('title');
-        $content = (string) $request->get_param('content');
-        $contexts = $request->get_param('contexts');
-        $item_type = $request->get_param('item_type');
-        $priority = $request->get_param('priority');
-        $pinned = $request->get_param('pinned');
-        $tags = $request->get_param('tags');
+        $title       = $request->get_param('title');
+        $content     = (string) $request->get_param('content');
+        $contexts    = $request->get_param('contexts');
+        $item_type   = $request->get_param('item_type');
+        $priority    = $request->get_param('priority');
+        $pinned      = $request->get_param('pinned');
+        $tags        = $request->get_param('tags');
+        $post_parent = (int) $request->get_param('post_parent');
+
+        // Inherit context and tags from parent item when not explicitly supplied
+        if ( $post_parent ) {
+            if ( empty( $contexts ) ) {
+                $contexts = wp_get_post_terms( $post_parent, 'wcp_context', array( 'fields' => 'ids' ) );
+                if ( is_wp_error( $contexts ) ) { $contexts = array(); }
+            }
+            if ( empty( $tags ) ) {
+                $tags = wp_get_post_terms( $post_parent, 'post_tag', array( 'fields' => 'names' ) );
+                if ( is_wp_error( $tags ) ) { $tags = array(); }
+            }
+        }
 
         // Place the new item at the bottom of its list: one step past the
         // highest menu_order currently in its primary context. (New items
@@ -550,13 +563,17 @@ class WCP_REST_API {
             }
         }
 
-        $post_id = wp_insert_post(array(
+        $insert_args = array(
             'post_type'    => 'post',
             'post_title'   => $title,
             'post_content' => isset($content) && $content !== null ? $content : '',
             'post_status'  => 'publish',
             'menu_order'   => $menu_order,
-        ));
+        );
+        if ( $post_parent ) {
+            $insert_args['post_parent'] = $post_parent;
+        }
+        $post_id = wp_insert_post( $insert_args );
 
         if (is_wp_error($post_id)) {
             return rest_ensure_response(array(
@@ -2010,6 +2027,11 @@ class WCP_REST_API {
         $content = $request->get_param('content');
         if ($content !== null) {
             $updated['post_content'] = wp_kses_post($content);
+        }
+
+        $post_parent_param = $request->get_param('post_parent');
+        if ($post_parent_param !== null) {
+            $updated['post_parent'] = max(0, (int) $post_parent_param);
         }
 
         if (count($updated) > 1) {
