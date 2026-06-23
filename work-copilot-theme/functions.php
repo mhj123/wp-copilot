@@ -208,6 +208,7 @@ function wcp_theme_get_page_pinned_items($page_id) {
     return get_posts(array(
         'post_type'      => 'post',
         'post_status'    => 'publish',
+        'post_parent'    => 0,
         'posts_per_page' => -1,
         'orderby'        => array('menu_order' => 'ASC', 'date' => 'DESC'),
         'tax_query'      => array(
@@ -367,7 +368,8 @@ function wcp_theme_get_heading_items($heading_id) {
     if (!$heading_term) return array();
 
     return get_posts(array(
-        'post_type' => 'post',
+        'post_type'      => 'post',
+        'post_parent'    => 0,
         'posts_per_page' => -1,
         'tax_query' => array(
             array(
@@ -380,6 +382,48 @@ function wcp_theme_get_heading_items($heading_id) {
         ),
         'orderby' => array('menu_order' => 'ASC', 'date' => 'ASC'),
     ));
+}
+
+// Get direct children of an item (subitems one level deep)
+function wcp_theme_get_item_children( $item_id ) {
+    return get_posts( array(
+        'post_type'      => 'post',
+        'post_status'    => 'publish',
+        'post_parent'    => (int) $item_id,
+        'posts_per_page' => -1,
+        'orderby'        => array( 'menu_order' => 'ASC', 'date' => 'ASC' ),
+    ) );
+}
+
+// Render an item row and recursively render its children beneath it.
+// $filter_context_ids: context term IDs that are already implied by the
+// current page/heading and should be hidden from the context pill display.
+function wcp_theme_render_item_tree( $item, $depth = 0, $filter_context_ids = array() ) {
+    $item_types    = wp_get_post_terms( $item->ID, 'item_type',   array( 'fields' => 'names' ) );
+    $priorities    = wp_get_post_terms( $item->ID, 'priority',    array( 'fields' => 'names' ) );
+    $task_statuses = wp_get_post_terms( $item->ID, 'task_status', array( 'fields' => 'slugs' ) );
+    $item_tags     = wp_get_post_terms( $item->ID, 'post_tag',    array( 'fields' => 'names' ) );
+    if ( empty( $filter_context_ids ) ) {
+        $item_contexts = wp_get_post_terms( $item->ID, 'wcp_context', array( 'fields' => 'names' ) );
+    } else {
+        $item_contexts = array_values( array_map(
+            function( $t ) { return $t->name; },
+            array_filter(
+                wp_get_post_terms( $item->ID, 'wcp_context' ),
+                function( $t ) use ( $filter_context_ids ) { return ! in_array( $t->term_id, $filter_context_ids ); }
+            )
+        ) );
+    }
+    include locate_template( 'template-parts/item-row.php' );
+
+    $children = wcp_theme_get_item_children( $item->ID );
+    if ( ! empty( $children ) ) {
+        echo '<div class="wcp-subitems-list" data-parent-id="' . esc_attr( $item->ID ) . '">';
+        foreach ( $children as $child ) {
+            wcp_theme_render_item_tree( $child, $depth + 1, $filter_context_ids );
+        }
+        echo '</div>';
+    }
 }
 
 // Get items belonging directly to a page — excludes items in child page contexts
@@ -455,6 +499,7 @@ function wcp_theme_get_page_only_items($page_id) {
 
     return get_posts(array(
         'post_type'      => 'post',
+        'post_parent'    => 0,
         'posts_per_page' => -1,
         'tax_query'      => $tax_query,
         'orderby'        => array('menu_order' => 'ASC', 'date' => 'DESC'),

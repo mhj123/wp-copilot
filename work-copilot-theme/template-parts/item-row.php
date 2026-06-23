@@ -39,6 +39,7 @@ $_delegation_labels = array(
 <div class="wcp-item-row<?php echo $is_done ? ' wcp-task-done' : ''; echo esc_attr($_creator_class); echo $_is_pinned ? ' wcp-pinned' : ''; ?>"
      id="wcp-item-<?php echo esc_attr($item->ID); ?>"
      data-item-id="<?php echo esc_attr($item->ID); ?>"
+     data-parent-id="<?php echo esc_attr($item->post_parent ?: 0); ?>"
      data-item-type="<?php echo esc_attr($_item_type_slug); ?>"
      data-task-status="<?php echo esc_attr($_task_status_slug); ?>"
      data-spec-status="<?php echo esc_attr($_spec_status_slug); ?>"
@@ -58,6 +59,7 @@ $_delegation_labels = array(
            <?php checked($is_done); ?>
            style="<?php echo $is_task ? '' : 'display:none;'; ?>">
     <span class="wcp-item-title"><?php echo esc_html($item->post_title); ?></span>
+    <input type="text" class="wcp-item-title-input" style="display:none;" value="<?php echo esc_attr($item->post_title); ?>">
     <span class="wcp-item-created" title="<?php echo esc_attr(get_the_time('j M Y', $item)); ?>"><?php echo esc_html(human_time_diff(get_post_time('U', true, $item))); ?> ago</span>
     <a href="<?php echo esc_url(get_permalink($item->ID)); ?>" class="wcp-item-view-link wcp-edit-link" title="View item">[view]</a>
     <button type="button" class="wcp-item-ai-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>" title="AI actions">[ai]</button>
@@ -66,7 +68,6 @@ $_delegation_labels = array(
     <?php if ($source_url) : ?>
         <a href="<?php echo esc_url($source_url); ?>" class="wcp-source-link" target="_blank" rel="noopener" title="<?php echo esc_attr($source_url); ?>">↗</a>
     <?php endif; ?>
-    <input type="text" class="wcp-item-title-input" style="display:none;" value="<?php echo esc_attr($item->post_title); ?>">
 
     <span class="wcp-item-description<?php echo empty($item->post_content) ? ' wcp-item-description-empty' : ''; ?>"
           data-item-id="<?php echo esc_attr($item->ID); ?>"><?php echo esc_html(wp_strip_all_tags($item->post_content)); ?></span>

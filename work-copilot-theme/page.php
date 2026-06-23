@@ -135,20 +135,8 @@ get_header();
         <!-- Page-level items (not under any heading) -->
         <div class="wcp-items-list" data-context-id="<?php echo esc_attr($page_context_id); ?>">
             <?php foreach ($page_only_items as $item) :
-                $item_types    = wp_get_post_terms($item->ID, 'item_type', array('fields' => 'names'));
-                $priorities    = wp_get_post_terms($item->ID, 'priority', array('fields' => 'names'));
-                $task_statuses = wp_get_post_terms($item->ID, 'task_status', array('fields' => 'slugs'));
-                $item_tags     = wp_get_post_terms($item->ID, 'post_tag', array('fields' => 'names'));
-                $item_contexts = array_values(array_map(
-                    function($t) { return $t->name; },
-                    array_filter(
-                        wp_get_post_terms($item->ID, 'wcp_context'),
-                        function($t) use ($local_context_ids) { return !in_array($t->term_id, $local_context_ids); }
-                    )
-                ));
-            ?>
-                <?php include(locate_template('template-parts/item-row.php')); ?>
-            <?php endforeach; ?>
+                wcp_theme_render_item_tree( $item, 0, $local_context_ids );
+            endforeach; ?>
         </div>
 
         <!-- Quick-add item at page level -->
@@ -183,20 +171,8 @@ get_header();
                 <div class="wcp-heading-body">
                     <div class="wcp-items-list" data-context-id="<?php echo esc_attr($heading_context_id); ?>">
                         <?php foreach ($items as $item) :
-                            $item_types    = wp_get_post_terms($item->ID, 'item_type', array('fields' => 'names'));
-                            $priorities    = wp_get_post_terms($item->ID, 'priority', array('fields' => 'names'));
-                            $task_statuses = wp_get_post_terms($item->ID, 'task_status', array('fields' => 'slugs'));
-                            $item_tags     = wp_get_post_terms($item->ID, 'post_tag', array('fields' => 'names'));
-                            $item_contexts = array_values(array_map(
-                                function($t) { return $t->name; },
-                                array_filter(
-                                    wp_get_post_terms($item->ID, 'wcp_context'),
-                                    function($t) use ($local_context_ids) { return !in_array($t->term_id, $local_context_ids); }
-                                )
-                            ));
-                        ?>
-                            <?php include(locate_template('template-parts/item-row.php')); ?>
-                        <?php endforeach; ?>
+                            wcp_theme_render_item_tree( $item, 0, $local_context_ids );
+                        endforeach; ?>
                     </div>
 
                     <!-- Quick-add item under this heading -->
