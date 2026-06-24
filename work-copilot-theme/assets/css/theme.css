@@ -3317,3 +3317,22 @@ a.wcp-tag:hover {
 .wcp-subitems-list .wcp-subitems-list {
     border-left-color: #f0f0f0;
 }
+
+/* ==========================================================================
+   Search results page
+   ========================================================================== */
+
+.wcp-search-results {
+    padding: 0 0 40px;
+}
+
+.wcp-search-count {
+    color: #888;
+    font-size: 0.9em;
+    margin: 4px 0 20px;
+}
+
+.wcp-search-empty {
+    color: #888;
+    padding: 20px 0;
+}
