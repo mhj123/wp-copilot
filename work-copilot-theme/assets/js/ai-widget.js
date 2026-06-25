@@ -62,9 +62,10 @@
                 this.selectedModel = $(e.target).val();
                 const isOpus = this.selectedModel === 'claude-opus-4-8';
                 const $thinking = $('#wcp-ai-thinking');
-                $thinking.prop('disabled', !isOpus);
-                if (!isOpus) {
-                    $thinking.val('0');
+                if (isOpus) {
+                    $thinking.removeAttr('disabled');
+                } else {
+                    $thinking.val('0').attr('disabled', 'disabled');
                     this.thinkingBudget = 0;
                 }
             });
