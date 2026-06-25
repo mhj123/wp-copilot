@@ -172,6 +172,7 @@ $_delegation_labels = array(
         <div class="wcp-item-ai-panel" data-item-id="<?php echo esc_attr($item->ID); ?>" style="display:none;">
             <div class="wcp-item-ai-chips">
                 <button type="button" class="wcp-item-ai-chip" data-action="action_plan">Action plan</button>
+                <button type="button" class="wcp-item-ai-chip" data-action="action_plan_from_context">Action plan from context</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="improve_phrasing">Improve phrasing</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="freeform">Freeform…</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="suggest_subtasks">Add subtasks</button>

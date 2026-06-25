@@ -2434,6 +2434,62 @@ class WCP_REST_API {
                     'steps'       => $steps,
                 ));
 
+            case 'action_plan_from_context':
+                $context_page_ids = array_filter( array_map( 'intval', (array) $request->get_param('context_page_ids') ) );
+                if ( empty( $context_page_ids ) ) {
+                    return new WP_Error( 'missing_pages', 'No context pages specified', array('status' => 400) );
+                }
+
+                // Include item tags in context
+                $tags    = wp_get_post_terms( $item_id, 'post_tag', array('fields' => 'names') );
+                $tag_str = ( ! empty($tags) && ! is_wp_error($tags) ) ? implode(', ', $tags) : '';
+
+                // Fetch and pack each page's content
+                $context_blocks = '';
+                $context_titles = array();
+                foreach ( $context_page_ids as $page_id ) {
+                    $page = get_post( $page_id );
+                    if ( ! $page || $page->post_status !== 'publish' ) continue;
+                    $page_content    = wp_strip_all_tags( apply_filters( 'the_content', $page->post_content ) );
+                    $page_content    = mb_substr( $page_content, 0, 4000 );
+                    $context_blocks .= "\n\n=== Context: {$page->post_title} ===\n{$page_content}";
+                    $context_titles[] = $page->post_title;
+                }
+
+                if ( empty( $context_titles ) ) {
+                    return new WP_Error( 'invalid_pages', 'No valid published pages found', array('status' => 400) );
+                }
+
+                $sys = "You are helping the user create a step-by-step action plan for a work item, "
+                     . "informed by the context pages provided. "
+                     . "Follow any processes, stakeholders, or steps described in those pages where relevant. "
+                     . "Generate 4–7 steps. Each step should have:\n"
+                     . "- A short, actionable title (verb-led, max 10 words)\n"
+                     . "- A brief rationale or detail (1–2 sentences)\n\n"
+                     . "Return ONLY a valid JSON array. No text before or after. Format:\n"
+                     . '[{"title":"Step title","description":"Brief rationale."}]';
+
+                $usr = "Item: {$item->post_title}\n"
+                     . ( $item->post_content ? 'Description: ' . wp_strip_all_tags($item->post_content) . "\n" : '' )
+                     . ( $tag_str  ? "Tags: {$tag_str}\n"    : '' )
+                     . ( $ctx_str  ? "Context: {$ctx_str}\n" : '' )
+                     . $context_blocks;
+
+                $resp = $ai_client->request_with_conversation( $sys, $usr, array(), 1024, 60 );
+                if ( is_wp_error($resp) ) return $resp;
+
+                $steps = json_decode( $resp['content'], true );
+                if ( ! is_array($steps) ) {
+                    return new WP_Error( 'parse_error', 'Could not parse action plan', array('status' => 500) );
+                }
+
+                return rest_ensure_response(array(
+                    'success'        => true,
+                    'action'         => 'action_plan_from_context',
+                    'steps'          => $steps,
+                    'context_titles' => $context_titles,
+                ));
+
             default:
                 return new WP_Error( 'unknown_action', "Unknown action: {$action}", array('status' => 400) );
         }
