@@ -1170,6 +1170,45 @@ jQuery(document).ready(function($) {
             return;
         }
 
+        if (action === 'action_plan_from_context') {
+            var itemTitle = $row.find('.wcp-item-title').text().trim();
+            var rawTags   = ($row.data('tags') || '').toString().trim();
+            var tagWords  = rawTags ? rawTags.replace(/,/g, ' ') : '';
+            var query     = itemTitle + (tagWords ? ' ' + tagWords : '');
+
+            $result.show().html('<em style="color:#aaa;font-size:12px;">Searching knowledge base…</em>');
+
+            $.ajax({
+                url: wcpThemeData.restUrl + '/search/semantic',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ query: query, post_type: 'page', limit: 5 }),
+                beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+                success: function(r) {
+                    if (!r.success || !r.results || !r.results.length) {
+                        $result.html('<em style="color:#888;font-size:12px;">No relevant pages found in your knowledge base.</em>');
+                        return;
+                    }
+                    var items = r.results.map(function(p) {
+                        var pct = Math.round(p.similarity * 100);
+                        return '<li><label>'
+                            + '<input type="checkbox" class="wcp-apc-page-cb" checked data-page-id="' + p.post_id + '"> '
+                            + $('<span>').text(p.title).html()
+                            + ' <span style="color:#aaa;font-size:10px;">(' + pct + '%)</span>'
+                            + '</label></li>';
+                    }).join('');
+                    $result.html(
+                        '<p style="font-size:12px;margin:0 0 6px;color:#555;">Relevant pages found:</p>'
+                        + '<ul style="margin:0 0 8px;padding-left:16px;font-size:12px;list-style:none;">' + items + '</ul>'
+                        + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-apc-generate" data-item-id="' + itemId + '">Generate plan</button>'
+                        + ' <button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Cancel</button>'
+                    );
+                },
+                error: function() { $result.html('<em style="color:#c0392b;">Search failed</em>'); }
+            });
+            return;
+        }
+
         if (action === 'freeform') {
             // Collect a freeform instruction first, then run on demand.
             $result.show().html(
@@ -1291,6 +1330,57 @@ jQuery(document).ready(function($) {
             });
         }
         addNext(0);
+    });
+
+    // Action plan from context — generate plan using selected RAG pages
+    $(document).on('click', '.wcp-apc-generate', function() {
+        var $btn    = $(this);
+        var itemId  = $btn.data('item-id');
+        var $result = $btn.closest('.wcp-item-ai-result');
+        var pageIds = [];
+        $result.find('.wcp-apc-page-cb:checked').each(function() {
+            pageIds.push(parseInt($(this).data('page-id'), 10));
+        });
+        if (!pageIds.length) return;
+
+        $btn.prop('disabled', true).text('Generating…');
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/items/' + itemId + '/ai',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ action: 'action_plan_from_context', context_page_ids: pageIds }),
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(r) {
+                if (!r.success) {
+                    $result.html('<em style="color:#c0392b;">' + (r.message || 'Error generating plan') + '</em>');
+                    return;
+                }
+                var note = (r.context_titles && r.context_titles.length)
+                    ? '<p style="font-size:11px;color:#888;margin:0 0 6px;">Using: '
+                        + r.context_titles.map(function(t) { return $('<span>').text(t).html(); }).join(', ')
+                        + '</p>'
+                    : '';
+                var html = note + '<ol class="wcp-action-plan-list">';
+                r.steps.forEach(function(step, i) {
+                    html += '<li class="wcp-action-plan-step" data-index="' + i + '">'
+                        + '<div class="wcp-ap-title-row">'
+                        + '<input class="wcp-ap-title" type="text" value="' + $('<span>').text(step.title).html() + '">'
+                        + '<button type="button" class="wcp-ap-remove wcp-edit-link">×</button>'
+                        + '</div>'
+                        + '<textarea class="wcp-ap-desc">' + $('<span>').text(step.description || '').html() + '</textarea>'
+                        + '</li>';
+                });
+                html += '</ol>'
+                    + '<div class="wcp-ap-actions">'
+                    + '<button type="button" class="wcp-ap-add-step wcp-edit-link">+ add step</button>'
+                    + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-ap-accept" data-item-id="' + itemId + '">Add as subtasks</button>'
+                    + '<button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
+                    + '</div>';
+                $result.html(html);
+            },
+            error: function() { $result.html('<em style="color:#c0392b;">Connection error</em>'); }
+        });
     });
 
     // Accept improved phrasing
