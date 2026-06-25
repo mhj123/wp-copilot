@@ -1260,6 +1260,7 @@ jQuery(document).ready(function($) {
                         + '<div class="wcp-ap-actions">'
                         + '<button type="button" class="wcp-ap-add-step wcp-edit-link">+ add step</button>'
                         + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-ap-accept" data-item-id="' + itemId + '">Add as subtasks</button>'
+                        + '<button type="button" class="wcp-btn wcp-btn-sm wcp-ap-accept-items" data-item-id="' + itemId + '">Add as nested items</button>'
                         + '<button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
                         + '</div>';
                     $result.html(html);
@@ -1332,6 +1333,42 @@ jQuery(document).ready(function($) {
         addNext(0);
     });
 
+    // Action plan — accept: create each step as a nested child item (post_parent)
+    $(document).on('click', '.wcp-ap-accept-items', function() {
+        var $btn   = $(this);
+        var itemId = $btn.data('item-id');
+        var $steps = $btn.closest('.wcp-item-ai-result').find('.wcp-action-plan-step');
+        var steps  = [];
+        $steps.each(function() {
+            var title = $(this).find('.wcp-ap-title').val().trim();
+            var desc  = $(this).find('.wcp-ap-desc').val().trim();
+            if (title) steps.push({ title: title, content: desc });
+        });
+        if (!steps.length) return;
+
+        $btn.prop('disabled', true).text('Adding…');
+
+        function addNext(i) {
+            if (i >= steps.length) {
+                $btn.closest('.wcp-item-ai-panel').slideUp(120);
+                location.reload();
+                return;
+            }
+            var payload = { title: steps[i].title, post_parent: itemId };
+            if (steps[i].content) payload.content = steps[i].content;
+            $.ajax({
+                url: wcpThemeData.restUrl + '/items/create',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(payload),
+                beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+                success: function() { addNext(i + 1); },
+                error: function() { addNext(i + 1); }
+            });
+        }
+        addNext(0);
+    });
+
     // Action plan from context — generate plan using selected RAG pages
     $(document).on('click', '.wcp-apc-generate', function() {
         var $btn    = $(this);
@@ -1375,6 +1412,7 @@ jQuery(document).ready(function($) {
                     + '<div class="wcp-ap-actions">'
                     + '<button type="button" class="wcp-ap-add-step wcp-edit-link">+ add step</button>'
                     + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-ap-accept" data-item-id="' + itemId + '">Add as subtasks</button>'
+                    + '<button type="button" class="wcp-btn wcp-btn-sm wcp-ap-accept-items" data-item-id="' + itemId + '">Add as nested items</button>'
                     + '<button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
                     + '</div>';
                 $result.html(html);
