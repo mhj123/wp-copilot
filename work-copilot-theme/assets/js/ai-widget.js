@@ -17,6 +17,8 @@
         contextMode: 'page',
         selectedPages: [],
         pagesCache: null,
+        selectedModel: 'claude-sonnet-4-6',
+        thinkingBudget: 0,
 
         /**
          * Initialize widget
@@ -53,6 +55,23 @@
             // Context mode change
             $(document).on('change', '#wcp-ai-context-mode', (e) => {
                 this.setContextMode($(e.target).val());
+            });
+
+            // Model selector
+            $(document).on('change', '#wcp-ai-model', (e) => {
+                this.selectedModel = $(e.target).val();
+                const isOpus = this.selectedModel === 'claude-opus-4-8';
+                const $thinking = $('#wcp-ai-thinking');
+                $thinking.prop('disabled', !isOpus);
+                if (!isOpus) {
+                    $thinking.val('0');
+                    this.thinkingBudget = 0;
+                }
+            });
+
+            // Thinking selector
+            $(document).on('change', '#wcp-ai-thinking', (e) => {
+                this.thinkingBudget = parseInt($(e.target).val(), 10) || 0;
             });
 
             // Page search
@@ -518,7 +537,9 @@
                 prompt: prompt,
                 page_id: wcpAiWidgetData.pageId,
                 conversation_id: this.conversationId,
-                context_mode: this.contextMode
+                context_mode: this.contextMode,
+                model: this.selectedModel,
+                thinking_budget: this.thinkingBudget
             };
 
             if (this.contextMode === 'select') {

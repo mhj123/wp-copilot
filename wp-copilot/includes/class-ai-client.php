@@ -16,6 +16,8 @@ class WCP_AI_Client {
     private $api_key;
     private $api_url = 'https://api.anthropic.com/v1/messages';
     private $model;
+    private $_override_model   = null;
+    private $_thinking_budget  = 0;
 
     public static function instance() {
         if (null === self::$instance) {
@@ -27,6 +29,20 @@ class WCP_AI_Client {
     private function __construct() {
         $this->api_key = get_option('wcp_anthropic_api_key', '');
         $this->model = get_option('wcp_ai_model', 'claude-sonnet-4-6');
+    }
+
+    /**
+     * Override model and thinking budget for a single request cycle.
+     * Call once before dispatching an action; resets after use.
+     *
+     * @param string|null $model          Model ID, or null to use the site default.
+     * @param int         $thinking_budget Tokens for extended thinking (0 = disabled).
+     *                                    Only Opus 4.8 supports extended thinking.
+     */
+    public function set_overrides( $model = null, $thinking_budget = 0 ) {
+        $allowed = array( 'claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-8' );
+        $this->_override_model  = ( $model && in_array( $model, $allowed, true ) ) ? $model : null;
+        $this->_thinking_budget = max( 0, (int) $thinking_budget );
     }
 
     /**
@@ -44,14 +60,22 @@ class WCP_AI_Client {
             return new WP_Error('not_configured', 'AI API key not configured');
         }
 
+        $effective_model = $this->_override_model ?: $this->model;
+
         $body = array(
-            'model' => $this->model,
+            'model'      => $effective_model,
             'max_tokens' => $max_tokens,
-            'messages' => $messages,
+            'messages'   => $messages,
         );
 
         if ($system) {
             $body['system'] = $system;
+        }
+
+        // Extended thinking — Opus 4.8 only; requires temperature: 1
+        if ( $this->_thinking_budget > 0 ) {
+            $body['thinking']    = array( 'type' => 'enabled', 'budget_tokens' => $this->_thinking_budget );
+            $body['temperature'] = 1;
         }
 
         $response = wp_remote_post($this->api_url, array(
@@ -75,6 +99,15 @@ class WCP_AI_Client {
         if ($response_code !== 200) {
             $error_message = isset($data['error']['message']) ? $data['error']['message'] : 'Unknown API error';
             return new WP_Error('api_error', $error_message, array('status' => $response_code));
+        }
+
+        // When thinking is enabled, Anthropic returns thinking blocks before text blocks.
+        // Strip them so all callers can safely use content[0]['text'].
+        if ( $this->_thinking_budget > 0 && isset( $data['content'] ) ) {
+            $data['content'] = array_values( array_filter(
+                $data['content'],
+                function ( $block ) { return isset( $block['type'] ) && $block['type'] === 'text'; }
+            ) );
         }
 
         return $data;

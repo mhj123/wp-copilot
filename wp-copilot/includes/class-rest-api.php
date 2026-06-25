@@ -1218,6 +1218,8 @@ class WCP_REST_API {
         $conversation_id = $request->get_param('conversation_id');
         $context_mode = $request->get_param('context_mode') ?? 'page';
         $selected_pages = $request->get_param('selected_pages') ?? array();
+        $model_override  = $request->get_param('model') ?: null;
+        $thinking_budget = max( 0, (int) ( $request->get_param('thinking_budget') ?? 0 ) );
 
         // Validate required params
         if (!$action_type || !$prompt || !$page_id) {
@@ -1242,6 +1244,9 @@ class WCP_REST_API {
                 'message' => 'AI is not configured',
             ));
         }
+
+        // Apply per-request model/thinking overrides (human-selected in the widget)
+        $ai_client->set_overrides( $model_override, $thinking_budget );
 
         // Execute action
         $ai_actions = WCP_AI_Actions::instance();
