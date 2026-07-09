@@ -19,6 +19,7 @@
         pagesCache: null,
         selectedModel: 'claude-sonnet-4-6',
         thinkingBudget: 0,
+        contextsFlat: null,
 
         /**
          * Initialize widget
@@ -27,6 +28,49 @@
             this.bindEvents();
             this.initConversation();
             this.fetchActiveMission();
+            this.fetchContexts();
+        },
+
+        /**
+         * Fetch and flatten the context tree once, for the save-as-item picker.
+         * Produces this.contextsFlat = [{term_id, name, path, ref_type, ref_id}].
+         */
+        fetchContexts: function() {
+            $.ajax({
+                url: wcpAiWidgetData.restUrl + '/contexts/tree',
+                method: 'GET',
+                headers: { 'X-WP-Nonce': wcpAiWidgetData.nonce },
+                success: (response) => {
+                    if (response && response.success) {
+                        const flat = [];
+                        const walk = (nodes, prefix) => {
+                            (nodes || []).forEach((n) => {
+                                const path = prefix ? prefix + ' › ' + n.name : n.name;
+                                flat.push({
+                                    term_id: n.term_id,
+                                    name: n.name,
+                                    path: path,
+                                    ref_type: n.ref_type,
+                                    ref_id: parseInt(n.ref_id, 10) || 0
+                                });
+                                walk(n.children, path);
+                            });
+                        };
+                        walk(response.tree, '');
+                        this.contextsFlat = flat;
+                    }
+                }
+            });
+        },
+
+        /**
+         * Term id of the current page's context, if resolvable from the tree.
+         */
+        currentPageContext: function() {
+            if (!this.contextsFlat) { return null; }
+            return this.contextsFlat.find(
+                (c) => c.ref_type === 'page' && c.ref_id === wcpAiWidgetData.pageId
+            ) || null;
         },
 
         /**
@@ -73,6 +117,72 @@
             // Thinking selector
             $(document).on('change', '#wcp-ai-thinking', (e) => {
                 this.thinkingBudget = parseInt($(e.target).val(), 10) || 0;
+            });
+
+            // Save assistant message as item
+            $(document).on('click', '.wcp-ai-msgsave-open', (e) => {
+                e.preventDefault();
+                this.openSaveForm($(e.currentTarget).closest('.wcp-ai-message'));
+            });
+
+            $(document).on('click', '.wcp-ai-msgsave-cancel', (e) => {
+                e.preventDefault();
+                const $msg = $(e.currentTarget).closest('.wcp-ai-message');
+                $msg.find('.wcp-ai-msgsave-form').remove();
+                $msg.find('.wcp-ai-msgsave-open').show();
+            });
+
+            $(document).on('click', '.wcp-ai-msgsave-confirm', (e) => {
+                e.preventDefault();
+                this.submitSaveForm($(e.currentTarget).closest('.wcp-ai-message'));
+            });
+
+            // Save form: mode switch
+            $(document).on('click', '.wcp-ai-msgsave-mode', (e) => {
+                e.preventDefault();
+                const $btn = $(e.currentTarget);
+                const $form = $btn.closest('.wcp-ai-msgsave-form');
+                $form.find('.wcp-ai-msgsave-mode').removeClass('active');
+                $btn.addClass('active');
+                const mode = $btn.data('mode');
+                // Title/content only apply to single-item modes
+                $form.find('.wcp-ai-msgsave-titlefield').toggle(mode !== 'multiple');
+                $form.find('.wcp-ai-msgsave-multinote').toggle(mode === 'multiple');
+            });
+
+            // Save form: type change toggles conditional fields
+            $(document).on('change', '.wcp-ai-msgsave-type', (e) => {
+                const $form = $(e.currentTarget).closest('.wcp-ai-msgsave-form');
+                this.updateSaveFormConditional($form);
+            });
+
+            // Save form: add a context chip from the dropdown
+            $(document).on('change', '.wcp-ai-msgsave-ctx-add', (e) => {
+                const $sel = $(e.currentTarget);
+                const termId = parseInt($sel.val(), 10);
+                if (!termId) { return; }
+                const name = $sel.find('option:selected').text().trim();
+                this.addChip($sel.closest('.wcp-ai-msgsave-ctx').find('.wcp-ai-msgsave-chips'), termId, name, 'ctx');
+                $sel.val('');
+            });
+
+            // Save form: add a tag chip
+            $(document).on('keydown', '.wcp-ai-msgsave-tag-input', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const $input = $(e.currentTarget);
+                    const val = $input.val().trim();
+                    if (val) {
+                        this.addChip($input.closest('.wcp-ai-msgsave-tags').find('.wcp-ai-msgsave-chips'), val, val, 'tag');
+                        $input.val('');
+                    }
+                }
+            });
+
+            // Save form: remove a chip
+            $(document).on('click', '.wcp-ai-msgsave-chip-remove', (e) => {
+                e.preventDefault();
+                $(e.currentTarget).closest('.wcp-ai-msgsave-chip').remove();
             });
 
             // Page search
@@ -502,8 +612,247 @@
                 $message.prepend($('<div>').addClass('wcp-ai-message-label').text('Hermes'));
             }
 
+            // Assistant (and Hermes) messages can be saved into the corpus
+            if (role === 'assistant' || isHermes) {
+                $message.data('raw', content);
+                $message.append(
+                    $('<div>').addClass('wcp-ai-msgsave').append(
+                        $('<a>')
+                            .attr('href', '#')
+                            .addClass('wcp-ai-msgsave-open')
+                            .text('Save as item')
+                    )
+                );
+            }
+
             $container.append($message);
             this.scrollToBottom();
+        },
+
+        /**
+         * Suggest an item title from message text: first sentence, cleaned of
+         * markdown punctuation, capped at 80 chars.
+         */
+        suggestTitle: function(text) {
+            let t = String(text).replace(/[#*_`>\[\]|]/g, ' ').replace(/\s+/g, ' ').trim();
+            const dot = t.indexOf('. ');
+            if (dot > 20) {
+                t = t.slice(0, dot);
+            }
+            if (t.length > 80) {
+                t = t.slice(0, 77) + '…';
+            }
+            return t;
+        },
+
+        /**
+         * Append a labelled chip (context or tag) to a chip container.
+         * kind 'ctx' stores a numeric term id; kind 'tag' stores the name.
+         */
+        addChip: function($container, value, label, kind) {
+            // Avoid duplicates
+            let dup = false;
+            $container.find('.wcp-ai-msgsave-chip').each(function() {
+                if (String($(this).data('value')) === String(value)) { dup = true; }
+            });
+            if (dup) { return; }
+            $container.append(
+                $('<span>').addClass('wcp-ai-msgsave-chip').addClass('wcp-ai-msgsave-chip-' + kind)
+                    .attr('data-value', value)
+                    .attr('data-kind', kind)
+                    .text(label + ' ')
+                    .append($('<a>').attr('href', '#').addClass('wcp-ai-msgsave-chip-remove').html('&times;'))
+            );
+        },
+
+        /**
+         * Show/hide type-conditional fields (task status/due, spec status).
+         */
+        updateSaveFormConditional: function($form) {
+            const type = $form.find('.wcp-ai-msgsave-type').val();
+            $form.find('.wcp-ai-msgsave-taskfields').toggle(type === 'task');
+            $form.find('.wcp-ai-msgsave-specfields').toggle(type === 'spec');
+        },
+
+        /**
+         * Open the inline save form on a message
+         */
+        openSaveForm: function($msg) {
+            if ($msg.find('.wcp-ai-msgsave-form').length) {
+                return;
+            }
+            $msg.find('.wcp-ai-msgsave-open').hide();
+
+            const raw = $msg.data('raw') || $msg.find('.wcp-ai-message-content').text();
+
+            const opt = (val, label, sel) =>
+                $('<option>').val(val).text(label).prop('selected', !!sel);
+
+            // Mode selector
+            const $modes = $('<div>').addClass('wcp-ai-msgsave-modes')
+                .append($('<button>').attr('type', 'button').addClass('wcp-ai-msgsave-mode active').attr('data-mode', 'verbatim').text('Verbatim'))
+                .append($('<button>').attr('type', 'button').addClass('wcp-ai-msgsave-mode').attr('data-mode', 'summary').text('AI summary'))
+                .append($('<button>').attr('type', 'button').addClass('wcp-ai-msgsave-mode').attr('data-mode', 'multiple').text('Multiple items'));
+
+            // Title (full width, labelled)
+            const $titleField = $('<div>').addClass('wcp-ai-msgsave-titlefield')
+                .append($('<label>').addClass('wcp-ai-msgsave-label').text('Item title'))
+                .append($('<input>').attr('type', 'text').addClass('wcp-ai-msgsave-title')
+                    .attr('placeholder', 'Item title').val(this.suggestTitle(raw)));
+            const $multiNote = $('<div>').addClass('wcp-ai-msgsave-multinote')
+                .text('Titles are generated per item.').hide();
+
+            // Type (usual order); no default selection
+            const $type = $('<select>').addClass('wcp-ai-msgsave-type')
+                .append(opt('', 'type', true))
+                .append(opt('task', 'task'))
+                .append(opt('info', 'info'))
+                .append(opt('learning', 'learning'))
+                .append(opt('spec', 'spec'))
+                .append(opt('memory', 'memory'));
+
+            // Task-only: status + due date
+            const $taskFields = $('<span>').addClass('wcp-ai-msgsave-taskfields').hide()
+                .append($('<select>').addClass('wcp-ai-msgsave-status')
+                    .append(opt('to-do', 'to do', true))
+                    .append(opt('in-progress', 'in progress'))
+                    .append(opt('done', 'done')))
+                .append($('<input>').attr('type', 'date').addClass('wcp-ai-msgsave-due').attr('title', 'Due date'));
+
+            // Spec-only: status
+            const $specFields = $('<span>').addClass('wcp-ai-msgsave-specfields').hide()
+                .append($('<select>').addClass('wcp-ai-msgsave-specstatus')
+                    .append(opt('draft', 'draft', true))
+                    .append(opt('review', 'review'))
+                    .append(opt('final', 'final')));
+
+            const $pinned = $('<label>').addClass('wcp-ai-msgsave-pin')
+                .append($('<input>').attr('type', 'checkbox').addClass('wcp-ai-msgsave-pinned'))
+                .append(document.createTextNode(' pin'));
+
+            const $grid = $('<div>').addClass('wcp-ai-msgsave-grid')
+                .append($type).append($taskFields).append($specFields).append($pinned);
+
+            // Contexts
+            const $ctxChips = $('<span>').addClass('wcp-ai-msgsave-chips');
+            const $ctxAdd = $('<select>').addClass('wcp-ai-msgsave-ctx-add')
+                .append(opt('', '+ context'));
+            (this.contextsFlat || []).forEach((c) => {
+                $ctxAdd.append($('<option>').val(c.term_id).text(c.path));
+            });
+            const $ctx = $('<div>').addClass('wcp-ai-msgsave-ctx')
+                .append($('<label>').addClass('wcp-ai-msgsave-label').text('Contexts'))
+                .append($ctxChips)
+                .append($ctxAdd);
+
+            // Tags
+            const $tagChips = $('<span>').addClass('wcp-ai-msgsave-chips');
+            const $tags = $('<div>').addClass('wcp-ai-msgsave-tags')
+                .append($('<label>').addClass('wcp-ai-msgsave-label').text('Tags'))
+                .append($tagChips)
+                .append($('<input>').attr('type', 'text').addClass('wcp-ai-msgsave-tag-input')
+                    .attr('placeholder', 'add tag + Enter').attr('autocomplete', 'off'));
+
+            const $actions = $('<div>').addClass('wcp-ai-msgsave-actions')
+                .append($('<button>').attr('type', 'button').addClass('wcp-ai-msgsave-confirm').text('Save'))
+                .append($('<button>').attr('type', 'button').addClass('wcp-ai-msgsave-cancel').text('Cancel'));
+
+            const $form = $('<div>').addClass('wcp-ai-msgsave-form')
+                .append($modes)
+                .append($titleField)
+                .append($multiNote)
+                .append($grid)
+                .append($ctx)
+                .append($tags)
+                .append($actions);
+
+            $msg.find('.wcp-ai-msgsave').append($form);
+
+            // Pre-select the current page as a context chip
+            const pageCtx = this.currentPageContext();
+            if (pageCtx) {
+                this.addChip($ctxChips, pageCtx.term_id, pageCtx.name, 'ctx');
+            }
+
+            $form.find('.wcp-ai-msgsave-title').trigger('focus');
+        },
+
+        /**
+         * Submit the inline save form.
+         * Note: this is a user-initiated save of visible AI output — the click
+         * is the acceptance, so no proposal round-trip (still logged server-side).
+         */
+        submitSaveForm: function($msg) {
+            const $form = $msg.find('.wcp-ai-msgsave-form');
+            const mode = $form.find('.wcp-ai-msgsave-mode.active').data('mode') || 'verbatim';
+            const title = $form.find('.wcp-ai-msgsave-title').val().trim();
+            const itemType = $form.find('.wcp-ai-msgsave-type').val();
+            const raw = $msg.data('raw') || $msg.find('.wcp-ai-message-content').text();
+
+            if (mode === 'verbatim' && !title) {
+                $form.find('.wcp-ai-msgsave-title').trigger('focus');
+                return;
+            }
+
+            const contextIds = $form.find('.wcp-ai-msgsave-ctx .wcp-ai-msgsave-chip').map(function() {
+                return parseInt($(this).data('value'), 10);
+            }).get();
+            const tags = $form.find('.wcp-ai-msgsave-tags .wcp-ai-msgsave-chip').map(function() {
+                return $(this).data('value');
+            }).get();
+
+            const data = {
+                mode: mode,
+                title: title,
+                content: raw,
+                item_type: itemType,
+                task_status: $form.find('.wcp-ai-msgsave-status').val(),
+                spec_status: $form.find('.wcp-ai-msgsave-specstatus').val(),
+                due_date: $form.find('.wcp-ai-msgsave-due').val(),
+                pinned: $form.find('.wcp-ai-msgsave-pinned').is(':checked') ? '1' : '',
+                model: this.selectedModel,
+                page_id: wcpAiWidgetData.pageId,
+                conversation_id: this.conversationId,
+                context_ids: contextIds,
+                tags: tags
+            };
+
+            $form.find('button').prop('disabled', true);
+            if (mode !== 'verbatim') {
+                $form.find('.wcp-ai-msgsave-confirm').text('Working…');
+            }
+
+            $.ajax({
+                url: wcpAiWidgetData.restUrl + '/ai/messages/save-as-item',
+                method: 'POST',
+                beforeSend: (xhr) => {
+                    xhr.setRequestHeader('X-WP-Nonce', wcpAiWidgetData.nonce);
+                },
+                data: data,
+                success: (response) => {
+                    if (response.success) {
+                        const count = response.count || 1;
+                        const $done = $('<span>').addClass('wcp-ai-msgsave-done')
+                            .text(count > 1
+                                ? ('Saved ' + count + ' items ')
+                                : (response.item_type ? ('Saved as ' + response.item_type + ' ') : 'Saved '));
+                        if (count === 1 && response.view_url) {
+                            $done.append($('<a>').attr('href', response.view_url).attr('target', '_blank').text('view'));
+                        }
+                        $msg.find('.wcp-ai-msgsave').empty().append($done);
+                    } else {
+                        $form.find('button').prop('disabled', false);
+                        $form.find('.wcp-ai-msgsave-confirm').text('Save');
+                        this.showError(response.message || 'Failed to save item');
+                    }
+                },
+                error: (xhr) => {
+                    $form.find('button').prop('disabled', false);
+                    $form.find('.wcp-ai-msgsave-confirm').text('Save');
+                    const msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : xhr.statusText;
+                    this.showError('Save failed: ' + msg);
+                }
+            });
         },
 
         /**

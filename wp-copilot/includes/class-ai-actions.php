@@ -1272,7 +1272,7 @@ class WCP_AI_Actions {
 
                 // Set item type if provided
                 if (!empty($item['item_type'])) {
-                    wp_set_post_terms($post_id, array($item['item_type']), 'wcp_item_type');
+                    wp_set_post_terms($post_id, array($item['item_type']), 'item_type');
                 }
 
                 $created_posts[] = $post_id;
@@ -1962,21 +1962,25 @@ class WCP_AI_Actions {
         $system_prompt .= "When asked to onboard onto a page, you:\n";
         $system_prompt .= "1. Briefly summarise what you understand about the global mission and the page's purpose.\n";
         $system_prompt .= "2. Note the page's current structure (headings, item count).\n";
-        $system_prompt .= "3. If there is no page AI mission defined, propose a concise one (2–4 sentences) in a JSON field called `suggested_mission`.\n";
-        $system_prompt .= "4. Close with an open, helpful question: 'How can I help?'\n\n";
-        $system_prompt .= "Keep the greeting to 150–250 words. Be direct and practical — not effusive.\n\n";
-        $system_prompt .= "Return JSON: { \"greeting\": \"<greeting text>\", \"suggested_mission\": \"<text or null>\" }";
+        $system_prompt .= "3. Close with an open, helpful question.\n\n";
+        $system_prompt .= "Keep the greeting to 100–200 words. Be direct and practical — not effusive.\n\n";
+        $system_prompt .= "IMPORTANT rules for the JSON output:\n";
+        $system_prompt .= "- Do NOT mention the mission proposal inside `greeting`. The UI will display it separately.\n";
+        $system_prompt .= "- If no page AI mission is set (you will be told), you MUST provide a concise 2–4 sentence mission in `suggested_mission`. Never leave it null or empty in that case.\n";
+        $system_prompt .= "- If a page AI mission already exists, set `suggested_mission` to null.\n\n";
+        $system_prompt .= "Return ONLY valid JSON with no markdown fences: { \"greeting\": \"<greeting text>\", \"suggested_mission\": \"<proposed mission text or null>\" }";
 
         // User message
         $user_message  = "Page: {$page->post_title}\n\n";
         $user_message .= "Global mission:\n" . ( $global_mission ?: '(none set)' ) . "\n\n";
-        $user_message .= "Page AI mission:\n" . ( $page_mission ?: '(none set)' ) . "\n\n";
+        $mission_status = $has_page_mission ? "SET:\n{$page_mission}" : "NOT SET — you must propose one in `suggested_mission`";
+        $user_message .= "Page AI mission: {$mission_status}\n\n";
         $user_message .= "Current structure:\n{$structure_snapshot}\n\n";
         $user_message .= "Total items on this page: {$item_count}\n\n";
         $user_message .= "Please onboard onto this page.";
 
         $ai_client = WCP_AI_Client::instance();
-        $response  = $ai_client->request_with_conversation( $system_prompt, $user_message, array(), 512, 30 );
+        $response  = $ai_client->request_with_conversation( $system_prompt, $user_message, array(), 800, 30 );
 
         if ( is_wp_error( $response ) ) {
             return $response;
