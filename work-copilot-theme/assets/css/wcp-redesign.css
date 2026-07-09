@@ -1,0 +1,737 @@
+/* ==========================================================================
+   WPPers — Redesign override stylesheet
+   Drop-in restyle for the work-copilot plugin/theme.
+   Enqueue AFTER the plugin CSS so these rules win:
+
+     wp_enqueue_style('wcp-redesign',
+        get_stylesheet_directory_uri().'/assets/css/wcp-redesign.css',
+        ['work-copilot-public'],        // depend on the plugin handle
+        '1.0.0');
+
+   Everything is scoped under .wcp-theme-container so it can't leak into
+   wp-admin or other themes. No plugin files are modified.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap');
+
+/* ==========================================================================
+   1. DESIGN TOKENS  (light — the default)
+   ========================================================================== */
+.wcp-theme-container {
+  /* neutrals */
+  --wcp-bg:            #f4f5f7;
+  --wcp-surface:       #ffffff;
+  --wcp-surface-2:     #f7f8fa;
+  --wcp-surface-3:     #eef0f3;
+  --wcp-border:        #e7e9ee;
+  --wcp-border-strong: #d6dae1;
+  --wcp-text:          #1b1e25;
+  --wcp-text-2:        #565d69;
+  --wcp-text-3:        #8b919d;
+
+  /* accent lives on <body> (see §3) so page classes can override it;
+     do NOT redeclare it here or the container would mask the page value. */
+  --wcp-accent-ink:    #ffffff;
+
+  /* semantic (item types) */
+  --wcp-task:     #3b82f6;
+  --wcp-info:     #0d9488;
+  --wcp-learning: #8b5cf6;
+  --wcp-spec:     #0891b2;
+
+  /* semantic (priority) */
+  --wcp-critical: #e5484d;
+  --wcp-high:     #f5721b;
+  --wcp-medium:   #6b7280;
+  --wcp-low:      #9aa0ab;
+
+  /* semantic (status) */
+  --wcp-done:      #1f9d6b;
+  --wcp-progress:  #e0872e;
+
+  /* geometry */
+  --wcp-radius:    9px;
+  --wcp-radius-sm: 6px;
+  --wcp-row-py:    7px;
+  --wcp-nav-w:     262px;
+  --wcp-font: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --wcp-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+/* ==========================================================================
+   2. DARK MODE   (auto via prefers-color-scheme + manual .wcp-dark)
+   ========================================================================== */
+@media (prefers-color-scheme: dark) {
+  .wcp-theme-container:not(.wcp-light) {
+    --wcp-bg:            #0e1013;
+    --wcp-surface:       #16181d;
+    --wcp-surface-2:     #1c1f26;
+    --wcp-surface-3:     #232732;
+    --wcp-border:        #262a32;
+    --wcp-border-strong: #363b46;
+    --wcp-text:          #e8eaed;
+    --wcp-text-2:        #9aa0ac;
+    --wcp-text-3:        #697080;
+  }
+}
+.wcp-theme-container.wcp-dark {
+  --wcp-bg:            #0e1013;
+  --wcp-surface:       #16181d;
+  --wcp-surface-2:     #1c1f26;
+  --wcp-surface-3:     #232732;
+  --wcp-border:        #262a32;
+  --wcp-border-strong: #363b46;
+  --wcp-text:          #e8eaed;
+  --wcp-text-2:        #9aa0ac;
+  --wcp-text-3:        #697080;
+}
+
+/* ==========================================================================
+   3. PER-PAGE ACCENT MAP
+   Each top-level page (and its descendants via parent-pageid) gets its own
+   accent. Works with zero PHP changes using WordPress' body classes.
+   For pages nested >1 level deep, add a body class in functions.php:
+       add_filter('body_class', fn($c)=>[...$c, 'wcp-section-'.$topLevelSlug]);
+   and add a matching rule here.
+   ========================================================================== */
+/* Real top-level page IDs for this install (personal.local / wordpress-personal).
+   Descendants inherit their top-level ancestor's accent via the
+   wcp_body_class_accent() filter in functions.php, which stamps
+   parent-pageid-<topAncestorId> at any nesting depth. */
+body { --wcp-accent: #7C5CFC; }   /* base default */
+body.page-id-63,   body.parent-pageid-63   { --wcp-accent:#7C5CFC; } /* Bookmarks              */
+body.page-id-12,   body.parent-pageid-12   { --wcp-accent:#1F9D6B; } /* Budgeting              */
+body.page-id-21,   body.parent-pageid-21   { --wcp-accent:#3B82F6; } /* Home                   */
+body.page-id-1692, body.parent-pageid-1692 { --wcp-accent:#E0872E; } /* House                  */
+body.page-id-1528, body.parent-pageid-1528 { --wcp-accent:#E0518C; } /* Intray                 */
+body.page-id-7,    body.parent-pageid-7    { --wcp-accent:#0EA5A6; } /* Investing              */
+body.page-id-5,    body.parent-pageid-5    { --wcp-accent:#E05A5A; } /* Memories               */
+body.page-id-57,   body.parent-pageid-57   { --wcp-accent:#5B6EE0; } /* Podcasts and resources */
+body.page-id-9,    body.parent-pageid-9    { --wcp-accent:#2B9FD6; } /* Side projects          */
+body.page-id-1540, body.parent-pageid-1540 { --wcp-accent:#6B7385; } /* Spec2                  */
+body.page-id-50,   body.parent-pageid-50   { --wcp-accent:#C79A2E; } /* Stock sources          */
+body.page-id-1400, body.parent-pageid-1400 { --wcp-accent:#E0685A; } /* Tasks and actions      */
+/* generic hook: <div class="wcp-theme-container" data-wcp-accent="#hex"> */
+.wcp-theme-container[data-wcp-accent] { --wcp-accent: attr(data-wcp-accent color, #7C5CFC); }
+
+/* ==========================================================================
+   4. BASE / LAYOUT
+   ========================================================================== */
+.wcp-theme-container,
+.wcp-theme-container * { box-sizing: border-box; }
+
+.wcp-theme-container {
+  display: flex;
+  align-items: stretch;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--wcp-bg);
+  color: var(--wcp-text);
+  font-family: var(--wcp-font);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+body.admin-bar .wcp-theme-container { min-height: calc(100vh - 32px); }
+
+.wcp-theme-container a { color: var(--wcp-accent); text-decoration: none; }
+.wcp-theme-container a:hover { color: var(--wcp-accent); text-decoration: none; }
+
+/* ==========================================================================
+   5. SIDEBAR
+   ========================================================================== */
+.wcp-sidebar {
+  width: var(--wcp-nav-w);
+  flex: none;
+  background: var(--wcp-surface);
+  border-right: 1px solid var(--wcp-border);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
+  min-height: 0;
+}
+body.admin-bar .wcp-sidebar { top: 32px; height: calc(100vh - 32px); }
+
+.wcp-sidebar-header { padding: 16px 16px 10px; }
+.wcp-sidebar-header h2 { margin: 0; font-size: 16px; }
+.wcp-sidebar-logo {
+  display: inline-flex; align-items: center; gap: 9px;
+  font-weight: 700; font-size: 16px; letter-spacing: -0.01em;
+  color: var(--wcp-text) !important;
+}
+.wcp-sidebar-logo::before {
+  content: "W";
+  width: 26px; height: 26px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--wcp-accent); color: var(--wcp-accent-ink);
+  font-size: 14px; font-weight: 700; border-radius: 7px;
+}
+
+/* nav tree */
+.wcp-page-navigation { flex: 1; overflow-y: auto; padding: 4px 8px 10px; }
+.wcp-page-list { list-style: none; margin: 0; padding: 0; }
+.wcp-page-list .wcp-page-list { margin-left: 14px; }  /* indent children */
+
+.wcp-nav-row {
+  display: flex; align-items: center; gap: 4px;
+  border-radius: var(--wcp-radius-sm);
+  padding: 1px 6px 1px 2px;
+  margin: 1px 0;
+}
+.wcp-nav-row:hover { background: var(--wcp-surface-2); }
+.wcp-nav-row > a {
+  flex: 1; min-width: 0;
+  padding: 5px 4px;
+  color: var(--wcp-text-2) !important;
+  font-size: 13px; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wcp-nav-row:hover > a { color: var(--wcp-text) !important; }
+
+.wcp-nav-toggle {
+  flex: none;
+  width: 18px; height: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 0; cursor: pointer;
+  color: var(--wcp-text-3);
+  font-size: 9px; line-height: 1;
+  border-radius: 4px;
+  padding: 0;
+}
+.wcp-nav-toggle:hover { background: var(--wcp-surface-3); color: var(--wcp-text); }
+.wcp-nav-toggle-spacer { flex: none; width: 18px; }
+
+/* active page */
+.wcp-page-list li.current-page > .wcp-nav-row {
+  background: color-mix(in srgb, var(--wcp-accent) 13%, transparent);
+}
+.wcp-page-list li.current-page > .wcp-nav-row > a {
+  color: var(--wcp-accent) !important; font-weight: 600;
+}
+
+.wcp-sidebar-footer { padding: 12px; border-top: 1px solid var(--wcp-border); }
+.wcp-add-page-btn {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  width: 100%;
+  background: var(--wcp-accent); color: var(--wcp-accent-ink) !important;
+  padding: 9px 12px;
+  border-radius: var(--wcp-radius);
+  font-weight: 600; font-size: 13px;
+}
+.wcp-add-page-btn:hover { filter: brightness(1.07); color: var(--wcp-accent-ink) !important; }
+
+/* ==========================================================================
+   6. MAIN + SITE HEADER
+   ========================================================================== */
+.wcp-main-content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* the theme repeats the brand in a site header — sidebar already has it,
+   so slim it into a thin bar (set display:none to remove entirely). */
+.wcp-site-header {
+  padding: 0 26px;
+  height: 0; overflow: hidden;
+  border: 0;
+}
+
+.wcp-content-wrapper { flex: 1; padding: 24px 28px 80px; }
+.wcp-page-content { max-width: 1120px; margin: 0 auto; }
+
+/* ==========================================================================
+   7. PAGE HEADER + BREADCRUMBS
+   ========================================================================== */
+.wcp-page-header-clean { margin-bottom: 18px; }
+
+.wcp-breadcrumbs { margin-bottom: 8px; }
+.wcp-breadcrumb-list {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 2px;
+}
+.wcp-breadcrumb-item { display: inline-flex; align-items: center; gap: 2px; }
+.wcp-breadcrumb-link { color: var(--wcp-text-3) !important; font-size: 12.5px; padding: 2px 4px; border-radius: 5px; }
+.wcp-breadcrumb-link:hover { color: var(--wcp-accent) !important; background: var(--wcp-surface-2); }
+.wcp-breadcrumb-separator { color: var(--wcp-text-3); opacity: .55; margin: 0 2px; }
+.wcp-breadcrumb-home-icon { font-size: 12px; }
+.wcp-breadcrumb-current-text { color: var(--wcp-text-2); font-size: 12.5px; font-weight: 600; padding: 2px 4px; }
+
+.wcp-page-title-clean {
+  margin: 0;
+  font-size: 27px; font-weight: 700; letter-spacing: -0.02em;
+  color: var(--wcp-text);
+}
+
+/* ==========================================================================
+   8. ITEMS TOOLBAR
+   ========================================================================== */
+.wcp-items-toolbar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  padding: 8px;
+  background: var(--wcp-surface);
+  border: 0;
+  border-bottom: 1px solid var(--wcp-border);
+}
+/* segmented filter control */
+.wcp-filter-group {
+  display: inline-flex; gap: 2px;
+  background: var(--wcp-surface-2);
+  border: 1px solid var(--wcp-border);
+  border-radius: 8px; padding: 2px;
+}
+.wcp-filter-btn {
+  background: none; border: 0; cursor: pointer;
+  padding: 5px 11px; border-radius: 6px;
+  font: 500 12px var(--wcp-font); color: var(--wcp-text-2);
+  white-space: nowrap;
+}
+.wcp-filter-btn:hover { color: var(--wcp-text); }
+.wcp-filter-btn.active {
+  background: var(--wcp-surface);
+  color: var(--wcp-accent);
+  box-shadow: 0 1px 2px rgba(0,0,0,.09);
+  font-weight: 600;
+}
+
+/* subtle text buttons in the toolbar (sort / toggle / select) */
+.wcp-items-toolbar .wcp-edit-link {
+  background: none; border: 1px solid transparent; cursor: pointer;
+  padding: 5px 9px; border-radius: 6px;
+  font: 500 12px var(--wcp-font); color: var(--wcp-text-2);
+}
+.wcp-items-toolbar .wcp-edit-link:hover { background: var(--wcp-surface-2); color: var(--wcp-text); border-color: var(--wcp-border); }
+.wcp-items-toolbar .wcp-sort-priority { margin-left: auto; } /* push sorts to the right */
+
+/* ==========================================================================
+   9. ITEM ROWS
+   ========================================================================== */
+.wcp-items-list { background: transparent; }
+
+.wcp-item-row {
+  position: relative;
+  display: flex; align-items: center; flex-wrap: wrap;
+  column-gap: 9px; row-gap: 2px;
+  padding: var(--wcp-row-py) 12px var(--wcp-row-py) 10px;
+  border-bottom: 1px solid var(--wcp-border);
+  border-left: 3px solid transparent;
+  min-height: 38px;
+}
+.wcp-item-row:hover { background: var(--wcp-surface-2); }
+.wcp-item-row:last-child { border-bottom: 0; }
+
+/* left rail + type accent by item type */
+.wcp-item-row[data-item-type="task"]     { border-left-color: var(--wcp-task); }
+.wcp-item-row[data-item-type="info"]     { border-left-color: var(--wcp-info); }
+.wcp-item-row[data-item-type="learning"] { border-left-color: var(--wcp-learning); }
+.wcp-item-row[data-item-type="spec"]     { border-left-color: var(--wcp-spec); }
+
+/* --- ordering of the flat child list into dense columns --- */
+.wcp-drag-handle        { order: 1; }
+.wcp-pin-toggle         { order: 2; }
+.wcp-task-checkbox      { order: 3; }
+.wcp-item-title         { order: 4; }
+.wcp-type-select        { order: 5; }
+.wcp-priority-select    { order: 6; }
+.wcp-status-select      { order: 6; }
+.wcp-spec-status-select { order: 6; }
+.wcp-due-date-input     { order: 7; }
+.wcp-item-created       { order: 8; }
+.wcp-source-link        { order: 9; }
+.wcp-item-view-link     { order: 10; }
+.wcp-item-ai-btn        { order: 11; }
+.wcp-subtask-add-btn    { order: 12; }
+.wcp-item-context-btn   { order: 13; }
+.wcp-item-tag-btn       { order: 14; }
+.wcp-item-delete        { order: 15; }
+.wcp-item-description   { order: 20; flex-basis: 100%; }
+.wcp-subtask-section    { order: 21; flex-basis: 100%; }
+
+/* drag handle — revealed on hover */
+.wcp-drag-handle {
+  flex: none; cursor: grab;
+  color: var(--wcp-text-3); font-size: 14px; line-height: 1;
+  opacity: 0; transition: opacity .12s;
+  width: 12px; text-align: center;
+}
+.wcp-item-row:hover .wcp-drag-handle { opacity: .5; }
+
+/* pin — hidden until hover, stays lit when pinned */
+.wcp-pin-toggle {
+  flex: none; display: inline-flex; align-items: center; cursor: pointer;
+  opacity: 0; transition: opacity .12s;
+}
+.wcp-item-row:hover .wcp-pin-toggle,
+.wcp-pin-toggle:has(.wcp-pin-checkbox:checked) { opacity: 1; }
+.wcp-pin-checkbox { display: none; }
+.wcp-pin-icon { font-size: 12px; filter: grayscale(1) opacity(.5); }
+.wcp-pin-toggle:has(.wcp-pin-checkbox:checked) .wcp-pin-icon { filter: none; }
+
+/* task checkbox (only rendered for task type) */
+.wcp-task-checkbox {
+  flex: none; -webkit-appearance: none; appearance: none;
+  width: 17px; height: 17px; margin: 0; cursor: pointer;
+  border: 1.5px solid var(--wcp-border-strong);
+  border-radius: 5px; background: var(--wcp-surface);
+  position: relative;
+}
+.wcp-task-checkbox:hover { border-color: var(--wcp-accent); }
+.wcp-task-checkbox:checked { background: var(--wcp-done); border-color: var(--wcp-done); }
+.wcp-task-checkbox:checked::after {
+  content: ""; position: absolute; left: 5px; top: 1.5px;
+  width: 4px; height: 9px; border: solid #fff;
+  border-width: 0 2.4px 2.4px 0; transform: rotate(45deg);
+}
+
+/* title */
+.wcp-item-title {
+  flex: 0 1 auto; min-width: 0;
+  font-size: 13px; font-weight: 500; color: var(--wcp-text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  cursor: text;
+}
+/* first element of the right-hand cluster pushes it all to the right */
+.wcp-type-select { margin-left: auto; }
+.wcp-item-row[data-task-status="done"] .wcp-item-title {
+  text-decoration: line-through; color: var(--wcp-text-3);
+}
+
+/* created timestamp */
+.wcp-item-created {
+  flex: none; font: 500 11px var(--wcp-mono);
+  color: var(--wcp-text-3); white-space: nowrap;
+}
+/* source link ↗ */
+.wcp-source-link {
+  flex: none; width: 20px; height: 20px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--wcp-text-3) !important; border-radius: 5px; font-size: 13px;
+}
+.wcp-source-link:hover { color: var(--wcp-accent) !important; background: var(--wcp-surface-3); }
+
+/* description — muted second line */
+.wcp-item-description {
+  color: var(--wcp-text-2); font-size: 12px; line-height: 1.5;
+  padding: 2px 0 3px 25px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.wcp-descriptions-hidden .wcp-item-description { display: none; }
+
+/* ==========================================================================
+   10. INLINE SELECTS  → type / priority pills
+   (hidden ones keep their inline display:none; we never force display)
+   ========================================================================== */
+.wcp-inline-select {
+  flex: none; -webkit-appearance: none; appearance: none;
+  border: 1px solid var(--wcp-border);
+  background: var(--wcp-surface-2);
+  color: var(--wcp-text-2);
+  font: 600 10.5px var(--wcp-mono);
+  text-transform: uppercase; letter-spacing: .04em;
+  padding: 3px 18px 3px 7px;
+  border-radius: var(--wcp-radius-sm);
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%238b919d' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 5px center;
+}
+.wcp-inline-select:hover { border-color: var(--wcp-border-strong); }
+
+/* colour the type pill by the row's type */
+.wcp-item-row[data-item-type="task"]     .wcp-type-select { color: var(--wcp-task);     border-color: color-mix(in srgb, var(--wcp-task) 40%, transparent);     background: color-mix(in srgb, var(--wcp-task) 11%, transparent); }
+.wcp-item-row[data-item-type="info"]     .wcp-type-select { color: var(--wcp-info);     border-color: color-mix(in srgb, var(--wcp-info) 40%, transparent);     background: color-mix(in srgb, var(--wcp-info) 11%, transparent); }
+.wcp-item-row[data-item-type="learning"] .wcp-type-select { color: var(--wcp-learning); border-color: color-mix(in srgb, var(--wcp-learning) 40%, transparent); background: color-mix(in srgb, var(--wcp-learning) 11%, transparent); }
+.wcp-item-row[data-item-type="spec"]     .wcp-type-select { color: var(--wcp-spec);     border-color: color-mix(in srgb, var(--wcp-spec) 40%, transparent);     background: color-mix(in srgb, var(--wcp-spec) 11%, transparent); }
+
+/* colour the priority pill by priority */
+.wcp-item-row[data-priority="critical"] .wcp-priority-select { color: var(--wcp-critical); border-color: color-mix(in srgb, var(--wcp-critical) 45%, transparent); background: color-mix(in srgb, var(--wcp-critical) 12%, transparent); }
+.wcp-item-row[data-priority="high"]     .wcp-priority-select { color: var(--wcp-high);     border-color: color-mix(in srgb, var(--wcp-high) 45%, transparent);     background: color-mix(in srgb, var(--wcp-high) 12%, transparent); }
+.wcp-item-row[data-priority="medium"]   .wcp-priority-select { color: var(--wcp-medium);   border-color: color-mix(in srgb, var(--wcp-medium) 45%, transparent); }
+.wcp-item-row[data-priority="low"]      .wcp-priority-select { color: var(--wcp-low); }
+
+/* status pills */
+.wcp-item-row[data-task-status="done"]        .wcp-status-select { color: var(--wcp-done);     border-color: color-mix(in srgb, var(--wcp-done) 45%, transparent);     background: color-mix(in srgb, var(--wcp-done) 12%, transparent); }
+.wcp-item-row[data-task-status="in-progress"] .wcp-status-select { color: var(--wcp-progress); border-color: color-mix(in srgb, var(--wcp-progress) 45%, transparent); background: color-mix(in srgb, var(--wcp-progress) 12%, transparent); }
+
+.wcp-due-date-input {
+  flex: none; border: 1px solid var(--wcp-border);
+  background: var(--wcp-surface-2); color: var(--wcp-text-2);
+  font: 500 11px var(--wcp-mono);
+  padding: 3px 7px; border-radius: var(--wcp-radius-sm);
+}
+
+/* ==========================================================================
+   11. ROW ACTIONS  — the [view] [ai] +subtask +context +tag [delete] links
+   revealed on row hover to keep the list clean.
+   ========================================================================== */
+.wcp-item-row .wcp-edit-link:not(.wcp-filter-btn) {
+  flex: none;
+  background: none; border: 0; cursor: pointer;
+  padding: 3px 6px; border-radius: 5px;
+  font: 500 11.5px var(--wcp-font); color: var(--wcp-text-3);
+  display: none;                 /* collapse out of flow when idle */
+  white-space: nowrap;
+}
+.wcp-item-row:hover .wcp-edit-link:not(.wcp-filter-btn) { display: inline-flex; align-items: center; }
+.wcp-item-row .wcp-edit-link:hover { background: var(--wcp-surface-3); color: var(--wcp-text); }
+.wcp-item-row .wcp-item-delete:hover { color: var(--wcp-critical); background: color-mix(in srgb, var(--wcp-critical) 12%, transparent); }
+/* keep timestamp + selects visible always (they aren't .wcp-edit-link) */
+
+/* ==========================================================================
+   12. EXPANDABLE PANELS  (AI actions / context picker / tags / subtask form)
+   ========================================================================== */
+.wcp-subtask-section { padding: 0; }
+.wcp-subtask-section:not(:empty) { margin-top: 4px; }
+
+.wcp-item-ai-panel,
+.wcp-item-context-panel,
+.wcp-item-tag-panel {
+  margin: 6px 0 4px 25px;
+  padding: 12px;
+  background: var(--wcp-surface-2);
+  border: 1px solid var(--wcp-border);
+  border-radius: var(--wcp-radius);
+}
+.wcp-item-ai-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.wcp-item-ai-chip {
+  background: var(--wcp-surface); border: 1px solid var(--wcp-border);
+  color: var(--wcp-text-2); cursor: pointer;
+  padding: 6px 11px; border-radius: 999px;
+  font: 500 12px var(--wcp-font);
+}
+.wcp-item-ai-chip:hover { border-color: var(--wcp-accent); color: var(--wcp-accent); }
+.wcp-item-ai-result {
+  margin-top: 10px; padding: 10px 12px;
+  background: var(--wcp-surface); border: 1px solid var(--wcp-border);
+  border-radius: var(--wcp-radius-sm); font-size: 12.5px; color: var(--wcp-text);
+}
+
+/* tag editor */
+.wcp-item-tag-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.wcp-item-tag-pills:empty { display: none; }
+.wcp-item-tag-form,
+.wcp-subtask-add-form { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.wcp-item-tag-input,
+.wcp-subtask-input {
+  flex: 1; min-width: 180px;
+  border: 1px solid var(--wcp-border); background: var(--wcp-surface);
+  color: var(--wcp-text); font: 400 13px var(--wcp-font);
+  padding: 7px 10px; border-radius: var(--wcp-radius-sm);
+}
+.wcp-item-tag-input:focus,
+.wcp-subtask-input:focus { outline: none; border-color: var(--wcp-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--wcp-accent) 18%, transparent); }
+
+/* inline meta pills on rows: tags + context (.wcp-item-meta-pills > .wcp-pill) */
+.wcp-item-meta-pills { order: 4; display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.wcp-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font: 500 11px var(--wcp-mono); line-height: 1.5;
+  padding: 2px 8px; border-radius: 5px; white-space: nowrap; text-decoration: none;
+}
+.wcp-pill-tag { background: var(--wcp-surface-3); color: var(--wcp-text-2); border: 1px solid var(--wcp-border); }
+a.wcp-pill-tag:hover { background: var(--wcp-border); color: var(--wcp-text); }
+.wcp-pill-context { background: color-mix(in srgb, var(--wcp-accent) 12%, transparent); color: var(--wcp-accent); }
+/* editor tag pills (in the tag panel) */
+.wcp-item-tag-pills > * {
+  display: inline-flex; align-items: center; gap: 4px;
+  font: 500 11px var(--wcp-mono); color: var(--wcp-text-2);
+  background: var(--wcp-surface-3); border: 1px solid var(--wcp-border);
+  padding: 2px 8px; border-radius: 5px;
+}
+
+/* ==========================================================================
+   13. BUTTONS
+   ========================================================================== */
+.wcp-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1px solid var(--wcp-border); background: var(--wcp-surface);
+  color: var(--wcp-text); cursor: pointer;
+  padding: 7px 13px; border-radius: var(--wcp-radius-sm);
+  font: 600 13px var(--wcp-font);
+}
+.wcp-btn:hover { border-color: var(--wcp-border-strong); }
+.wcp-btn-primary { background: var(--wcp-accent); border-color: var(--wcp-accent); color: var(--wcp-accent-ink) !important; }
+.wcp-btn-primary:hover { filter: brightness(1.07); }
+.wcp-btn-sm { padding: 5px 10px; font-size: 12px; }
+
+/* ==========================================================================
+   14. SCROLLBARS
+   ========================================================================== */
+.wcp-theme-container ::-webkit-scrollbar { width: 10px; height: 10px; }
+.wcp-theme-container ::-webkit-scrollbar-thumb {
+  background: var(--wcp-border-strong); border-radius: 6px;
+  border: 3px solid transparent; background-clip: content-box;
+}
+.wcp-theme-container ::-webkit-scrollbar-track { background: transparent; }
+
+/* ==========================================================================
+   14b. PAGE CONTENT BOX + EMBEDDED (pasted) CONTENT
+   Pages can hold a rich content block (e.g. a pasted ChatGPT export with
+   tables, headings, prose). Make it read cleanly inside the new shell.
+   ========================================================================== */
+.wcp-page-content-box {
+  background: var(--wcp-surface);
+  border: 1px solid var(--wcp-border);
+  border-radius: var(--wcp-radius);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.wcp-section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 14px;
+  background: var(--wcp-surface-2);
+  border-bottom: 1px solid var(--wcp-border);
+}
+.wcp-section-label {
+  font: 600 10.5px var(--wcp-mono); letter-spacing: .09em; text-transform: uppercase;
+  color: var(--wcp-text-3);
+}
+.wcp-section-header .wcp-toggle-section {
+  background: none; border: 0; cursor: pointer;
+  font: 500 12px var(--wcp-font); color: var(--wcp-text-3);
+  padding: 3px 8px; border-radius: 5px;
+}
+.wcp-section-header .wcp-toggle-section:hover { color: var(--wcp-accent); background: var(--wcp-surface-3); }
+.wcp-section-body { padding: 16px 18px; font-size: 13.5px; line-height: 1.62; color: var(--wcp-text-2); }
+
+/* readable typography for embedded / pasted content */
+.wcp-section-body h1, .wcp-section-body h2, .wcp-section-body h3, .wcp-section-body h4 {
+  color: var(--wcp-text); line-height: 1.25; margin: 1.3em 0 .5em; font-weight: 650;
+}
+.wcp-section-body h1 { font-size: 22px; } .wcp-section-body h2 { font-size: 18px; }
+.wcp-section-body h3 { font-size: 15px; } .wcp-section-body h4 { font-size: 13.5px; }
+.wcp-section-body > *:first-child, .wcp-section-body h1:first-child { margin-top: 0; }
+.wcp-section-body p { margin: .5em 0; }
+.wcp-section-body ul, .wcp-section-body ol { margin: .5em 0; padding-left: 1.4em; }
+.wcp-section-body li { margin: .2em 0; }
+.wcp-section-body a { color: var(--wcp-accent); text-decoration: underline; text-underline-offset: 2px; }
+.wcp-section-body hr { border: 0; border-top: 1px solid var(--wcp-border); margin: 1.4em 0; }
+.wcp-section-body blockquote {
+  margin: .8em 0; padding: 6px 14px; color: var(--wcp-text-2);
+  border-left: 3px solid var(--wcp-accent); background: color-mix(in srgb, var(--wcp-accent) 5%, transparent);
+}
+.wcp-section-body code {
+  font: 500 12px var(--wcp-mono); background: var(--wcp-surface-3);
+  padding: 1px 5px; border-radius: 4px; color: var(--wcp-text);
+}
+/* tables (the pasted markdown tables) */
+.wcp-section-body table {
+  border-collapse: collapse; width: auto; min-width: 0 !important;
+  margin: .9em 0; font-size: 12.5px;
+  border: 1px solid var(--wcp-border); border-radius: var(--wcp-radius-sm); overflow: hidden;
+}
+.wcp-section-body th, .wcp-section-body td {
+  border: 1px solid var(--wcp-border); padding: 7px 11px; text-align: left; vertical-align: top;
+}
+.wcp-section-body th { background: var(--wcp-surface-2); color: var(--wcp-text); font-weight: 600; }
+.wcp-section-body td { color: var(--wcp-text-2); }
+.wcp-section-body tr:nth-child(even) td { background: color-mix(in srgb, var(--wcp-surface-2) 55%, transparent); }
+.TyagGW_tableContainer, .wcp-section-body .tableContainer { overflow-x: auto; }
+/* pasted chat bubbles (ChatGPT export) — make them look intentional */
+.wcp-section-body .user-message-bubble-color {
+  display: inline-block; background: var(--wcp-surface-2);
+  border: 1px solid var(--wcp-border); border-radius: 14px;
+  padding: 9px 13px; margin: 4px 0; color: var(--wcp-text);
+}
+
+/* ==========================================================================
+   15. OVERRIDES for the shipped theme.css / public.css
+   (defeat conflicting rules — this sheet loads after both)
+   ========================================================================== */
+/* theme pins the sidebar (fixed) + offsets main by 280px; we run in-flow */
+.wcp-main-content { margin-left: 0; }
+.wcp-content-wrapper { max-width: none; }
+/* the section is the card; theme adds 30px padding + shadow, we go flush so
+   the toolbar + per-heading lists read as one surface */
+.wcp-items-section { padding: 0; background: var(--wcp-surface); border: 1px solid var(--wcp-border); border-radius: var(--wcp-radius); box-shadow: none; overflow: hidden; }
+/* theme forces .wcp-inline-select min-width:100px — too wide for a pill */
+.wcp-inline-select { min-width: 0; }
+/* neutralise the dark-theme nav link chips + left-border accents */
+.wcp-page-list a, .wcp-page-list a:hover,
+.wcp-page-list .current-page > a { background: transparent; border-left: 0; }
+/* our pin is the icon, not the theme's red outline */
+.wcp-item-row.wcp-pinned { outline: none; }
+/* theme marks done tasks with a .wcp-task-done class on the row */
+.wcp-task-done .wcp-item-title { text-decoration: line-through; color: var(--wcp-text-3); }
+/* badges (dashboard / search / archives) recoloured to the token palette */
+.wcp-badge { border-radius: 5px; font-weight: 600; }
+.wcp-type-task     { background: color-mix(in srgb, var(--wcp-task) 15%, transparent);     color: var(--wcp-task); }
+.wcp-type-info     { background: color-mix(in srgb, var(--wcp-info) 15%, transparent);     color: var(--wcp-info); }
+.wcp-type-learning { background: color-mix(in srgb, var(--wcp-learning) 15%, transparent); color: var(--wcp-learning); }
+.wcp-type-spec     { background: color-mix(in srgb, var(--wcp-spec) 15%, transparent);     color: var(--wcp-spec); }
+.wcp-priority-high   { background: color-mix(in srgb, var(--wcp-high) 15%, transparent);   color: var(--wcp-high); }
+.wcp-priority-medium { background: color-mix(in srgb, var(--wcp-medium) 15%, transparent); color: var(--wcp-medium); }
+.wcp-priority-low    { background: color-mix(in srgb, var(--wcp-low) 15%, transparent);    color: var(--wcp-low); }
+
+/* ==========================================================================
+   16. HEADINGS & GOALS
+   heading  = .wcp-heading-group > h3.wcp-heading-title-simple > .wcp-heading-body
+   goal     = the same + .wcp-goal-group, a .wcp-goal-badge and .wcp-goal-description
+   ========================================================================== */
+.wcp-heading-group { margin: 0; border-bottom: 1px solid var(--wcp-border); }
+.wcp-heading-group:last-child { border-bottom: 0; }
+
+.wcp-heading-title-simple {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0; padding: 12px 12px 9px;
+  font: 700 13px var(--wcp-font); color: var(--wcp-text);
+  background: transparent; border: 0;
+}
+.wcp-heading-title-text { font-weight: 700; }
+.wcp-heading-drag-handle {
+  flex: none; cursor: grab; color: var(--wcp-text-3);
+  font-size: 13px; letter-spacing: -2px; opacity: 0; transition: opacity .12s;
+}
+.wcp-heading-group:hover .wcp-heading-drag-handle { opacity: .5; }
+.wcp-heading-collapse-toggle {
+  flex: none; width: 18px; height: 18px; padding: 0;
+  background: none; border: 0; cursor: pointer;
+  color: var(--wcp-text-3); font-size: 10px; line-height: 1; border-radius: 4px;
+}
+.wcp-heading-collapse-toggle:hover { background: var(--wcp-surface-3); color: var(--wcp-text); }
+.wcp-heading-title-simple .wcp-heading-delete {
+  margin-left: auto; flex: none;
+  background: none; border: 0; cursor: pointer;
+  font: 500 11.5px var(--wcp-font); color: var(--wcp-text-3);
+  opacity: 0; transition: opacity .12s;
+}
+.wcp-heading-group:hover .wcp-heading-delete { opacity: 1; }
+.wcp-heading-title-simple .wcp-heading-delete:hover { color: var(--wcp-critical); }
+
+/* goal variant — accent-railed block with a badge + italic description */
+.wcp-goal-group {
+  border-left: 3px solid var(--wcp-accent);
+  background: color-mix(in srgb, var(--wcp-accent) 5%, transparent);
+}
+.wcp-goal-badge {
+  flex: none; display: inline-flex; align-items: center;
+  font: 700 9.5px var(--wcp-mono); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--wcp-accent-ink); background: var(--wcp-accent);
+  padding: 3px 7px; border-radius: 5px;
+}
+.wcp-goal-group .wcp-heading-title-text { font-size: 15px; letter-spacing: -.01em; }
+.wcp-goal-description {
+  margin: -3px 0 0; padding: 0 12px 12px 42px;
+  color: var(--wcp-text-2); font-size: 12.5px; font-style: italic; line-height: 1.55; max-width: 900px;
+}
+.wcp-goal-description p { margin: 0; }
+.wcp-heading-body { padding: 0; }
+
+/* quick-add row under a heading */
+.wcp-quick-add-wrap { padding: 8px 12px; }
+.wcp-btn-quick-add-item {
+  background: none; border: 0; cursor: pointer;
+  color: var(--wcp-text-3); font: 500 12.5px var(--wcp-font); padding: 4px 0;
+}
+.wcp-btn-quick-add-item:hover { color: var(--wcp-accent); }
+.wcp-quick-item-form { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; padding: 10px 12px; background: var(--wcp-surface-2); border: 1px solid var(--wcp-border); border-radius: var(--wcp-radius-sm); }
+.wcp-quick-title { flex: 1; min-width: 200px; padding: 6px 9px; border: 1px solid var(--wcp-border); border-radius: var(--wcp-radius-sm); background: var(--wcp-surface); color: var(--wcp-text); font: 400 13px var(--wcp-font); }
+.wcp-no-items-in-heading { padding: 8px 12px; color: var(--wcp-text-3); font-style: italic; font-size: 12.5px; }
+
+/* ==========================================================================
+   16. RESPONSIVE
+   ========================================================================== */
+@media (max-width: 900px) {
+  .wcp-theme-container { --wcp-nav-w: 210px; }
+  .wcp-content-wrapper { padding: 18px 16px 60px; }
+}

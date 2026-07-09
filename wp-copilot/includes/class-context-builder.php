@@ -154,11 +154,16 @@ class WCP_Context_Builder {
             'limits' => $options['limits'] // Store limits in context data
         );
 
-        // Fetch relevant memories if RAG is enabled and query provided
-        if (get_option('wcp_embeddings_enabled', false) && !empty($options['query'])) {
-            $memory_manager = WCP_Memory_Manager::instance();
-            $context['memories'] = $memory_manager->get_relevant_memories($options['query'], 5);
-        }
+        // Disabled 2026-07-09 (per user request): the always-on 5-item "Relevant
+        // Memories" injection ran on every turn/context mode and — because
+        // get_relevant_memories' scoping arg is ignored — pulled from the whole
+        // corpus (mislabelled as memories, duplicating the RAG block in corpus
+        // mode). Re-enable by uncommenting. $context['memories'] stays an empty
+        // array (see init above), so format_for_prompt skips the section.
+        // if (get_option('wcp_embeddings_enabled', false) && !empty($options['query'])) {
+        //     $memory_manager = WCP_Memory_Manager::instance();
+        //     $context['memories'] = $memory_manager->get_relevant_memories($options['query'], 5);
+        // }
 
         switch ($context_mode) {
             case 'corpus':
