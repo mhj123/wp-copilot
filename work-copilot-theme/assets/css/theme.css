@@ -2960,6 +2960,24 @@ a.wcp-tag:hover {
 
 .wcp-item-ai-proposal { margin-bottom: 6px; line-height: 1.5; }
 
+/* Single item page reuses the item-row AI panel markup/JS, but the article
+   itself isn't a listing row — cancel out the flex/grid row styling and
+   keep the [ai] toggle visible without needing a hover. */
+.wcp-single-item.wcp-item-row {
+    display: block;
+    padding: 0;
+    border-bottom: none;
+}
+
+.wcp-single-item .wcp-item-ai-btn {
+    opacity: 1;
+    font-size: 13px;
+}
+
+.wcp-single-item .wcp-item-ai-panel {
+    margin-top: 15px;
+}
+
 /* Delegation form (inside the AI result area) */
 .wcp-delegation-form .wcp-delegate-instruction {
     width: 100%;

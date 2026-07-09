@@ -523,6 +523,224 @@ body.admin-bar .wcp-ai-widget.minimized {
     border-bottom-left-radius: 4px;
 }
 
+/* Save-as-item affordance under assistant/Hermes messages */
+.wcp-ai-message-assistant {
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.wcp-ai-msgsave {
+    margin-top: 4px;
+    font-size: 11px;
+    width: 100%;
+    align-self: stretch;
+    text-align: right;
+}
+
+.wcp-ai-msgsave-open {
+    color: #888;
+    text-decoration: none;
+    opacity: 0.55;
+    transition: opacity 0.15s ease;
+}
+
+.wcp-ai-message:hover .wcp-ai-msgsave-open {
+    opacity: 1;
+}
+
+.wcp-ai-msgsave-open:hover {
+    color: #0073aa;
+    text-decoration: underline;
+}
+
+.wcp-ai-msgsave-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+    padding: 10px;
+    background: #f6f7f7;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    text-align: left;
+}
+
+/* Mode selector (segmented) */
+.wcp-ai-msgsave-modes {
+    display: flex;
+    gap: 0;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.wcp-ai-msgsave-mode {
+    flex: 1;
+    font-size: 12px;
+    padding: 5px 8px;
+    border: none;
+    border-right: 1px solid #ccc;
+    background: #fff;
+    color: #444;
+    cursor: pointer;
+}
+
+.wcp-ai-msgsave-mode:last-child {
+    border-right: none;
+}
+
+.wcp-ai-msgsave-mode.active {
+    background: #0073aa;
+    color: #fff;
+}
+
+.wcp-ai-msgsave-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #666;
+    margin-bottom: 3px;
+}
+
+.wcp-ai-msgsave-title {
+    font-size: 13px;
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.wcp-ai-msgsave-multinote {
+    font-size: 12px;
+    color: #777;
+    font-style: italic;
+}
+
+/* Categorisation controls */
+.wcp-ai-msgsave-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.wcp-ai-msgsave-grid select,
+.wcp-ai-msgsave-taskfields input,
+.wcp-ai-msgsave-taskfields select,
+.wcp-ai-msgsave-specfields select {
+    font-size: 12px;
+    padding: 3px 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+}
+
+.wcp-ai-msgsave-taskfields,
+.wcp-ai-msgsave-specfields {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.wcp-ai-msgsave-pin {
+    font-size: 12px;
+    color: #444;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+/* Context + tag chip areas */
+.wcp-ai-msgsave-ctx,
+.wcp-ai-msgsave-tags {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.wcp-ai-msgsave-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.wcp-ai-msgsave-chips:empty {
+    display: none;
+}
+
+.wcp-ai-msgsave-chip {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: #e7eef3;
+    color: #24506b;
+    display: inline-flex;
+    align-items: center;
+}
+
+.wcp-ai-msgsave-chip-tag {
+    background: #eae7f3;
+    color: #4b3b6b;
+}
+
+.wcp-ai-msgsave-chip-remove {
+    color: inherit;
+    text-decoration: none;
+    margin-left: 3px;
+    opacity: 0.6;
+}
+
+.wcp-ai-msgsave-chip-remove:hover {
+    opacity: 1;
+}
+
+.wcp-ai-msgsave-ctx-add,
+.wcp-ai-msgsave-tag-input {
+    font-size: 12px;
+    padding: 4px 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    max-width: 220px;
+}
+
+.wcp-ai-msgsave-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.wcp-ai-msgsave-actions button {
+    font-size: 12px;
+    padding: 5px 14px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background: #fff;
+    cursor: pointer;
+}
+
+.wcp-ai-msgsave-actions button.wcp-ai-msgsave-confirm {
+    background: #0073aa;
+    border-color: #0073aa;
+    color: #fff;
+}
+
+.wcp-ai-msgsave-actions button:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.wcp-ai-msgsave-done {
+    font-size: 11px;
+    color: #2e7d32;
+}
+
+.wcp-ai-msgsave-done a {
+    color: #0073aa;
+}
+
 /* Input area */
 .wcp-ai-input-area {
     border-top: 1px solid #e0e0e0;

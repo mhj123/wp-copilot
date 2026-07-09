@@ -187,6 +187,13 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // Save an assistant chat message as an item (learning/info/task/spec/memory)
+        register_rest_route($namespace, '/ai/messages/save-as-item', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'save_message_as_item'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // NEW: Editor expand draft
         register_rest_route($namespace, '/ai/editor/expand', array(
             'methods' => 'POST',
@@ -1952,6 +1959,296 @@ class WCP_REST_API {
             'batch_id' => isset($result['batch_id']) ? $result['batch_id'] : null,
             'message' => isset($result['message']) ? $result['message'] : null
         ));
+    }
+
+    /**
+     * Save an assistant chat message as one or more items
+     *
+     * POST /work-copilot/v1/ai/messages/save-as-item
+     *
+     * AI guardrail note: this is a user-initiated save of AI output already
+     * visible in the chat — the click IS the acceptance, so there is no
+     * proposal round-trip. It is still logged like any AI-derived write.
+     *
+     * Modes:
+     *  - verbatim  : save the message content as-is (one item)
+     *  - summary   : AI condenses the message into one item's content
+     *  - multiple  : AI splits the message into several atomic items
+     *
+     * All categorisation (type, priority, task/spec status, due date, pinned,
+     * contexts, tags) is applied to the created item(s), mirroring create_item.
+     *
+     * @param WP_REST_Request $request Request object
+     * @return WP_REST_Response|WP_Error Response with created item(s)
+     */
+    public function save_message_as_item($request) {
+        $mode            = sanitize_key($request->get_param('mode')) ?: 'verbatim';
+        $title           = sanitize_text_field((string) $request->get_param('title'));
+        $content         = wp_kses_post((string) $request->get_param('content'));
+        $item_type       = sanitize_key($request->get_param('item_type'));
+        $page_id         = intval($request->get_param('page_id'));
+        $conversation_id = sanitize_text_field((string) $request->get_param('conversation_id'));
+
+        if (trim($content) === '') {
+            return new WP_Error('missing_fields', 'Message content is required', array('status' => 400));
+        }
+        if (!in_array($mode, array('verbatim', 'summary', 'multiple'), true)) {
+            $mode = 'verbatim';
+        }
+
+        // No default type — an unset/invalid type means the item carries no type term
+        $valid_types = array('task', 'info', 'learning', 'spec', 'memory');
+        if (!in_array($item_type, $valid_types, true)) {
+            $item_type = '';
+        }
+
+        // Shared categorisation applied to every created item
+        $priority    = sanitize_key((string) $request->get_param('priority'));
+        $task_status = sanitize_title((string) $request->get_param('task_status'));
+        $spec_status = sanitize_key((string) $request->get_param('spec_status'));
+        $due_date    = sanitize_text_field((string) $request->get_param('due_date'));
+        $pinned      = $request->get_param('pinned') ? true : false;
+
+        $context_ids = (array) $request->get_param('context_ids');
+        $context_ids = array_values(array_filter(array_map('intval', $context_ids)));
+        if (empty($context_ids)) {
+            // Default to the page the chat is scoped to
+            $default_term = $page_id ? $this->resolve_page_term($page_id) : 0;
+            if ($default_term) {
+                $context_ids = array($default_term);
+            }
+        }
+
+        $tags = $request->get_param('tags');
+        if (is_string($tags)) {
+            $tags = array_map('trim', explode(',', $tags));
+        }
+        $tags = array_values(array_filter(array_map('sanitize_text_field', (array) $tags)));
+
+        $shared = compact('priority', 'task_status', 'spec_status', 'due_date', 'pinned', 'context_ids', 'tags', 'conversation_id');
+
+        // Build the list of {title, content, item_type} to create
+        $to_create = array();
+
+        // For AI-backed modes, pick a valid model. The site default option can
+        // hold a stale/deprecated id, so fall back to a current model rather
+        // than letting set_overrides silently revert to it.
+        if ($mode === 'summary' || $mode === 'multiple') {
+            $allowed  = array('claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-8');
+            $req_model = sanitize_text_field((string) $request->get_param('model'));
+            $use_model = in_array($req_model, $allowed, true) ? $req_model : 'claude-sonnet-4-6';
+            WCP_AI_Client::instance()->set_overrides($use_model, 0);
+        }
+
+        if ($mode === 'multiple') {
+            $ai = WCP_AI_Client::instance();
+            $sys = "Split the assistant message below into atomic knowledge/work items — one single idea, task, or fact each. "
+                 . "Prefer 2–6 items; never invent content not present in the message. "
+                 . "Return ONLY a JSON array, no prose: "
+                 . '[{"title":"short title","content":"the item body","item_type":"task|info|learning|spec"}].';
+            $resp = $ai->request_with_conversation($sys, $content, array(), 2048, 60);
+            if (is_wp_error($resp)) {
+                return $resp;
+            }
+            $items = $this->decode_ai_json($resp['content']);
+            if (!is_array($items) || empty($items)) {
+                return new WP_Error('parse_error', 'Could not split the message into items', array('status' => 500));
+            }
+            foreach ($items as $it) {
+                if (empty($it['title'])) { continue; }
+                $t = isset($it['item_type']) ? sanitize_key($it['item_type']) : $item_type;
+                if (!in_array($t, array('task', 'info', 'learning', 'spec'), true)) {
+                    // Fall back to the form's type when valid, otherwise leave untyped
+                    $t = in_array($item_type, array('task', 'info', 'learning', 'spec'), true) ? $item_type : '';
+                }
+                $to_create[] = array(
+                    'title'     => sanitize_text_field($it['title']),
+                    'content'   => wp_kses_post(isset($it['content']) ? $it['content'] : ''),
+                    'item_type' => $t,
+                );
+            }
+        } elseif ($mode === 'summary') {
+            $ai = WCP_AI_Client::instance();
+            $sys = "Condense the assistant message below into a single atomic item. "
+                 . "Return ONLY a JSON object, no prose: "
+                 . '{"title":"short descriptive title","content":"a concise summary (1–4 sentences)"}.';
+            $resp = $ai->request_with_conversation($sys, $content, array(), 1024, 60);
+            if (is_wp_error($resp)) {
+                return $resp;
+            }
+            $obj = $this->decode_ai_json($resp['content']);
+            if (!is_array($obj) || empty($obj)) {
+                return new WP_Error('parse_error', 'Could not summarise the message', array('status' => 500));
+            }
+            // Respect a user-supplied title; otherwise use the AI's
+            $final_title = $title !== '' ? $title : sanitize_text_field($obj['title'] ?? '');
+            $to_create[] = array(
+                'title'     => $final_title,
+                'content'   => wp_kses_post($obj['content'] ?? ''),
+                'item_type' => $item_type,
+            );
+        } else { // verbatim
+            if ($title === '') {
+                return new WP_Error('missing_fields', 'A title is required', array('status' => 400));
+            }
+            $to_create[] = array(
+                'title'     => $title,
+                'content'   => $content,
+                'item_type' => $item_type,
+            );
+        }
+
+        if (empty($to_create)) {
+            return new WP_Error('nothing_to_save', 'No items were produced to save', array('status' => 400));
+        }
+
+        // Create each item, collecting results
+        $created = array();
+        foreach ($to_create as $spec) {
+            $post_id = $this->create_saved_item($spec, $shared);
+            if (is_wp_error($post_id)) {
+                continue;
+            }
+            $created[] = array(
+                'post_id'   => $post_id,
+                'title'     => $spec['title'],
+                'item_type' => $spec['item_type'],
+                'view_url'  => get_permalink($post_id),
+            );
+            do_action('wcp_message_saved_as_item', $post_id, $spec['item_type'], $conversation_id, $page_id);
+        }
+
+        if (empty($created)) {
+            return new WP_Error('save_failed', 'Failed to create any items', array('status' => 500));
+        }
+
+        // One log entry for the whole save action
+        $logger    = WCP_AI_Logger::instance();
+        $action_id = $logger->log_action('save_message_as_item', array(
+            'prompt'          => 'Save assistant message (' . $mode . ')',
+            'input_context'   => array('conversation_id' => $conversation_id, 'mode' => $mode),
+            'output'          => $created,
+            'context_post_id' => $page_id,
+        ));
+        $logger->log_decisions($action_id, wp_list_pluck($created, 'post_id'));
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'mode'    => $mode,
+            'count'   => count($created),
+            'created' => $created,
+            // Back-compat single-item fields
+            'post_id'   => $created[0]['post_id'],
+            'item_type' => $created[0]['item_type'],
+            'view_url'  => $created[0]['view_url'],
+        ));
+    }
+
+    /**
+     * Decode a JSON payload from an AI response, tolerating ```json fences
+     * and surrounding prose.
+     *
+     * @param string $raw
+     * @return array|null Decoded array, or null if nothing parseable
+     */
+    private function decode_ai_json($raw) {
+        $raw = trim((string) $raw);
+        // Strip code fences
+        $raw = preg_replace('/^```(?:json)?\s*/i', '', $raw);
+        $raw = preg_replace('/\s*```$/', '', $raw);
+        $decoded = json_decode($raw, true);
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+        // Fall back to the first {...} or [...] span
+        if (preg_match('/(\[.*\]|\{.*\})/s', $raw, $m)) {
+            $decoded = json_decode($m[1], true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Create one saved item and apply all categorisation.
+     * Shared by the save-as-item modes. Mirrors create_item's taxonomy handling.
+     *
+     * @param array $spec   { title, content, item_type }
+     * @param array $shared { priority, task_status, spec_status, due_date, pinned, context_ids, tags, conversation_id }
+     * @return int|WP_Error  Created post ID
+     */
+    private function create_saved_item($spec, $shared) {
+        $item_type = $spec['item_type'];
+
+        // Memory type routes through the memory manager so it lands under the
+        // Memories page; the free-form categorisation below does not apply.
+        if ($item_type === 'memory') {
+            $post_id = WCP_Memory_Manager::instance()->save_memory(array(
+                'title'      => $spec['title'],
+                'content'    => $spec['content'],
+                'type'       => 'user_saved',
+                'confidence' => 100,
+            ), !empty($shared['conversation_id']) ? $shared['conversation_id'] : null);
+            if (is_wp_error($post_id)) {
+                return $post_id;
+            }
+            update_post_meta($post_id, '_wcp_memory_source', 'user_saved');
+            if (!empty($shared['conversation_id'])) {
+                update_post_meta($post_id, '_wcp_source_conversation_id', $shared['conversation_id']);
+            }
+            return $post_id;
+        }
+
+        $post_id = wp_insert_post(array(
+            'post_type'    => 'post',
+            'post_title'   => $spec['title'],
+            'post_content' => $spec['content'],
+            'post_status'  => 'publish',
+            'post_author'  => get_current_user_id(),
+        ), true);
+        if (is_wp_error($post_id)) {
+            return $post_id;
+        }
+
+        WCP_Post_Types::mark_creator($post_id, 'copilot');
+        if ($item_type !== '') {
+            wp_set_post_terms($post_id, array($item_type), 'item_type');
+        }
+
+        // Status taxonomies: explicit value wins, else sensible default per type
+        if ($item_type === 'task') {
+            $status = in_array($shared['task_status'], array('to-do', 'in-progress', 'done'), true) ? $shared['task_status'] : 'to-do';
+            wp_set_post_terms($post_id, array($status), 'task_status');
+            if (!empty($shared['due_date'])) {
+                update_post_meta($post_id, '_wcp_due_date', $shared['due_date']);
+            }
+        } elseif ($item_type === 'spec') {
+            $status = in_array($shared['spec_status'], array('draft', 'review', 'final'), true) ? $shared['spec_status'] : 'draft';
+            wp_set_post_terms($post_id, array($status), 'spec_status');
+        }
+
+        if (in_array($shared['priority'], array('critical', 'high', 'medium', 'low'), true)) {
+            wp_set_post_terms($post_id, array($shared['priority']), 'priority');
+        }
+        if (!empty($shared['pinned'])) {
+            wp_set_post_terms($post_id, array('yes'), 'pinned');
+        }
+        if (!empty($shared['context_ids'])) {
+            wp_set_post_terms($post_id, array_map('intval', $shared['context_ids']), 'wcp_context');
+        }
+        if (!empty($shared['tags'])) {
+            wp_set_post_terms($post_id, $shared['tags'], 'post_tag');
+        }
+        if (!empty($shared['conversation_id'])) {
+            update_post_meta($post_id, '_wcp_source_conversation_id', $shared['conversation_id']);
+        }
+
+        if (get_option('wcp_embeddings_enabled', false)) {
+            WCP_Embeddings_Manager::instance()->generate_embedding($post_id);
+        }
+
+        return $post_id;
     }
 
     /**

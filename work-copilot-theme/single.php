@@ -22,7 +22,18 @@ get_header();
             $tags = wp_get_post_tags(get_the_ID(), array('fields' => 'names'));
         ?>
 
-        <article id="post-<?php the_ID(); ?>" <?php post_class('wcp-single-item'); ?>>
+        <?php
+        // Primary context page (used for "Back to Page" and as the page context
+        // for item-level AI actions such as "Convert to goal").
+        $primary_page_id = 0;
+        if (!empty($contexts)) {
+            $context_terms = wp_get_post_terms(get_the_ID(), 'wcp_context');
+            if (!empty($context_terms)) {
+                $primary_page_id = (int) get_term_meta($context_terms[0]->term_id, 'wcp_ref_id', true);
+            }
+        }
+        ?>
+        <article id="post-<?php the_ID(); ?>" <?php post_class('wcp-single-item wcp-item-row'); ?> data-tags="<?php echo esc_attr(implode(',', $tags)); ?>">
             <header class="wcp-item-header">
                 <?php
                 // Display breadcrumbs
@@ -98,8 +109,9 @@ get_header();
                 <?php
                 // Get edit link - pass post ID explicitly
                 $edit_link = get_edit_post_link(get_the_ID());
+                $can_edit  = current_user_can('edit_post', get_the_ID());
 
-                if ($edit_link && current_user_can('edit_post', get_the_ID())) :
+                if ($edit_link && $can_edit) :
                 ?>
                     <a href="<?php echo esc_url($edit_link); ?>" class="wcp-btn wcp-btn-secondary">
                         Edit Item
@@ -113,21 +125,40 @@ get_header();
                 <?php endif; ?>
 
                 <?php
-                // Get the context page to link back
-                if (!empty($contexts)) {
-                    $context_terms = wp_get_post_terms(get_the_ID(), 'wcp_context');
-                    if (!empty($context_terms)) {
-                        $ref_id = get_term_meta($context_terms[0]->term_id, 'wcp_ref_id', true);
-                        if ($ref_id) {
-                            $page_url = get_permalink($ref_id);
-                            if ($page_url) {
-                                echo '<a href="' . esc_url($page_url) . '" class="wcp-btn wcp-btn-secondary">Back to Page</a>';
-                            }
-                        }
+                // Link back to the primary context page, if any
+                if ($primary_page_id) {
+                    $page_url = get_permalink($primary_page_id);
+                    if ($page_url) {
+                        echo '<a href="' . esc_url($page_url) . '" class="wcp-btn wcp-btn-secondary">Back to Page</a>';
                     }
                 }
                 ?>
+
+                <?php if ($can_edit) : ?>
+                    <button type="button" class="wcp-btn wcp-btn-secondary wcp-item-ai-btn" data-item-id="<?php the_ID(); ?>">
+                        AI Actions
+                    </button>
+                <?php endif; ?>
             </div>
+
+            <?php if ($can_edit) : ?>
+            <input type="hidden" name="page_id" value="<?php echo esc_attr($primary_page_id); ?>">
+            <div class="wcp-item-ai-panel" data-item-id="<?php the_ID(); ?>" style="display:none;">
+                <div class="wcp-item-ai-chips">
+                    <button type="button" class="wcp-item-ai-chip" data-action="action_plan">Action plan</button>
+                    <button type="button" class="wcp-item-ai-chip" data-action="action_plan_from_context">Action plan from context</button>
+                    <button type="button" class="wcp-item-ai-chip" data-action="improve_phrasing">Improve phrasing</button>
+                    <button type="button" class="wcp-item-ai-chip" data-action="freeform">Freeform…</button>
+                    <button type="button" class="wcp-item-ai-chip" data-action="suggest_subtasks">Add subtasks</button>
+                    <button type="button" class="wcp-item-ai-chip" data-action="suggest_contexts">Auto-associate</button>
+                    <button type="button" class="wcp-item-ai-chip" data-action="to_goal">Convert to goal</button>
+                    <?php if (class_exists('WCPD_Delegation_Manager') && get_option('wcpd_enabled') === '1') : ?>
+                    <button type="button" class="wcp-item-ai-chip" data-action="delegate">Delegate</button>
+                    <?php endif; ?>
+                </div>
+                <div class="wcp-item-ai-result" style="display:none;"></div>
+            </div>
+            <?php endif; ?>
         </article>
 
         <?php endwhile; ?>
