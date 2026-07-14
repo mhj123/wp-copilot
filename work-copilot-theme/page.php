@@ -93,7 +93,29 @@ get_header();
             <button type="button" class="wcp-toggle-descriptions wcp-edit-link" title="Toggle descriptions">descriptions</button>
             <button type="button" class="wcp-toggle-actions wcp-edit-link" title="Toggle item actions">actions</button>
             <button type="button" id="wcp-select-mode-btn" class="wcp-edit-link" data-page-id="<?php echo esc_attr($page_id); ?>">select</button>
+            <?php if (get_option('wcp_ai_enabled', false)) : ?>
+            <button type="button" id="wcp-page-ai-btn" class="wcp-edit-link" title="AI actions">[ai]</button>
+            <?php endif; ?>
         </div>
+
+        <?php if (get_option('wcp_ai_enabled', false)) : ?>
+        <!-- Page-level AI actions: rolls down a strip of chips, each expanding
+             a prompt field (mirrors the item-level AI panel). Runs through the
+             AI Assistant chat widget so proposals go through the same
+             review/accept flow as everywhere else. -->
+        <div id="wcp-page-ai-panel" class="wcp-page-ai-panel" style="display:none;" data-page-id="<?php echo esc_attr($page_id); ?>">
+            <div class="wcp-page-ai-chips">
+                <button type="button" class="wcp-page-ai-chip" data-action="generate_structure">Generate structure</button>
+            </div>
+            <form class="wcp-page-ai-prompt-form" style="display:none;">
+                <textarea class="wcp-page-ai-prompt-input wcp-form-control" rows="3" placeholder="Describe the headings and items to generate…"></textarea>
+                <div class="wcp-page-ai-prompt-actions">
+                    <button type="submit" class="wcp-btn wcp-btn-primary wcp-btn-sm">Generate</button>
+                    <button type="button" class="wcp-page-ai-prompt-cancel wcp-edit-link">cancel</button>
+                </div>
+            </form>
+        </div>
+        <?php endif; ?>
 
         <?php
         $page_context_term = wcp_theme_get_page_context_term($page_id);

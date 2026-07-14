@@ -1062,6 +1062,56 @@ jQuery(document).ready(function($) {
         }
     });
 
+    // Page-level AI actions — toggle the chip strip
+    $(document).on('click', '#wcp-page-ai-btn', function() {
+        $('#wcp-page-ai-panel').slideToggle(150);
+    });
+
+    // Chip click reveals a prompt textarea for that action (mirrors the
+    // item-level AI panel's "Freeform" reveal).
+    $(document).on('click', '.wcp-page-ai-chip', function() {
+        var $chip  = $(this);
+        var $panel = $chip.closest('.wcp-page-ai-panel');
+        var $form  = $panel.find('.wcp-page-ai-prompt-form');
+
+        $panel.find('.wcp-page-ai-chip').removeClass('active');
+        $chip.addClass('active');
+        $form.data('action', $chip.data('action')).show();
+        $form.find('.wcp-page-ai-prompt-input').focus();
+    });
+
+    $(document).on('click', '.wcp-page-ai-prompt-cancel', function() {
+        var $panel = $(this).closest('.wcp-page-ai-panel');
+        $panel.find('.wcp-page-ai-prompt-form').hide().find('.wcp-page-ai-prompt-input').val('');
+        $panel.find('.wcp-page-ai-chip').removeClass('active');
+    });
+
+    // Hand off to the AI Assistant chat widget: it already owns the
+    // request/proposal-review pipeline (conversation, approval panel,
+    // accept/dismiss) for every other AI action, so page-level actions
+    // reuse it rather than duplicating that logic here.
+    $(document).on('submit', '.wcp-page-ai-prompt-form', function(e) {
+        e.preventDefault();
+        var $form  = $(this);
+        var action = $form.data('action');
+        var prompt = $form.find('.wcp-page-ai-prompt-input').val().trim();
+        if (!prompt || !action) { return; }
+
+        if (!window.WcpAIWidget) {
+            alert('AI assistant is not available on this page.');
+            return;
+        }
+
+        window.WcpAIWidget.currentAction = action;
+        window.WcpAIWidget.openWidget();
+        $('#wcp-ai-prompt').val(prompt);
+        window.WcpAIWidget.sendMessage();
+
+        $form.hide().find('.wcp-page-ai-prompt-input').val('');
+        $('.wcp-page-ai-chip').removeClass('active');
+        $('#wcp-page-ai-panel').slideUp(150);
+    });
+
     $(document).on('change', '.wcp-item-select-cb', function() {
         var checked = $('.wcp-item-select-cb:checked');
         var n = checked.length;

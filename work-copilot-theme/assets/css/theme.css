@@ -3464,3 +3464,55 @@ a.wcp-tag:hover {
 .wcp-item-row.wcp-desc-closed .wcp-item-description {
     display: none !important;
 }
+
+/* ==================================================================
+   Page-level AI actions — chip strip below the items toolbar.
+   Mirrors the item-level AI panel/chip/freeform-textarea look.
+   ================================================================== */
+
+.wcp-page-ai-panel {
+    margin: 8px 0 16px;
+    padding: 8px 10px;
+    background: #f0f4ff;
+    border-radius: 4px;
+    border: 1px solid #d8e4ff;
+    font-size: 12px;
+}
+
+.wcp-page-ai-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.wcp-page-ai-chip {
+    padding: 3px 10px;
+    background: #fff;
+    border: 1px solid #c0d0ff;
+    border-radius: 12px;
+    font-size: 11px;
+    color: #3355cc;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.wcp-page-ai-chip:hover { background: #e8eeff; }
+.wcp-page-ai-chip.active { background: #3355cc; color: #fff; border-color: #3355cc; }
+
+.wcp-page-ai-prompt-form {
+    margin-top: 8px;
+}
+
+.wcp-page-ai-prompt-input {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    font-size: 13px;
+}
+
+.wcp-page-ai-prompt-actions {
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
