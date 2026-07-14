@@ -947,7 +947,12 @@ class WCP_AI_Actions {
             'include_items' => true,
             'item_limit'    => 25,
         ) );
-        $context_data['pages'] = array(); // pages already covered by snapshot above
+        // Ancestor page titles/hierarchy are already covered by the snapshot above,
+        // but ancestor CONTENT isn't — and neither is the current page's own content,
+        // which the snapshot never carried. Keep just the current page's content.
+        $context_data['pages'] = array_values(array_filter($context_data['pages'], function($p) use ($page_id) {
+            return isset($p['id']) && (int) $p['id'] === (int) $page_id;
+        }));
         $items_context = $context_builder->format_for_prompt( $context_data );
 
         $prompt_builder = WCP_Prompt_Builder::instance();

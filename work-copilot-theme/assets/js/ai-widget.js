@@ -1656,6 +1656,12 @@
         }
     };
 
+    // Exposed so other scripts (e.g. the page-level "AI actions" panel in
+    // theme.js) can drive the widget — set an action, open it, and send a
+    // prompt through the same conversation/approval pipeline — instead of
+    // duplicating the request + proposal-rendering logic.
+    window.WcpAIWidget = AIWidget;
+
     // Initialize on document ready
     $(document).ready(() => {
         AIWidget.init();
