@@ -415,6 +415,14 @@ jQuery(document).ready(function($) {
         $('.wcp-items-section').toggleClass('wcp-show-descriptions', !showing);
     });
 
+    // Per-item description toggle — overrides the section-level toggle
+    // in both directions (wcp-desc-open / wcp-desc-closed classes).
+    $(document).on('click', '.wcp-desc-toggle', function() {
+        var $row = $(this).closest('.wcp-item-row');
+        var visible = $row.children('.wcp-item-description').is(':visible');
+        $row.toggleClass('wcp-desc-open', !visible).toggleClass('wcp-desc-closed', visible);
+    });
+
     // Actions toggle — hide non-essential row controls
     var actionsHidden = localStorage.getItem('wcp_actions_hidden') === '1';
     if (actionsHidden) {
@@ -910,10 +918,20 @@ jQuery(document).ready(function($) {
         var $checkbox = $row.find('.wcp-task-checkbox');
         var $dueDate = $row.find('.wcp-due-date-input');
         $row.data('item-type', type);
+        // Also stamp the DOM attribute: the atomic-type CSS (hide pin/prio/
+        // subtask, hover-reveal actions) matches on [data-item-type], which
+        // jQuery's .data() cache alone doesn't update.
+        $row.attr('data-item-type', type);
+        // Use .css('display', ...) rather than .show()/.hide(): jQuery's
+        // show/hide set an explicit inline display value even when
+        // "showing", which would permanently stick and override the
+        // hover-reveal CSS for this control from then on. An empty string
+        // clears the inline style so the stylesheet (hover-to-reveal)
+        // governs again, matching how the server-rendered markup behaves.
         if (type === 'task') {
-            $statusSelect.show();
+            $statusSelect.css('display', '');
             $checkbox.show();
-            $dueDate.show();
+            $dueDate.css('display', '');
             // Default status to 'to-do' if not already set
             if (!$statusSelect.val()) {
                 $statusSelect.val('to-do');
@@ -921,15 +939,15 @@ jQuery(document).ready(function($) {
                 updateItem(itemId, { task_status: 'to-do' });
             }
         } else {
-            $statusSelect.hide().val('');
+            $statusSelect.css('display', 'none').val('');
             $checkbox.hide().prop('checked', false);
-            $dueDate.hide().val('');
+            $dueDate.css('display', 'none').val('');
             $row.removeClass('wcp-task-done');
             $row.data('task-status', '').data('due-date', '');
             updateItem(itemId, { task_status: '', due_date: '' });
         }
         if (type === 'spec') {
-            $specStatusSelect.show();
+            $specStatusSelect.css('display', '');
             // Default spec status to 'draft' if not already set
             if (!$specStatusSelect.val()) {
                 $specStatusSelect.val('draft');
@@ -937,7 +955,7 @@ jQuery(document).ready(function($) {
                 updateItem(itemId, { spec_status: 'draft' });
             }
         } else {
-            $specStatusSelect.hide().val('');
+            $specStatusSelect.css('display', 'none').val('');
             $row.data('spec-status', '');
             updateItem(itemId, { spec_status: '' });
         }

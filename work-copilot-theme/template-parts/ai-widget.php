@@ -110,6 +110,7 @@ if (empty($saved_prompts)) {
             <button type="button" class="wcp-ai-action-chip" data-action="create_goal"><?php _e('Create goal', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="rewrite_content"><?php _e('Edit page', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="append_content"><?php _e('Append to page', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip" data-action="edit_items"><?php _e('Edit items', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="fetch_posts"><?php _e('Fetch posts', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="fetch_structure"><?php _e('Fetch structure', 'work-copilot'); ?></button>
             <?php if (class_exists('WCPD_Delegation_Manager') && get_option('wcpd_enabled') === '1') : ?>
@@ -167,8 +168,8 @@ if (empty($saved_prompts)) {
         <!-- Approval panel (shown when proposals need approval) -->
         <div class="wcp-ai-approval-panel" style="display: none;">
             <div class="wcp-ai-approval-header">
-                <h4><?php _e('Review AI Suggestions', 'work-copilot'); ?></h4>
-                <p class="description"><?php _e('Select the items you want to create, then click Create Selected.', 'work-copilot'); ?></p>
+                <h4 class="wcp-ai-approval-title"><?php _e('Review AI Suggestions', 'work-copilot'); ?></h4>
+                <p class="description wcp-ai-approval-description"><?php _e('Select the items you want to create, then click Create Selected.', 'work-copilot'); ?></p>
             </div>
             <div class="wcp-ai-proposals">
                 <!-- Proposals will be inserted here by JavaScript -->
@@ -185,7 +186,7 @@ if (empty($saved_prompts)) {
             </div>
             <div class="wcp-ai-approval-actions">
                 <button type="button" class="wcp-ai-accept-btn button button-primary">
-                    <?php _e('Create Selected', 'work-copilot'); ?> (<span class="wcp-ai-selected-count">0</span>)
+                    <span class="wcp-ai-accept-label"><?php _e('Create Selected', 'work-copilot'); ?></span> (<span class="wcp-ai-selected-count">0</span>)
                 </button>
                 <button type="button" class="wcp-ai-dismiss-btn button">
                     <?php _e('Dismiss All', 'work-copilot'); ?>

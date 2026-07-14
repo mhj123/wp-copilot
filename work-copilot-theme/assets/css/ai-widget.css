@@ -990,6 +990,26 @@ body.admin-bar .wcp-ai-widget.minimized {
     color: #666;
 }
 
+/* Edit-item proposals: before/after diff view */
+.wcp-ai-proposal-diff {
+    margin: 0 0 10px 0;
+}
+
+.wcp-ai-proposal-diff h5 {
+    margin: 2px 0 0 0;
+}
+
+.wcp-ai-proposal-old {
+    display: block;
+    font-size: 13px;
+    color: #999;
+    text-decoration: line-through;
+}
+
+.wcp-ai-proposal-content.wcp-ai-proposal-old {
+    margin-bottom: 4px;
+}
+
 /* Memory proposal specific styles */
 .wcp-memory-proposal {
     border-left: 3px solid #9b59b6;

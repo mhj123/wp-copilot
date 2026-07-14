@@ -773,6 +773,158 @@ class WCP_AI_Actions {
     }
 
     /**
+     * Propose edits to the title/description of one or more existing items.
+     * The model is shown candidate items with their IDs (context prompts
+     * elsewhere don't expose IDs, so this builds its own listing) and must
+     * reference one of those IDs for each edit — anything else is discarded
+     * rather than guessed at.
+     * AI guardrail: proposals only; execute_proposal() applies the edit only
+     * once the user accepts it.
+     */
+    public function edit_items($prompt, $page_id, $context_mode = 'page', $selected_pages = array(), $conversation_id = null) {
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new WP_Error('auth_error', 'User not authenticated');
+        }
+
+        $context_builder = WCP_Context_Builder::instance();
+        $context_data = $context_builder->build_context_by_mode($page_id, $context_mode, array(
+            'selected_pages' => $selected_pages,
+            'query' => $prompt,
+            'include_items' => true,
+            'item_limit' => 40,
+        ));
+
+        $candidate_items = $context_data['items'] ?? array();
+        if (empty($candidate_items)) {
+            return new WP_Error('no_items', 'No items found in this context to edit');
+        }
+
+        $by_id = array();
+        $items_listing = '';
+        foreach ($candidate_items as $it) {
+            $by_id[(int) $it['id']] = $it;
+            $content = wp_strip_all_tags($it['content'] ?? '');
+            if (strlen($content) > 500) {
+                $content = substr($content, 0, 500) . '…';
+            }
+            $items_listing .= "ID {$it['id']}: \"{$it['title']}\" — " . ($content !== '' ? $content : '(no description)') . "\n";
+        }
+
+        $sys = "You are helping the user edit the title and/or description of one or more existing items. "
+             . "Below is a list of candidate items, each with its ID, current title, and current description. "
+             . "Decide which item(s) the user's instruction refers to and propose a new title and description for "
+             . "each. Only include items the instruction clearly refers to — do not touch items it doesn't mention. "
+             . "Return ONLY a JSON array: [{\"id\": <item id, must match one from the list>, \"title\": \"...\", "
+             . "\"content\": \"...\"}, ...]. Use the item's existing title/description for whichever of the two "
+             . "the instruction doesn't ask you to change. Content may be an empty string if the item should end up "
+             . "with no description.";
+        $usr = "User instruction: {$prompt}\n\nCandidate items:\n{$items_listing}";
+
+        $conversation_history = array();
+        if ($conversation_id) {
+            $conversations_manager = WCP_Conversations_Manager::instance();
+            $messages = $conversations_manager->get_messages($conversation_id, 10);
+            foreach ($messages as $msg) {
+                $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
+            }
+        }
+
+        $ai_client = WCP_AI_Client::instance();
+        $response = $ai_client->request_with_conversation($sys, $usr, $conversation_history, 2048, 90);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        if ($conversation_id) {
+            $conversations_manager = WCP_Conversations_Manager::instance();
+            $conversations_manager->add_message($conversation_id, 'user', $prompt);
+        }
+
+        $parsed = $this->parse_json_response($response['content']);
+        if (is_wp_error($parsed)) {
+            return $parsed;
+        }
+        if (isset($parsed['id'])) {
+            $parsed = array($parsed);
+        }
+        if (empty($parsed) || !is_array($parsed)) {
+            return new WP_Error('invalid_response', 'AI did not propose any edits');
+        }
+
+        $proposals = array();
+        $batch_id  = wp_generate_uuid4();
+
+        foreach ($parsed as $index => $edit) {
+            $item_id = isset($edit['id']) ? (int) $edit['id'] : 0;
+            if (!$item_id || !isset($by_id[$item_id])) {
+                continue; // AI referenced something outside the candidate set — skip, don't guess
+            }
+            $original = $by_id[$item_id];
+
+            $proposal_id = wp_generate_uuid4();
+            $proposal = array(
+                'proposal_id'     => $proposal_id,
+                'batch_id'        => $batch_id,
+                'index'           => $index,
+                'action_type'     => 'edit_item',
+                'item_id'         => $item_id,
+                'original'        => array('title' => $original['title'], 'content' => $original['content']),
+                'item'            => array(
+                    'title'   => isset($edit['title']) ? $edit['title'] : $original['title'],
+                    'content' => isset($edit['content']) ? $edit['content'] : $original['content'],
+                ),
+                'conversation_id' => $conversation_id,
+                'page_id'         => $page_id,
+                'created_at'      => current_time('mysql'),
+            );
+
+            set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
+            $proposals[] = $proposal;
+        }
+
+        if (empty($proposals)) {
+            return new WP_Error('no_matching_items', 'Could not match the AI’s response to any item in this context');
+        }
+
+        set_transient('wcp_batch_' . $batch_id, array(
+            'proposal_ids'    => array_column($proposals, 'proposal_id'),
+            'page_id'         => $page_id,
+            'conversation_id' => $conversation_id,
+        ), HOUR_IN_SECONDS);
+
+        if ($conversation_id) {
+            $conversations_manager = WCP_Conversations_Manager::instance();
+            $count = count($proposals);
+            $conversations_manager->add_message($conversation_id, 'assistant',
+                "Proposed edits to {$count} item(s) for your review",
+                array('batch_id' => $batch_id)
+            );
+        }
+
+        $logger = WCP_AI_Logger::instance();
+        $logger->log_action(array(
+            'action_type'     => 'edit_items',
+            'user_id'         => $user_id,
+            'model'           => $response['model'],
+            'prompt'          => $prompt,
+            'input_context'   => json_encode(array('context_mode' => $context_mode, 'page_id' => $page_id)),
+            'output_snapshot' => json_encode($parsed),
+            'context_post_id' => $page_id,
+            'accepted_items'  => array(),
+            'dismissed_items' => array(),
+        ));
+
+        return array(
+            'outcome'   => 'edit_items',
+            'proposals' => $proposals,
+            'batch_id'  => $batch_id,
+            'metadata'  => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null),
+        );
+    }
+
+    /**
      * Structure-aware generation: the model sees the current page's existing
      * headings (with ids) and items, and proposes new headings and/or items
      * placed under new headings, existing headings, or page level. Combines the
@@ -1240,6 +1392,37 @@ class WCP_AI_Actions {
                 'created_posts' => array($new_page_id),
                 'message'       => 'Page created successfully',
                 'debug'         => array('page_id' => $new_page_id, 'parent_id' => $page_id),
+            );
+        }
+
+        // Handle item edit proposals — updates an existing post rather than
+        // creating one. AI guardrail: only reached once the user accepts.
+        if (isset($proposal['action_type']) && $proposal['action_type'] === 'edit_item') {
+            $item_id = (int) ($proposal['item_id'] ?? 0);
+            $new     = isset($proposal['item']) ? $proposal['item'] : array();
+
+            if (!$item_id || get_post_type($item_id) !== 'post') {
+                return new WP_Error('invalid_proposal', 'Edit proposal refers to a missing item');
+            }
+
+            $update = array(
+                'ID'           => $item_id,
+                'post_title'   => sanitize_text_field($new['title'] ?? get_the_title($item_id)),
+                'post_content' => wp_kses_post($new['content'] ?? ''),
+            );
+
+            $updated = wp_update_post($update, true);
+            if (is_wp_error($updated)) {
+                return $updated;
+            }
+
+            delete_transient('wcp_proposal_' . $proposal_id);
+
+            return array(
+                'created_posts' => array(),
+                'updated_posts' => array($item_id),
+                'message'       => 'Item updated successfully',
+                'debug'         => array('item_id' => $item_id),
             );
         }
 

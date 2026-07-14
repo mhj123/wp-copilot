@@ -1025,6 +1025,9 @@
             } else if (result.outcome === 'create_items') {
                 this.currentBatchId = result.batch_id || null;
                 this.showProposals(result.proposals);
+            } else if (result.outcome === 'edit_items') {
+                this.currentBatchId = result.batch_id || null;
+                this.showEditProposals(result.proposals);
             } else if (result.outcome === 'create_structure') {
                 this.currentBatchId = result.batch_id || null;
                 this.showStructureProposal(result.plan || {});
@@ -1087,9 +1090,14 @@
             }
 
             this.currentProposals = proposals;
+            this.proposalMode = 'create';
             const $container = $('.wcp-ai-proposals');
             console.log('Proposal container found:', $container.length > 0);
             $container.empty();
+
+            $('.wcp-ai-approval-title').text('Review AI Suggestions');
+            $('.wcp-ai-approval-description').text('Select the items you want to create, then click Create Selected.');
+            $('.wcp-ai-accept-label').text('Create Selected');
 
             proposals.forEach((proposal, index) => {
                 const item = proposal.item;
@@ -1125,6 +1133,77 @@
             // Append system message
             const itemWord = proposals.length === 1 ? 'item' : 'items';
             this.appendMessage('assistant', `I've generated ${proposals.length} ${itemWord} for your review. Select the ones you want to create.`);
+        },
+
+        /**
+         * Show proposed title/description edits to existing items for
+         * approval (supports multiple). Mirrors showProposals() but renders
+         * a before/after diff and reuses the same approval panel, checkbox
+         * markup, and accept/dismiss wiring — only the labels differ.
+         */
+        showEditProposals: function(proposals) {
+            if (!proposals || proposals.length === 0) {
+                return;
+            }
+
+            this.currentProposals = proposals;
+            this.proposalMode = 'edit';
+            const $container = $('.wcp-ai-proposals');
+            $container.empty();
+
+            $('.wcp-ai-approval-title').text('Review Proposed Edits');
+            $('.wcp-ai-approval-description').text('Select the edits you want to apply, then click Apply Selected.');
+            $('.wcp-ai-accept-label').text('Apply Selected');
+
+            proposals.forEach((proposal) => {
+                const orig = proposal.original || {};
+                const next = proposal.item || {};
+                const titleChanged = orig.title !== next.title;
+                const contentChanged = (orig.content || '') !== (next.content || '');
+
+                const $proposalCard = $('<div>')
+                    .addClass('wcp-ai-proposal-card selected')
+                    .attr('data-proposal-id', proposal.proposal_id)
+                    .append(
+                        $('<label>')
+                            .addClass('wcp-proposal-checkbox')
+                            .append(
+                                $('<input>')
+                                    .attr('type', 'checkbox')
+                                    .prop('checked', true)
+                                    .val(proposal.proposal_id)
+                            )
+                    );
+
+                if (titleChanged) {
+                    $proposalCard.append(
+                        $('<div>').addClass('wcp-ai-proposal-diff')
+                            .append($('<span>').addClass('wcp-ai-proposal-old').text(orig.title))
+                            .append($('<h5>').text(next.title))
+                    );
+                } else {
+                    $proposalCard.append($('<h5>').text(next.title));
+                }
+
+                if (contentChanged && orig.content) {
+                    $proposalCard.append(
+                        $('<div>').addClass('wcp-ai-proposal-content wcp-ai-proposal-old').text(orig.content)
+                    );
+                }
+                if (next.content || contentChanged) {
+                    $proposalCard.append(
+                        $('<div>').addClass('wcp-ai-proposal-content').text(next.content || '(description cleared)')
+                    );
+                }
+
+                $container.append($proposalCard);
+            });
+
+            this.updateProposalSelectedCount();
+            $('.wcp-ai-approval-panel').slideDown();
+
+            const itemWord = proposals.length === 1 ? 'item' : 'items';
+            this.appendMessage('assistant', `I've proposed edits to ${proposals.length} ${itemWord}. Review and apply the ones you want.`);
         },
 
         /**
@@ -1254,7 +1333,7 @@
             console.log('Current proposals:', this.currentProposals);
 
             if (selectedIds.length === 0) {
-                alert('Please select at least one item to create.');
+                alert(this.proposalMode === 'edit' ? 'Please select at least one edit to apply.' : 'Please select at least one item to create.');
                 return;
             }
 
@@ -1285,19 +1364,20 @@
                         this.currentProposals = [];
                         this.currentBatchId = null;
 
-                        const postCount = response.created_posts ? response.created_posts.length : 0;
-                        const itemWord = postCount === 1 ? 'item' : 'items';
-                        this.appendMessage('system', `${postCount} ${itemWord} created successfully!`);
+                        const createdCount = response.created_posts ? response.created_posts.length : 0;
+                        const updatedCount = response.updated_posts ? response.updated_posts.length : 0;
+                        this.appendMessage('system', response.message || 'Done.');
 
                         // Log debug info if present
                         if (response.debug) {
                             console.log('Debug info:', response.debug);
                         }
 
-                        // Optionally reload page to show new items
-                        if (postCount > 0) {
+                        // Optionally reload page to show new/updated items
+                        const totalCount = createdCount + updatedCount;
+                        if (totalCount > 0) {
                             setTimeout(() => {
-                                if (confirm(`${postCount} ${itemWord} created! Would you like to reload the page to see them?`)) {
+                                if (confirm(`${response.message} Would you like to reload the page to see the changes?`)) {
                                     window.location.reload();
                                 }
                             }, 1000);

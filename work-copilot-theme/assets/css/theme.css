@@ -2712,6 +2712,7 @@ a.wcp-tag:hover {
 /* Hide non-essential actions when toggle is active */
 .wcp-items-section.wcp-hide-actions .wcp-item-view-link,
 .wcp-items-section.wcp-hide-actions .wcp-item-ai-btn,
+.wcp-items-section.wcp-hide-actions .wcp-desc-toggle,
 .wcp-items-section.wcp-hide-actions .wcp-source-link,
 .wcp-items-section.wcp-hide-actions .wcp-type-select,
 .wcp-items-section.wcp-hide-actions .wcp-priority-select,
@@ -2917,7 +2918,8 @@ a.wcp-tag:hover {
     transition: opacity 0.15s;
 }
 
-.wcp-item-row:hover .wcp-item-ai-btn { opacity: 1; }
+.wcp-item-row:hover .wcp-item-ai-btn,
+.wcp-item-row:focus-within .wcp-item-ai-btn { opacity: 1; }
 
 .wcp-item-ai-panel {
     flex-basis: 100%;
@@ -3353,4 +3355,112 @@ a.wcp-tag:hover {
 .wcp-search-empty {
     color: #888;
     padding: 20px 0;
+}
+
+/* ==================================================================
+   Item row controls (all types) — Roam-style rows
+   All per-item controls (type/priority/status selects, +context,
+   +tag, delete, view/ai/desc links, pin) follow straight on from the
+   title/created-time and are hidden until the row is hovered or has
+   focus inside it (focus-within) — for every item type: task, info,
+   spec, learning, and not-yet-categorised.
+
+   `.wcp-row-actions` is `display: contents`, not a flex box of its
+   own: its children become direct flex items of `.wcp-item-row`
+   again, so the browser packs as many of them onto the title's line
+   as fit and wraps only the rest — the same natural fill-then-wrap
+   behaviour the row always had. (A real wrapper box here would make
+   the whole cluster one flex item — either all of it fits on the
+   line, or none of it does — which forced everything onto a second
+   line even when there was room for some of it.)
+
+   Each control is hidden/shown individually (rather than as a group)
+   so that jQuery's `.show()`/`.hide()` on task-only controls
+   (status, due-date, spec-status — see the `.wcp-type-select`
+   change handler in theme.js) can still win when it needs to.
+   ================================================================== */
+
+.wcp-row-actions {
+    display: contents;
+}
+
+.wcp-item-row .wcp-item-view-link,
+.wcp-item-row .wcp-item-ai-btn,
+.wcp-item-row .wcp-desc-toggle,
+.wcp-item-row .wcp-subtask-add-btn,
+.wcp-item-row .wcp-item-context-btn,
+.wcp-item-row .wcp-item-tag-btn,
+.wcp-item-row .wcp-item-delete {
+    display: none;
+}
+.wcp-item-row:hover .wcp-item-view-link,
+.wcp-item-row:focus-within .wcp-item-view-link,
+.wcp-item-row:hover .wcp-item-ai-btn,
+.wcp-item-row:focus-within .wcp-item-ai-btn,
+.wcp-item-row:hover .wcp-desc-toggle,
+.wcp-item-row:focus-within .wcp-desc-toggle,
+.wcp-item-row:hover .wcp-subtask-add-btn,
+.wcp-item-row:focus-within .wcp-subtask-add-btn,
+.wcp-item-row:hover .wcp-item-context-btn,
+.wcp-item-row:focus-within .wcp-item-context-btn,
+.wcp-item-row:hover .wcp-item-tag-btn,
+.wcp-item-row:focus-within .wcp-item-tag-btn,
+.wcp-item-row:hover .wcp-item-delete,
+.wcp-item-row:focus-within .wcp-item-delete {
+    display: inline;
+}
+
+/* Selects/date-input: task-only ones (status, due-date) and the
+   spec-only one (spec-status) carry an inline `display:none` from
+   PHP/JS when they don't apply to the current type — inline style
+   always wins over these plain rules, so they correctly stay hidden
+   regardless of hover in that case. */
+.wcp-item-row .wcp-type-select,
+.wcp-item-row .wcp-priority-select,
+.wcp-item-row .wcp-status-select,
+.wcp-item-row .wcp-spec-status-select,
+.wcp-item-row .wcp-due-date-input {
+    display: none;
+}
+.wcp-item-row:hover .wcp-type-select,
+.wcp-item-row:focus-within .wcp-type-select,
+.wcp-item-row:hover .wcp-priority-select,
+.wcp-item-row:focus-within .wcp-priority-select,
+.wcp-item-row:hover .wcp-status-select,
+.wcp-item-row:focus-within .wcp-status-select,
+.wcp-item-row:hover .wcp-spec-status-select,
+.wcp-item-row:focus-within .wcp-spec-status-select,
+.wcp-item-row:hover .wcp-due-date-input,
+.wcp-item-row:focus-within .wcp-due-date-input {
+    display: inline-block;
+}
+
+.wcp-item-row .wcp-pin-toggle {
+    display: none;
+}
+/* A pinned item's pin stays visible without hovering, so pinned
+   items are identifiable at a glance. */
+.wcp-item-row.wcp-pinned .wcp-pin-toggle,
+.wcp-item-row:hover .wcp-pin-toggle,
+.wcp-item-row:focus-within .wcp-pin-toggle {
+    display: inline-flex;
+}
+
+/* Pin, priority and subtask controls don't apply to atomic types.
+   The pin toggle stays visible while an item IS pinned so it can
+   still be unpinned. */
+.wcp-item-row:is([data-item-type="info"], [data-item-type="spec"], [data-item-type="learning"]):not(.wcp-pinned) .wcp-pin-toggle,
+.wcp-item-row:is([data-item-type="info"], [data-item-type="spec"], [data-item-type="learning"]) .wcp-priority-select,
+.wcp-item-row:is([data-item-type="info"], [data-item-type="spec"], [data-item-type="learning"]) .wcp-subtask-add-btn {
+    display: none !important;
+}
+
+/* Per-item description toggle (all item types) — overrides the
+   section-level "show descriptions" toggle in both directions. */
+.wcp-item-row.wcp-desc-open .wcp-item-description {
+    display: block;
+}
+
+.wcp-item-row.wcp-desc-closed .wcp-item-description {
+    display: none !important;
 }
