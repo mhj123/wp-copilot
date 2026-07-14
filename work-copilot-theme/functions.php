@@ -76,58 +76,6 @@ function wcp_theme_scripts() {
 }
 add_action('wp_enqueue_scripts', 'wcp_theme_scripts');
 
-/**
- * Enqueue the redesign override sheet LAST so it wins the cascade.
- *
- * Depends on the theme's own handles (always present on the front end) and,
- * when it is registered for the current view, the plugin's public stylesheet.
- * The plugin handle is added conditionally because it only registers on app
- * views (pages / headings / context archives) — listing an unregistered
- * dependency would suppress this sheet entirely on other views.
- */
-function wcp_theme_enqueue_redesign() {
-    $deps = array('wcp-theme-style', 'wcp-theme-custom');
-    if (wp_style_is('work-copilot-public', 'registered')) {
-        $deps[] = 'work-copilot-public';
-    }
-    wp_enqueue_style(
-        'wcp-redesign',
-        get_stylesheet_directory_uri() . '/assets/css/wcp-redesign.css',
-        $deps,
-        '1.0.0'
-    );
-}
-add_action('wp_enqueue_scripts', 'wcp_theme_enqueue_redesign', 100);
-
-/**
- * Per-page accent inheritance for the redesign sheet.
- *
- * WordPress adds `page-id-N` and (for the immediate parent only)
- * `parent-pageid-N`. The redesign keys each section's accent off the
- * top-level page, so pages nested more than one level deep would otherwise
- * fall back to the default accent. Stamp `parent-pageid-<topAncestorId>` for
- * every descendant so the existing CSS rule matches at any depth.
- */
-function wcp_body_class_accent($classes) {
-    if (!is_page()) {
-        return $classes;
-    }
-    $post = get_queried_object();
-    if (!$post || empty($post->post_parent)) {
-        return $classes; // top-level page already carries page-id-N
-    }
-    $ancestors = get_post_ancestors($post->ID); // ordered nearest → furthest
-    if (!empty($ancestors)) {
-        $top = end($ancestors);
-        $class = 'parent-pageid-' . (int) $top;
-        if (!in_array($class, $classes, true)) {
-            $classes[] = $class;
-        }
-    }
-    return $classes;
-}
-add_filter('body_class', 'wcp_body_class_accent');
-
 // Get hierarchical page tree
 function wcp_theme_get_page_tree($parent_id = 0) {
     $args = array(
