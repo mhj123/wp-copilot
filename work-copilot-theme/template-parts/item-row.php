@@ -49,10 +49,6 @@ $_delegation_labels = array(
      data-context-ids="<?php echo esc_attr(implode(',', $_context_ids)); ?>"
      data-tags="<?php echo esc_attr(implode(',', $item_tags)); ?>">
     <span class="wcp-drag-handle" title="Drag to reorder">&#8942;</span>
-    <label class="wcp-pin-toggle" title="Pin to top of page">
-        <input type="checkbox" class="wcp-pin-checkbox" data-item-id="<?php echo esc_attr($item->ID); ?>" <?php checked($_is_pinned); ?>>
-        <span class="wcp-pin-icon" aria-hidden="true">&#128204;</span>
-    </label>
     <input type="checkbox"
            class="wcp-task-checkbox"
            data-item-id="<?php echo esc_attr($item->ID); ?>"
@@ -61,8 +57,60 @@ $_delegation_labels = array(
     <span class="wcp-item-title"><?php echo esc_html($item->post_title); ?></span>
     <input type="text" class="wcp-item-title-input" style="display:none;" value="<?php echo esc_attr($item->post_title); ?>">
     <span class="wcp-item-created" title="<?php echo esc_attr(get_the_time('j M Y', $item)); ?>"><?php echo esc_html(human_time_diff(get_post_time('U', true, $item))); ?> ago</span>
-    <a href="<?php echo esc_url(get_permalink($item->ID)); ?>" class="wcp-item-view-link wcp-edit-link" title="View item">[view]</a>
-    <button type="button" class="wcp-item-ai-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>" title="AI actions">[ai]</button>
+
+    <span class="wcp-row-actions">
+        <select class="wcp-inline-select wcp-type-select" data-item-id="<?php echo esc_attr($item->ID); ?>">
+            <option value=""><?php _e('type', 'work-copilot-theme'); ?></option>
+            <?php foreach (array('task', 'info', 'learning', 'spec') as $type) : ?>
+                <option value="<?php echo $type; ?>" <?php selected(!empty($item_types) && $item_types[0] === $type); ?>><?php echo $type; ?></option>
+            <?php endforeach; ?>
+        </select>
+
+        <select class="wcp-inline-select wcp-priority-select" data-item-id="<?php echo esc_attr($item->ID); ?>">
+            <option value=""><?php _e('prio', 'work-copilot-theme'); ?></option>
+            <?php foreach (array('critical', 'high', 'medium', 'low') as $prio) : ?>
+                <option value="<?php echo $prio; ?>" <?php selected(!empty($priorities) && $priorities[0] === $prio); ?>><?php echo $prio; ?></option>
+            <?php endforeach; ?>
+        </select>
+
+        <?php $current_status = !empty($task_statuses) ? $task_statuses[0] : ''; ?>
+        <select class="wcp-inline-select wcp-status-select"
+                data-item-id="<?php echo esc_attr($item->ID); ?>"
+                style="<?php echo (!empty($item_types) && $item_types[0] === 'task') ? '' : 'display:none;'; ?>">
+            <option value=""><?php _e('status', 'work-copilot-theme'); ?></option>
+            <?php foreach (array('to-do' => 'to do', 'in-progress' => 'in progress', 'done' => 'done') as $slug => $label) : ?>
+                <option value="<?php echo $slug; ?>" <?php selected($current_status, $slug); ?>><?php echo $label; ?></option>
+            <?php endforeach; ?>
+        </select>
+
+        <select class="wcp-inline-select wcp-spec-status-select"
+                data-item-id="<?php echo esc_attr($item->ID); ?>"
+                style="<?php echo $_is_spec ? '' : 'display:none;'; ?>">
+            <option value=""><?php _e('status', 'work-copilot-theme'); ?></option>
+            <?php foreach (array('draft' => 'draft', 'review' => 'review', 'final' => 'final') as $slug => $label) : ?>
+                <option value="<?php echo $slug; ?>" <?php selected($_spec_status_slug, $slug); ?>><?php echo $label; ?></option>
+            <?php endforeach; ?>
+        </select>
+
+        <input type="date"
+               class="wcp-due-date-input"
+               data-item-id="<?php echo esc_attr($item->ID); ?>"
+               value="<?php echo esc_attr($_due_date); ?>"
+               title="Due date"
+               style="<?php echo $is_task ? '' : 'display:none;'; ?>">
+        <button type="button" class="wcp-subtask-add-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">+ subtask</button>
+        <button type="button" class="wcp-item-context-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">+ context</button>
+        <button type="button" class="wcp-item-tag-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">+ tag</button>
+        <button type="button" class="wcp-item-delete wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">[delete]</button>
+        <a href="<?php echo esc_url(get_permalink($item->ID)); ?>" class="wcp-item-view-link wcp-edit-link" title="View item">[view]</a>
+        <button type="button" class="wcp-item-ai-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>" title="AI actions">[ai]</button>
+        <button type="button" class="wcp-desc-toggle wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>" title="Show/hide description">[desc]</button>
+        <label class="wcp-pin-toggle" title="Pin to top of page">
+            <input type="checkbox" class="wcp-pin-checkbox" data-item-id="<?php echo esc_attr($item->ID); ?>" <?php checked($_is_pinned); ?>>
+            <span class="wcp-pin-icon" aria-hidden="true">&#128204;</span>
+        </label>
+    </span>
+
     <input type="checkbox" class="wcp-item-select-cb" data-item-id="<?php echo esc_attr($item->ID); ?>" data-item-title="<?php echo esc_attr($item->post_title); ?>" style="display:none;">
     <?php $source_url = get_post_meta($item->ID, '_wcp_source_url', true); ?>
     <?php if ($source_url) : ?>
@@ -98,50 +146,6 @@ $_delegation_labels = array(
             <span class="wcp-pill wcp-pill-delegation wcp-delegation-status-<?php echo esc_attr($_dlg_status); ?>">&#8644; <?php echo esc_html($_dlg_label); ?></span>
         </span>
     <?php endif; ?>
-
-    <select class="wcp-inline-select wcp-type-select" data-item-id="<?php echo esc_attr($item->ID); ?>">
-        <option value=""><?php _e('type', 'work-copilot-theme'); ?></option>
-        <?php foreach (array('task', 'info', 'learning', 'spec') as $type) : ?>
-            <option value="<?php echo $type; ?>" <?php selected(!empty($item_types) && $item_types[0] === $type); ?>><?php echo $type; ?></option>
-        <?php endforeach; ?>
-    </select>
-
-    <select class="wcp-inline-select wcp-priority-select" data-item-id="<?php echo esc_attr($item->ID); ?>">
-        <option value=""><?php _e('prio', 'work-copilot-theme'); ?></option>
-        <?php foreach (array('critical', 'high', 'medium', 'low') as $prio) : ?>
-            <option value="<?php echo $prio; ?>" <?php selected(!empty($priorities) && $priorities[0] === $prio); ?>><?php echo $prio; ?></option>
-        <?php endforeach; ?>
-    </select>
-
-    <?php $current_status = !empty($task_statuses) ? $task_statuses[0] : ''; ?>
-    <select class="wcp-inline-select wcp-status-select"
-            data-item-id="<?php echo esc_attr($item->ID); ?>"
-            style="<?php echo (!empty($item_types) && $item_types[0] === 'task') ? '' : 'display:none;'; ?>">
-        <option value=""><?php _e('status', 'work-copilot-theme'); ?></option>
-        <?php foreach (array('to-do' => 'to do', 'in-progress' => 'in progress', 'done' => 'done') as $slug => $label) : ?>
-            <option value="<?php echo $slug; ?>" <?php selected($current_status, $slug); ?>><?php echo $label; ?></option>
-        <?php endforeach; ?>
-    </select>
-
-    <select class="wcp-inline-select wcp-spec-status-select"
-            data-item-id="<?php echo esc_attr($item->ID); ?>"
-            style="<?php echo $_is_spec ? '' : 'display:none;'; ?>">
-        <option value=""><?php _e('status', 'work-copilot-theme'); ?></option>
-        <?php foreach (array('draft' => 'draft', 'review' => 'review', 'final' => 'final') as $slug => $label) : ?>
-            <option value="<?php echo $slug; ?>" <?php selected($_spec_status_slug, $slug); ?>><?php echo $label; ?></option>
-        <?php endforeach; ?>
-    </select>
-
-    <input type="date"
-           class="wcp-due-date-input"
-           data-item-id="<?php echo esc_attr($item->ID); ?>"
-           value="<?php echo esc_attr($_due_date); ?>"
-           title="Due date"
-           style="<?php echo $is_task ? '' : 'display:none;'; ?>">
-    <button type="button" class="wcp-subtask-add-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">+ subtask</button>
-    <button type="button" class="wcp-item-context-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">+ context</button>
-    <button type="button" class="wcp-item-tag-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">+ tag</button>
-    <button type="button" class="wcp-item-delete wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">[delete]</button>
 
     <?php
     $subtasks = json_decode(get_post_meta($item->ID, '_wcp_subtasks', true) ?: '[]', true);

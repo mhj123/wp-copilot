@@ -1295,6 +1295,10 @@ class WCP_REST_API {
                 $result = $ai_actions->generate_pages($prompt, $page_id, $context_mode, $selected_pages, $conversation_id, $item_count);
                 break;
 
+            case 'edit_items':
+                $result = $ai_actions->edit_items($prompt, $page_id, $context_mode, $selected_pages, $conversation_id);
+                break;
+
             case 'rewrite_content':
                 $result = $ai_actions->rewrite_page_content($prompt, $page_id, $context_mode, $selected_pages);
                 break;
@@ -1411,7 +1415,8 @@ class WCP_REST_API {
             return rest_ensure_response(array(
                 'success' => true,
                 'decision' => 'accepted',
-                'created_posts' => $result['created_posts'],
+                'created_posts' => $result['created_posts'] ?? array(),
+                'updated_posts' => $result['updated_posts'] ?? array(),
                 'message' => $result['message'],
                 'debug' => array_merge($received_params, array('result_debug' => $result['debug'] ?? null)),
             ));
@@ -1562,6 +1567,7 @@ class WCP_REST_API {
 
         $all_proposal_ids = $batch['proposal_ids'] ?? array();
         $created_posts = array();
+        $updated_posts = array();
         $ai_actions = WCP_AI_Actions::instance();
 
         if ($decision === 'dismiss') {
@@ -1602,6 +1608,9 @@ class WCP_REST_API {
                         if (!empty($result['created_posts'])) {
                             $created_posts = array_merge($created_posts, $result['created_posts']);
                         }
+                        if (!empty($result['updated_posts'])) {
+                            $updated_posts = array_merge($updated_posts, $result['updated_posts']);
+                        }
                         // Collect debug info from each proposal
                         if (isset($result['debug'])) {
                             $proposal_debug[] = $result['debug'];
@@ -1616,12 +1625,22 @@ class WCP_REST_API {
             // Clean up batch
             delete_transient('wcp_batch_' . $batch_id);
 
-            $count = count($created_posts);
+            $created_count = count($created_posts);
+            $updated_count = count($updated_posts);
+            if ($updated_count && !$created_count) {
+                $message = $updated_count . ' item' . ($updated_count !== 1 ? 's' : '') . ' updated';
+            } elseif ($updated_count && $created_count) {
+                $message = $created_count . ' item' . ($created_count !== 1 ? 's' : '') . ' created, '
+                         . $updated_count . ' updated';
+            } else {
+                $message = $created_count . ' item' . ($created_count !== 1 ? 's' : '') . ' created';
+            }
             $response = array(
                 'success' => true,
                 'decision' => 'accepted',
                 'created_posts' => $created_posts,
-                'message' => $count . ' item' . ($count !== 1 ? 's' : '') . ' created',
+                'updated_posts' => $updated_posts,
+                'message' => $message,
             );
 
             // Always include debug info for troubleshooting
