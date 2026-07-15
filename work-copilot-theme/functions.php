@@ -286,7 +286,7 @@ function wcp_theme_enqueue_ai_widget() {
     }
 
     // Version for cache busting - update with each change
-    $widget_version = '2.5.0';
+    $widget_version = '2.6.0';
 
     // Enqueue widget CSS
     wp_enqueue_style(
@@ -319,6 +319,13 @@ add_action('wp_enqueue_scripts', 'wcp_theme_enqueue_ai_widget');
 // Include AI widget in footer
 function wcp_theme_ai_widget_footer() {
     if (is_admin() || !is_user_logged_in() || !get_option('wcp_ai_enabled', false)) {
+        return;
+    }
+
+    // The homepage renders its own embedded instance inside the "Chat" tab
+    // (see index.php) — skip the floating one there to avoid two widget
+    // instances sharing the same DOM ids on one page.
+    if (is_front_page()) {
         return;
     }
 

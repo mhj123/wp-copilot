@@ -28,6 +28,32 @@ body.admin-bar .wcp-ai-widget {
     height: calc(100vh - 32px);
 }
 
+/* Embedded mode — rendered inline inside the homepage "Chat" tab panel
+   instead of floating over the page. Overrides the fixed-position/
+   minimize-to-bubble styling above. */
+.wcp-ai-widget--embedded {
+    position: static;
+    right: auto;
+    top: auto;
+    width: 100%;
+    height: 70vh;
+    min-height: 480px;
+    max-height: none;
+    border-left: none;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: none;
+}
+
+body.admin-bar .wcp-ai-widget--embedded {
+    top: auto;
+    height: 70vh;
+}
+
+.wcp-ai-widget--embedded .wcp-ai-header-actions {
+    display: none; /* nothing to minimize/close when embedded in a tab */
+}
+
 /* Minimized state */
 .wcp-ai-widget.minimized .wcp-ai-container {
     display: none;

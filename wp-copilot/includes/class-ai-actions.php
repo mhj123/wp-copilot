@@ -344,6 +344,246 @@ class WCP_AI_Actions {
     }
 
     /**
+     * Site-level: a readable taxonomy outline of the whole corpus (every
+     * Page → Heading, walked from the wcp_context taxonomy tree).
+     * AI guardrail: read-only — answers in chat, writes nothing.
+     */
+    public function taxonomy_outline($prompt, $conversation_id = null) {
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new WP_Error('auth_error', 'User not authenticated');
+        }
+
+        $terms   = WCP_Taxonomy_Sync::get_all_contexts();
+        $outline = is_wp_error($terms) ? '' : $this->format_taxonomy_outline_text($terms);
+        if (empty($outline)) {
+            return new WP_Error('no_structure', 'No page/heading structure found to outline');
+        }
+
+        $prompt_builder = WCP_Prompt_Builder::instance();
+        $system_prompt  = $prompt_builder->build_system_prompt('taxonomy_outline', 0);
+        $user_message   = trim($prompt) . "\n\nSite structure (Page → Heading):\n" . $outline;
+
+        $conversation_history = array();
+        if ($conversation_id) {
+            $cm = WCP_Conversations_Manager::instance();
+            foreach ($cm->get_messages($conversation_id, 10) as $msg) {
+                $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
+            }
+        }
+
+        $ai_client = WCP_AI_Client::instance();
+        $response  = $ai_client->request_with_conversation($system_prompt, $user_message, $conversation_history, 2048);
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        if ($conversation_id) {
+            $cm = WCP_Conversations_Manager::instance();
+            $cm->add_message($conversation_id, 'user', $prompt);
+            $cm->add_message($conversation_id, 'assistant', $response['content']);
+        }
+
+        WCP_AI_Logger::instance()->log_action(array(
+            'action_type'     => 'taxonomy_outline',
+            'user_id'         => $user_id,
+            'model'           => $response['model'],
+            'prompt'          => $prompt,
+            'input_context'   => json_encode(array('term_count' => count($terms))),
+            'output_snapshot' => $response['content'],
+            'context_post_id' => 0,
+            'accepted_items'  => array(),
+            'dismissed_items' => array(),
+        ));
+
+        return array(
+            'outcome'  => 'chat',
+            'message'  => $response['content'],
+            'metadata' => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null),
+        );
+    }
+
+    /**
+     * Recursively render a wcp_context term tree (as returned by
+     * WCP_Taxonomy_Sync::get_all_contexts()) into an indented text outline.
+     * Mirrors build_structure_snapshot()'s "readable text from taxonomy/post
+     * data" style below.
+     */
+    private function format_taxonomy_outline_text($terms, $parent_id = 0, $depth = 0) {
+        $lines = array();
+        foreach ($terms as $term) {
+            if ((int) $term->parent !== (int) $parent_id) {
+                continue;
+            }
+            $ref_type = get_term_meta($term->term_id, 'wcp_ref_type', true);
+            $label    = $ref_type === 'wcp_heading' ? 'heading' : 'page';
+            $lines[]  = str_repeat('  ', $depth) . "- {$term->name} ({$label})";
+            $child_outline = $this->format_taxonomy_outline_text($terms, $term->term_id, $depth + 1);
+            if ($child_outline !== '') {
+                $lines[] = $child_outline;
+            }
+        }
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Site-level: the 5 most important things to work on, weighed against
+     * the global mission and recent site-wide activity.
+     * AI guardrail: read-only — answers in chat, writes nothing.
+     */
+    public function mission_priorities($prompt, $conversation_id = null) {
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new WP_Error('auth_error', 'User not authenticated');
+        }
+
+        $mission = WCP_Mission_Loader::instance()->get_global_mission();
+        if (empty($mission)) {
+            return new WP_Error('no_mission', 'No mission is set — add one before using this action');
+        }
+
+        $items      = WCP_Context_Builder::instance()->get_recent_items_sitewide(20);
+        $items_text = '';
+        foreach ($items as $it) {
+            $excerpt = wp_strip_all_tags($it['content'] ?? '');
+            $excerpt = $excerpt ? ' — ' . mb_substr($excerpt, 0, 200) : '';
+            $items_text .= "- {$it['title']}{$excerpt}\n";
+        }
+
+        $prompt_builder = WCP_Prompt_Builder::instance();
+        $system_prompt  = $prompt_builder->build_system_prompt('mission_priorities', 0);
+        $user_message   = trim($prompt) . "\n\nMission:\n{$mission}"
+            . "\n\nRecently created items:\n" . ($items_text ?: '(none)');
+
+        $conversation_history = array();
+        if ($conversation_id) {
+            $cm = WCP_Conversations_Manager::instance();
+            foreach ($cm->get_messages($conversation_id, 10) as $msg) {
+                $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
+            }
+        }
+
+        $ai_client = WCP_AI_Client::instance();
+        $response  = $ai_client->request_with_conversation($system_prompt, $user_message, $conversation_history, 2048);
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        if ($conversation_id) {
+            $cm = WCP_Conversations_Manager::instance();
+            $cm->add_message($conversation_id, 'user', $prompt);
+            $cm->add_message($conversation_id, 'assistant', $response['content']);
+        }
+
+        WCP_AI_Logger::instance()->log_action(array(
+            'action_type'     => 'mission_priorities',
+            'user_id'         => $user_id,
+            'model'           => $response['model'],
+            'prompt'          => $prompt,
+            'input_context'   => json_encode(array('item_count' => count($items))),
+            'output_snapshot' => $response['content'],
+            'context_post_id' => 0,
+            'accepted_items'  => array(),
+            'dismissed_items' => array(),
+        ));
+
+        return array(
+            'outcome'  => 'chat',
+            'message'  => $response['content'],
+            'metadata' => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null),
+        );
+    }
+
+    /**
+     * Site-level: a chat-delivered weekly activity summary. Reuses the same
+     * query + prompt approach as WCP_Rest_API::generate_activity_summary()
+     * (which powers the dashboard's "This week" card) but returns a chat
+     * reply saved to the conversation, rather than that endpoint's bespoke
+     * {summary, post_count, generated_at} shape / 6-hour transient cache.
+     * AI guardrail: read-only — answers in chat, writes nothing.
+     */
+    public function weekly_summary($prompt, $conversation_id = null) {
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new WP_Error('auth_error', 'User not authenticated');
+        }
+
+        $posts = get_posts(array(
+            'post_type'      => 'post',
+            'post_status'    => 'publish',
+            'posts_per_page' => 50,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+            'date_query'     => array(array('after' => '7 days ago', 'inclusive' => true)),
+        ));
+
+        if (empty($posts)) {
+            $message = 'No items were created in the last 7 days.';
+            if ($conversation_id) {
+                $cm = WCP_Conversations_Manager::instance();
+                $cm->add_message($conversation_id, 'user', $prompt);
+                $cm->add_message($conversation_id, 'assistant', $message);
+            }
+            return array('outcome' => 'chat', 'message' => $message, 'metadata' => array());
+        }
+
+        $items_text = '';
+        foreach ($posts as $p) {
+            $excerpt  = wp_strip_all_tags($p->post_content);
+            $excerpt  = $excerpt ? ' — ' . mb_substr($excerpt, 0, 200) : '';
+            $contexts = wp_get_post_terms($p->ID, 'wcp_context', array('fields' => 'names'));
+            $ctx      = !empty($contexts) && !is_wp_error($contexts) ? ' [' . implode(', ', $contexts) . ']' : '';
+            $items_text .= "- {$p->post_title}{$ctx}{$excerpt}\n";
+        }
+
+        $mission      = WCP_Mission_Loader::instance()->get_global_mission();
+        $mission_line = $mission ? "\n\nMission:\n{$mission}" : '';
+
+        $count = count($posts);
+        $prompt_builder = WCP_Prompt_Builder::instance();
+        $system_prompt  = $prompt_builder->build_system_prompt('weekly_summary', 0);
+        $user_message   = trim($prompt) . "\n\nItems created in the last 7 days ({$count} total):\n\n{$items_text}{$mission_line}";
+
+        $conversation_history = array();
+        if ($conversation_id) {
+            $cm = WCP_Conversations_Manager::instance();
+            foreach ($cm->get_messages($conversation_id, 10) as $msg) {
+                $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
+            }
+        }
+
+        $ai_client = WCP_AI_Client::instance();
+        $response  = $ai_client->request_with_conversation($system_prompt, $user_message, $conversation_history, 1024);
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        if ($conversation_id) {
+            $cm = WCP_Conversations_Manager::instance();
+            $cm->add_message($conversation_id, 'user', $prompt);
+            $cm->add_message($conversation_id, 'assistant', $response['content']);
+        }
+
+        WCP_AI_Logger::instance()->log_action(array(
+            'action_type'     => 'weekly_summary',
+            'user_id'         => $user_id,
+            'model'           => $response['model'],
+            'prompt'          => $prompt,
+            'input_context'   => json_encode(array('post_count' => $count)),
+            'output_snapshot' => $response['content'],
+            'context_post_id' => 0,
+            'accepted_items'  => array(),
+            'dismissed_items' => array(),
+        ));
+
+        return array(
+            'outcome'  => 'chat',
+            'message'  => $response['content'],
+            'metadata' => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null),
+        );
+    }
+
+    /**
      * Expand/modify draft content for editor sidebar
      *
      * @param string $prompt User's instruction for how to modify the draft

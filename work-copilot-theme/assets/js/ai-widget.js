@@ -25,6 +25,13 @@
          * Initialize widget
          */
         init: function() {
+            // Embedded (site-wide, e.g. the homepage "Chat" tab) instances have
+            // no single page, so default to corpus context rather than 'page'.
+            // The <select> already renders with 'corpus' pre-selected server-side
+            // (ai-widget.php); this keeps the JS-side state in sync with it.
+            if (wcpAiWidgetData.embedded) {
+                this.contextMode = 'corpus';
+            }
             this.bindEvents();
             this.initConversation();
             this.fetchActiveMission();
@@ -236,6 +243,20 @@
                 if (action === 'onboard') {
                     // Fires immediately — no user prompt needed
                     this.runOnboard();
+                    return;
+                }
+                if (action === 'chat_qa') {
+                    // "Ask anything" — reset to plain chat and let the user type.
+                    $('.wcp-ai-action-chip').removeClass('active');
+                    this.currentAction = 'chat_qa';
+                    $('#wcp-ai-prompt').focus();
+                    return;
+                }
+                if ($chip.hasClass('wcp-ai-action-chip--canned')) {
+                    // Site-level canned-prompt chips (taxonomy outline, mission
+                    // priorities, weekly summary) fire immediately with a fixed
+                    // prompt — no textarea step needed.
+                    this.runCannedAction(action, $chip.data('prompt'));
                     return;
                 }
                 if ($chip.hasClass('active')) {
@@ -1581,6 +1602,46 @@
                         this.handleActionResult(response);
                     } else {
                         this.showError(response.message || 'Onboard failed');
+                    }
+                },
+                error: (xhr) => {
+                    this.showLoading(false);
+                    this.showError('Connection error: ' + xhr.statusText);
+                }
+            });
+        },
+
+        /**
+         * Fire a canned, fixed-prompt site-level action immediately (taxonomy
+         * outline, mission priorities, weekly summary) — same request shape as
+         * sendMessage(), just without the textarea step.
+         */
+        runCannedAction: function(actionType, promptText) {
+            $('.wcp-ai-action-chip').removeClass('active');
+            this.showLoading(true);
+            this.appendMessage('user', promptText);
+
+            $.ajax({
+                url: wcpAiWidgetData.restUrl + '/ai/actions/execute',
+                method: 'POST',
+                beforeSend: (xhr) => {
+                    xhr.setRequestHeader('X-WP-Nonce', wcpAiWidgetData.nonce);
+                },
+                data: {
+                    action_type: actionType,
+                    prompt: promptText,
+                    page_id: wcpAiWidgetData.pageId,
+                    conversation_id: this.conversationId,
+                    context_mode: this.contextMode,
+                    model: this.selectedModel,
+                    thinking_budget: this.thinkingBudget
+                },
+                success: (response) => {
+                    this.showLoading(false);
+                    if (response.success) {
+                        this.handleActionResult(response.result);
+                    } else {
+                        this.showError(response.message || 'Action failed');
                     }
                 },
                 error: (xhr) => {

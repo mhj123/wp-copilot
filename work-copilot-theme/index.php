@@ -257,9 +257,19 @@ foreach ($cal_events as $ev) {
         <div class="wcp-dash-tabs" role="tablist">
             <button type="button" class="wcp-dash-tab active" data-tab="dashboard" role="tab">Dashboard</button>
             <button type="button" class="wcp-dash-tab" data-tab="structure" role="tab">Structure</button>
+            <?php if (get_option('wcp_ai_enabled', false)) : ?>
+            <button type="button" class="wcp-dash-tab" data-tab="chat" role="tab">Chat</button>
+            <?php endif; ?>
             <button type="button" class="wcp-dash-tab" data-tab="activity" role="tab">Recent activity</button>
         </div>
     </div>
+
+    <?php if (get_option('wcp_ai_enabled', false)) : ?>
+    <!-- Chat tab panel: site-wide AI Assistant, embedded (not floating) -->
+    <div id="wcp-dash-panel-chat" class="wcp-dash-panel wcp-dash-panel-chat" style="display:none;">
+        <?php get_template_part('template-parts/ai-widget', null, array('embedded' => true)); ?>
+    </div>
+    <?php endif; ?>
 
     <!-- Activity tab panel -->
     <div id="wcp-dash-panel-activity" class="wcp-dash-panel" style="display:none;">

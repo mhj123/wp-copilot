@@ -11,12 +11,20 @@ if (!is_user_logged_in() || !get_option('wcp_ai_enabled', false)) {
     return;
 }
 
-// Get current page ID
-global $post;
-$page_id = ($post && $post->post_type === 'page') ? $post->ID : 0;
+// Embedded mode: a site-wide instance (e.g. the homepage "Chat" tab) with no
+// single page — passed in via get_template_part(..., array('embedded' => true)).
+$embedded = !empty($args['embedded']);
 
-if (!$page_id) {
-    return; // Only show on pages
+if ($embedded) {
+    $page_id = 0;
+} else {
+    // Get current page ID
+    global $post;
+    $page_id = ($post && $post->post_type === 'page') ? $post->ID : 0;
+
+    if (!$page_id) {
+        return; // Only show on pages (the embedded instance covers the homepage)
+    }
 }
 
 // Get saved prompts
@@ -30,8 +38,8 @@ if (empty($saved_prompts)) {
 }
 ?>
 
-<div id="wcp-ai-widget" class="wcp-ai-widget minimized">
-    <!-- Floating toggle button (when minimized) -->
+<div id="wcp-ai-widget" class="wcp-ai-widget<?php echo $embedded ? ' wcp-ai-widget--embedded' : ' minimized'; ?>">
+    <!-- Floating toggle button (when minimized) — not used in embedded mode -->
     <button type="button" class="wcp-ai-toggle" aria-label="Open AI Assistant">
         <span class="dashicons dashicons-format-chat"></span>
     </button>
@@ -55,8 +63,10 @@ if (empty($saved_prompts)) {
         <div class="wcp-ai-context-selector">
             <label><?php _e('Context:', 'work-copilot'); ?></label>
             <select id="wcp-ai-context-mode" class="wcp-ai-context-dropdown">
+                <?php if (!$embedded) : ?>
                 <option value="page"><?php echo esc_html(sprintf(__('This Page: %s', 'work-copilot'), get_the_title($page_id))); ?></option>
-                <option value="corpus"><?php _e('Entire Corpus (RAG)', 'work-copilot'); ?></option>
+                <?php endif; ?>
+                <option value="corpus"<?php selected($embedded); ?>><?php _e('Entire Corpus (RAG)', 'work-copilot'); ?></option>
                 <option value="select"><?php _e('Select Pages...', 'work-copilot'); ?></option>
             </select>
         </div>
@@ -104,6 +114,12 @@ if (empty($saved_prompts)) {
 
         <!-- Action toggles — select one to set the intent for the next send -->
         <div class="wcp-ai-action-chips">
+            <?php if ($embedded) : ?>
+            <button type="button" class="wcp-ai-action-chip" data-action="chat_qa"><?php _e('Ask anything', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip wcp-ai-action-chip--canned" data-action="taxonomy_outline" data-prompt="Give me a taxonomy outline of the corpus."><?php _e('Taxonomy outline', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip wcp-ai-action-chip--canned" data-action="mission_priorities" data-prompt="Give me the 5 most important things I can work on to move the needle against my mission."><?php _e('5 things for my mission', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip wcp-ai-action-chip--canned" data-action="weekly_summary" data-prompt="Summarise what happened in the last week."><?php _e('What happened this week', 'work-copilot'); ?></button>
+            <?php else : ?>
             <button type="button" class="wcp-ai-action-chip wcp-ai-action-chip--onboard" data-action="onboard"><?php _e('Onboard', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="generate_structure"><?php _e('Generate structure', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="generate_pages"><?php _e('Create sub-pages', 'work-copilot'); ?></button>
@@ -115,6 +131,7 @@ if (empty($saved_prompts)) {
             <button type="button" class="wcp-ai-action-chip" data-action="fetch_structure"><?php _e('Fetch structure', 'work-copilot'); ?></button>
             <?php if (class_exists('WCPD_Delegation_Manager') && get_option('wcpd_enabled') === '1') : ?>
             <button type="button" class="wcp-ai-action-chip" data-action="agent_review"><?php _e('Agent review', 'work-copilot'); ?></button>
+            <?php endif; ?>
             <?php endif; ?>
         </div>
 
@@ -212,7 +229,8 @@ if (empty($saved_prompts)) {
     // Pass data to JavaScript
     var wcpAiWidgetData = {
         pageId: <?php echo absint($page_id); ?>,
-        pageName: <?php echo wp_json_encode(get_the_title($page_id)); ?>,
+        pageName: <?php echo wp_json_encode($embedded ? '' : get_the_title($page_id)); ?>,
+        embedded: <?php echo $embedded ? 'true' : 'false'; ?>,
         restUrl: <?php echo wp_json_encode(rest_url('work-copilot/v1')); ?>,
         delegationRestUrl: <?php echo wp_json_encode(rest_url('wcp-delegation/v1')); ?>,
         delegationEnabled: <?php echo (class_exists('WCPD_Delegation_Manager') && get_option('wcpd_enabled') === '1') ? 'true' : 'false'; ?>,
