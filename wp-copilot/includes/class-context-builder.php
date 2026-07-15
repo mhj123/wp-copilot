@@ -167,7 +167,15 @@ class WCP_Context_Builder {
 
         switch ($context_mode) {
             case 'corpus':
-                // RAG mode: semantic search across all content
+                // Baseline site-wide gather — always populated, independent of RAG,
+                // so corpus mode still has real content to work with when embeddings
+                // are disabled or no query is given (e.g. the site-wide "Ask
+                // anything" chat, which has no single query to search against).
+                $context['pages'] = $this->get_all_top_level_pages_summary(30);
+                $context['items'] = $this->get_recent_items_sitewide(20);
+
+                // Layer in semantic search results, when available, on top of the
+                // baseline gather above.
                 if (!empty($options['query'])) {
                     $context['rag_items'] = $this->include_rag_items($options['query'], array(
                         'limit' => 20
@@ -403,6 +411,67 @@ class WCP_Context_Builder {
                     'terms' => $term_ids,
                 ),
             ),
+            'orderby' => 'date',
+            'order' => 'DESC',
+        ));
+
+        $items = array();
+        foreach ($posts as $post) {
+            $items[] = array(
+                'id' => $post->ID,
+                'title' => $post->post_title,
+                'content' => $post->post_content,
+                'date' => $post->post_date,
+            );
+        }
+
+        return $items;
+    }
+
+    /**
+     * Baseline site-wide page gather for 'corpus' context mode — every
+     * top-level page's own content, independent of RAG/embeddings.
+     * Shape matches collect_parent_contexts() so format_for_prompt()
+     * renders it with no changes.
+     *
+     * @param int $limit Maximum pages to return
+     * @return array Array of page context data
+     */
+    private function get_all_top_level_pages_summary($limit = 30) {
+        $pages = get_posts(array(
+            'post_type' => 'page',
+            'post_parent' => 0,
+            'posts_per_page' => $limit,
+            'orderby' => 'menu_order title',
+            'order' => 'ASC',
+        ));
+
+        $summary = array();
+        foreach ($pages as $page) {
+            $summary[] = array(
+                'id' => $page->ID,
+                'title' => $page->post_title,
+                'content' => $page->post_content,
+                'level' => 0,
+            );
+        }
+
+        return $summary;
+    }
+
+    /**
+     * Baseline site-wide recent items for 'corpus' context mode — the most
+     * recently created ItemPosts across the whole site, independent of any
+     * single page's context term. Shape matches get_page_items() so
+     * format_for_prompt() renders it with no changes.
+     *
+     * @param int $limit Maximum items to return
+     * @return array Array of item data
+     */
+    public function get_recent_items_sitewide($limit = 20) {
+        $posts = get_posts(array(
+            'post_type' => 'post',
+            'posts_per_page' => $limit,
             'orderby' => 'date',
             'order' => 'DESC',
         ));

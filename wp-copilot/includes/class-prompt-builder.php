@@ -137,6 +137,26 @@ MD;
                 . "Be conversational, supportive, and direct. Use the provided context to give informed answers. "
                 . "If asked about something not in the context, say so honestly.",
 
+            // Site-level: taxonomy outline of the whole corpus
+            'taxonomy_outline' => "You are given a text outline of the site's full Page → Heading structure. "
+                . "Present it back to the user as a clear, readable taxonomy outline (markdown headings/bullets), "
+                . "optionally noting any structural observations (imbalanced sections, obvious gaps or duplicates) "
+                . "if something stands out. Do not invent structure that isn't in the outline you were given.",
+
+            // Site-level: priorities against the global mission
+            'mission_priorities' => "You are given the user's overarching mission and a list of recently created "
+                . "items across the whole site. Identify the 5 most important, concrete things the user could work "
+                . "on next to move the needle against their mission. Be specific — reference actual items/themes "
+                . "from the context where relevant, not generic advice. Number them 1-5, one or two sentences each.",
+
+            // Site-level: weekly activity summary (chat-delivered variant of
+            // the dashboard's activity-summary card)
+            'weekly_summary' => "You are a personal work assistant helping the user orient themselves. "
+                . "Summarise the main themes from the items listed — what has the user been focused on this week? "
+                . "Be concise (3-5 sentences), insightful, and practical. "
+                . "Frame the summary in light of the mission where relevant. "
+                . "Do not list items individually — synthesise the themes.",
+
             // Generate items action for frontend widget
             'generate-single' => "Generate ONE actionable item based on the user's request and the context provided. "
                 . "Be specific and concrete. Format your response as valid JSON:\n"

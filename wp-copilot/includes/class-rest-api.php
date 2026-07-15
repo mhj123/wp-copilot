@@ -1172,10 +1172,13 @@ class WCP_REST_API {
      * NEW: Initialize or get conversation for a page
      */
     public function init_conversation($request) {
+        // page_id 0 is a valid sentinel for a site-wide (page-less) conversation —
+        // only reject when the param is genuinely missing/non-numeric.
         $page_id = $request->get_param('page_id');
+        $page_id = is_numeric($page_id) ? (int) $page_id : null;
         $user_id = get_current_user_id();
 
-        if (!$page_id) {
+        if ($page_id === null) {
             return rest_ensure_response(array(
                 'success' => false,
                 'message' => 'Page ID is required',
@@ -1221,7 +1224,8 @@ class WCP_REST_API {
     public function execute_action($request) {
         $action_type = $request->get_param('action_type');
         $prompt = $request->get_param('prompt');
-        $page_id = $request->get_param('page_id');
+        // page_id 0 is a valid sentinel for a site-wide (page-less) action.
+        $page_id = (int) $request->get_param('page_id');
         $conversation_id = $request->get_param('conversation_id');
         $context_mode = $request->get_param('context_mode') ?? 'page';
         $selected_pages = $request->get_param('selected_pages') ?? array();
@@ -1229,10 +1233,10 @@ class WCP_REST_API {
         $thinking_budget = max( 0, (int) ( $request->get_param('thinking_budget') ?? 0 ) );
 
         // Validate required params
-        if (!$action_type || !$prompt || !$page_id) {
+        if (!$action_type || !$prompt) {
             return rest_ensure_response(array(
                 'success' => false,
-                'message' => 'Missing required parameters (action_type, prompt, page_id)',
+                'message' => 'Missing required parameters (action_type, prompt)',
             ));
         }
 
@@ -1297,6 +1301,18 @@ class WCP_REST_API {
 
             case 'edit_items':
                 $result = $ai_actions->edit_items($prompt, $page_id, $context_mode, $selected_pages, $conversation_id);
+                break;
+
+            case 'taxonomy_outline':
+                $result = $ai_actions->taxonomy_outline($prompt, $conversation_id);
+                break;
+
+            case 'mission_priorities':
+                $result = $ai_actions->mission_priorities($prompt, $conversation_id);
+                break;
+
+            case 'weekly_summary':
+                $result = $ai_actions->weekly_summary($prompt, $conversation_id);
                 break;
 
             case 'rewrite_content':
@@ -2861,10 +2877,8 @@ class WCP_REST_API {
             . "Frame the summary in light of the copilot's mission where relevant. "
             . "Do not list items individually — synthesise the themes.";
 
-        $user_message = "Items created in the last 7 days ({$count} total):\n\n{$items_text}{$mission_line}";
-
         $count = count( $posts );
-        $user_message = str_replace( '{$count}', $count, $user_message );
+        $user_message = "Items created in the last 7 days ({$count} total):\n\n{$items_text}{$mission_line}";
 
         $ai_client = WCP_AI_Client::instance();
         $response  = $ai_client->request_with_conversation( $system_prompt, $user_message, array(), 1024 );
