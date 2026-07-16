@@ -2677,7 +2677,8 @@ class WCP_REST_API {
             case 'improve_phrasing':
                 $sys  = "Rewrite the item title (and optionally content if present) to be clearer, more actionable, and more concise. "
                       . "Return ONLY a JSON object: {\"title\": \"...\", \"content\": \"...\"}. "
-                      . "Keep 'content' empty string if there was no original content.";
+                      . "Keep 'content' empty string if there was no original content. "
+                      . "'content' may use Markdown (bullet lists with -, **bold**, headings with #) where it improves clarity — it will be rendered, not shown as raw text.";
                 $resp = $ai_client->request_with_conversation( $sys, $item_text, array(), 256 );
                 if ( is_wp_error($resp) ) return $resp;
                 $parsed = json_decode( $resp['content'], true );
@@ -2695,7 +2696,8 @@ class WCP_REST_API {
                 $sys  = "You are editing a single knowledge/work item. Apply the user's instruction to it "
                       . "(most often rephrasing or rewriting). Return ONLY a JSON object: {\"title\": \"...\", \"content\": \"...\"}. "
                       . "Preserve the item's meaning unless the instruction says otherwise. Keep 'content' an empty string "
-                      . "if the item had no content and the instruction does not call for any.";
+                      . "if the item had no content and the instruction does not call for any. "
+                      . "'content' may use Markdown (bullet lists with -, **bold**, headings with #) where it improves clarity — it will be rendered, not shown as raw text.";
                 $usr  = "User instruction: {$user_prompt}\n\n{$item_text}";
                 $resp = $ai_client->request_with_conversation( $sys, $usr, array(), 512 );
                 if ( is_wp_error($resp) ) return $resp;

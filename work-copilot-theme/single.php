@@ -64,9 +64,13 @@ get_header();
                 </div>
             </header>
 
-            <div class="wcp-item-content">
-                <?php the_content(); ?>
-            </div>
+            <?php
+            // Rendered client-side as Markdown (theme.js), not through the_content()'s
+            // wpautop/shortcode pipeline — item content may be AI-generated Markdown
+            // (bullet lists, bold, etc.) and should render as such.
+            $_content_raw = wp_strip_all_tags(get_the_content());
+            ?>
+            <div class="wcp-item-content" data-raw="<?php echo esc_attr($_content_raw); ?>"><?php echo esc_html($_content_raw); ?></div>
 
             <?php
             // Belongs to: every structural location this item sits in (it may be

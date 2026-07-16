@@ -100,9 +100,9 @@ get_header();
 
         <?php if (get_option('wcp_ai_enabled', false)) : ?>
         <!-- Page-level AI actions: rolls down a strip of chips, each expanding
-             a prompt field (mirrors the item-level AI panel). Runs through the
-             AI Assistant chat widget so proposals go through the same
-             review/accept flow as everywhere else. -->
+             a prompt field (mirrors the item-level AI panel). Self-contained —
+             requests, reviews, and creates the result directly on the page,
+             without opening the AI Assistant chat widget. -->
         <div id="wcp-page-ai-panel" class="wcp-page-ai-panel" style="display:none;" data-page-id="<?php echo esc_attr($page_id); ?>">
             <div class="wcp-page-ai-chips">
                 <button type="button" class="wcp-page-ai-chip" data-action="generate_structure">Generate structure</button>
@@ -114,6 +114,7 @@ get_header();
                     <button type="button" class="wcp-page-ai-prompt-cancel wcp-edit-link">cancel</button>
                 </div>
             </form>
+            <div class="wcp-page-ai-result" style="display:none;"></div>
         </div>
         <?php endif; ?>
 

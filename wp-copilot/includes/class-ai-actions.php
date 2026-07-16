@@ -1058,7 +1058,8 @@ class WCP_AI_Actions {
              . "Return ONLY a JSON array: [{\"id\": <item id, must match one from the list>, \"title\": \"...\", "
              . "\"content\": \"...\"}, ...]. Use the item's existing title/description for whichever of the two "
              . "the instruction doesn't ask you to change. Content may be an empty string if the item should end up "
-             . "with no description.";
+             . "with no description. Content may use Markdown (bullet lists with -, **bold**, headings with #) "
+             . "where it improves clarity — it will be rendered, not shown as raw text.";
         $usr = "User instruction: {$prompt}\n\nCandidate items:\n{$items_listing}";
 
         $conversation_history = array();
