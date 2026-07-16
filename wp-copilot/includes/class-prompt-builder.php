@@ -160,13 +160,15 @@ MD;
             // Generate items action for frontend widget
             'generate-single' => "Generate ONE actionable item based on the user's request and the context provided. "
                 . "Be specific and concrete. Format your response as valid JSON:\n"
-                . '{"title": "Item title", "content": "Detailed content", "item_type": "task|info|learning"}',
+                . '{"title": "Item title", "content": "Detailed content", "item_type": "task|info|learning"}'
+                . "\n\n'content' may use Markdown (bullet lists with -, **bold**, headings with #) where it improves clarity — it will be rendered, not shown as raw text.",
 
             'generate-multiple' => "{$item_count_instruction} based on the user's request and context. "
                 . "Each item should be specific, concrete, and immediately useful.\n\n"
                 . "IMPORTANT: Respond with ONLY a valid JSON array. No text before or after. Example format:\n"
                 . '[{"title": "Item title", "content": "Detailed content", "item_type": "task"}]\n\n'
-                . "Valid item_type values: task, info, learning. Start your response with [ and end with ].",
+                . "Valid item_type values: task, info, learning. Start your response with [ and end with ]. "
+                . "'content' may use Markdown (bullet lists with -, **bold**, headings with #) where it improves clarity — it will be rendered, not shown as raw text.",
 
             'generate-headings' => "Generate headings to structure the current page based on the user's request and context. "
                 . "Headings are section titles that organise items within a page — keep them short, clear, and noun-phrase style.\n\n"

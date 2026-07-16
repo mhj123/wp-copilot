@@ -117,8 +117,10 @@ $_delegation_labels = array(
         <a href="<?php echo esc_url($source_url); ?>" class="wcp-source-link" target="_blank" rel="noopener" title="<?php echo esc_attr($source_url); ?>">↗</a>
     <?php endif; ?>
 
+    <?php $_desc_raw = wp_strip_all_tags($item->post_content); ?>
     <span class="wcp-item-description<?php echo empty($item->post_content) ? ' wcp-item-description-empty' : ''; ?>"
-          data-item-id="<?php echo esc_attr($item->ID); ?>"><?php echo esc_html(wp_strip_all_tags($item->post_content)); ?></span>
+          data-item-id="<?php echo esc_attr($item->ID); ?>"
+          data-raw="<?php echo esc_attr($_desc_raw); ?>"><?php echo esc_html($_desc_raw); ?></span>
 
     <?php if (!empty($item_contexts)) : ?>
         <span class="wcp-item-meta-pills">

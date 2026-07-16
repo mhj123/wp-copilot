@@ -508,11 +508,31 @@ jQuery(document).ready(function($) {
         if (e.key === 'Escape') { $(this).hide().siblings('.wcp-heading-title-text').show(); }
     });
 
+    // Render a raw Markdown string into an element (item descriptions may be
+    // AI-generated Markdown — bullet lists, bold, etc. — and should render as
+    // such rather than as an unbroken line of plain text). Falls back to
+    // plain text if marked.js isn't loaded for some reason.
+    function wcpRenderMarkdown($el, raw) {
+        if (window.marked && typeof window.marked.parse === 'function') {
+            $el.html(marked.parse(raw || ''));
+        } else {
+            $el.text(raw || '');
+        }
+    }
+
+    // Render every item description on the page as Markdown on load — the
+    // server renders the raw text initially (data-raw), this upgrades it.
+    // Same for the single-item page's main content area.
+    $('.wcp-item-description[data-raw], .wcp-item-content[data-raw]').each(function() {
+        var $el = $(this);
+        wcpRenderMarkdown($el, $el.data('raw'));
+    });
+
     // Inline item description edit — click description to edit
     $(document).on('click', '.wcp-item-description', function() {
         var $span  = $(this);
         var itemId = $span.data('item-id');
-        var text   = $span.text();
+        var text   = String($span.data('raw') || '');
         var $ta    = $('<textarea class="wcp-item-description-edit wcp-form-control">')
                         .val(text).attr('rows', 3);
         $span.hide().after($ta);
@@ -520,7 +540,10 @@ jQuery(document).ready(function($) {
 
         function saveDesc() {
             var newVal = $ta.val().trim();
-            $span.text(newVal).show();
+            $span.attr('data-raw', newVal).data('raw', newVal);
+            $span.toggleClass('wcp-item-description-empty', !newVal);
+            wcpRenderMarkdown($span, newVal);
+            $span.show();
             $ta.remove();
             if (newVal !== text) {
                 updateItem(itemId, { content: newVal });
@@ -1086,30 +1109,149 @@ jQuery(document).ready(function($) {
         $panel.find('.wcp-page-ai-chip').removeClass('active');
     });
 
-    // Hand off to the AI Assistant chat widget: it already owns the
-    // request/proposal-review pipeline (conversation, approval panel,
-    // accept/dismiss) for every other AI action, so page-level actions
-    // reuse it rather than duplicating that logic here.
+    // Self-contained request → review → create flow: this never opens the
+    // AI Assistant chat widget. Reuses the same REST actions the widget
+    // calls (execute_action / structure/accept) — they're generic and don't
+    // care which UI called them — but renders the proposal review and
+    // handles accept/dismiss directly in this panel.
     $(document).on('submit', '.wcp-page-ai-prompt-form', function(e) {
         e.preventDefault();
-        var $form  = $(this);
-        var action = $form.data('action');
-        var prompt = $form.find('.wcp-page-ai-prompt-input').val().trim();
+        var $form   = $(this);
+        var $panel  = $form.closest('.wcp-page-ai-panel');
+        var $result = $panel.find('.wcp-page-ai-result');
+        var action  = $form.data('action');
+        var prompt  = $form.find('.wcp-page-ai-prompt-input').val().trim();
+        var pageId  = $panel.data('page-id');
         if (!prompt || !action) { return; }
 
-        if (!window.WcpAIWidget) {
-            alert('AI assistant is not available on this page.');
-            return;
-        }
+        $result.show().html('<p class="wcp-page-ai-thinking">Thinking…</p>');
 
-        window.WcpAIWidget.currentAction = action;
-        window.WcpAIWidget.openWidget();
-        $('#wcp-ai-prompt').val(prompt);
-        window.WcpAIWidget.sendMessage();
+        $.ajax({
+            url: wcpThemeData.restUrl + '/ai/actions/execute',
+            method: 'POST',
+            data: {
+                action_type: action,
+                prompt: prompt,
+                page_id: pageId,
+                context_mode: 'page'
+            },
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(response) {
+                if (!response.success) {
+                    $result.html('<p class="wcp-page-ai-error">' + (response.message || 'Action failed.') + '</p>');
+                    return;
+                }
+                var result = response.result || {};
+                if (result.outcome === 'create_structure') {
+                    wcpRenderPageStructureProposal($result, result.batch_id, result.plan || {});
+                } else {
+                    $result.html('<p class="wcp-page-ai-error">Unexpected response from AI.</p>');
+                }
+            },
+            error: function(xhr) {
+                $result.html('<p class="wcp-page-ai-error">Connection error: ' + xhr.statusText + '</p>');
+            }
+        });
 
         $form.hide().find('.wcp-page-ai-prompt-input').val('');
         $('.wcp-page-ai-chip').removeClass('active');
-        $('#wcp-page-ai-panel').slideUp(150);
+    });
+
+    // Render a structure proposal (new headings + placed items) for review,
+    // mirroring ai-widget.js's showStructureProposal() but self-contained.
+    function wcpRenderPageStructureProposal($result, batchId, plan) {
+        var esc = function(s) { return $('<span>').text(s == null ? '' : s).html(); };
+        var html = '<div class="wcp-struct">';
+
+        (plan.new_headings || []).forEach(function(h) {
+            html += '<div class="wcp-struct-group">';
+            html += '<label class="wcp-struct-row wcp-struct-heading">'
+                + '<input type="checkbox" class="wcp-struct-heading-cb" data-proposal-id="' + esc(h.proposal_id) + '" checked> '
+                + '<span class="wcp-struct-badge">+ heading</span> ' + esc(h.title) + '</label>';
+            (h.items || []).forEach(function(it) {
+                html += '<label class="wcp-struct-row wcp-struct-item wcp-struct-child">'
+                    + '<input type="checkbox" class="wcp-struct-item-cb" data-proposal-id="' + esc(it.proposal_id) + '" checked> '
+                    + '<span class="wcp-struct-type">' + esc(it.item_type) + '</span> ' + esc(it.title) + '</label>';
+            });
+            html += '</div>';
+        });
+
+        (plan.existing_groups || []).forEach(function(g) {
+            html += '<div class="wcp-struct-group"><div class="wcp-struct-grouplabel">under ' + esc(g.title) + '</div>';
+            (g.items || []).forEach(function(it) {
+                html += '<label class="wcp-struct-row wcp-struct-item">'
+                    + '<input type="checkbox" class="wcp-struct-item-cb" data-proposal-id="' + esc(it.proposal_id) + '" checked> '
+                    + '<span class="wcp-struct-type">' + esc(it.item_type) + '</span> ' + esc(it.title) + '</label>';
+            });
+            html += '</div>';
+        });
+
+        if ((plan.page_items || []).length) {
+            html += '<div class="wcp-struct-group"><div class="wcp-struct-grouplabel">page level</div>';
+            plan.page_items.forEach(function(it) {
+                html += '<label class="wcp-struct-row wcp-struct-item">'
+                    + '<input type="checkbox" class="wcp-struct-item-cb" data-proposal-id="' + esc(it.proposal_id) + '" checked> '
+                    + '<span class="wcp-struct-type">' + esc(it.item_type) + '</span> ' + esc(it.title) + '</label>';
+            });
+            html += '</div>';
+        }
+
+        html += '<div class="wcp-struct-actions">'
+            + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-page-ai-create-btn">Create selected</button> '
+            + '<button type="button" class="wcp-btn wcp-btn-sm wcp-page-ai-dismiss-btn">Dismiss</button>'
+            + '</div></div>';
+
+        $result.attr('data-batch-id', batchId).show().html(html);
+    }
+
+    // New-heading checkbox cascades to its child items — if the heading
+    // isn't being created, its items have nowhere to go either.
+    $(document).on('change', '.wcp-page-ai-result .wcp-struct-heading-cb', function() {
+        var $cb = $(this);
+        var on  = $cb.is(':checked');
+        $cb.closest('.wcp-struct-group').find('.wcp-struct-item-cb')
+            .prop('disabled', !on).prop('checked', on);
+    });
+
+    $(document).on('click', '.wcp-page-ai-create-btn', function() {
+        var $btn    = $(this);
+        var $result = $btn.closest('.wcp-page-ai-result');
+        var batchId = $result.data('batch-id');
+        var headingIds = $result.find('.wcp-struct-heading-cb:checked').map(function() { return $(this).data('proposal-id'); }).get();
+        var itemIds    = $result.find('.wcp-struct-item-cb:checked').filter(function() { return !$(this).prop('disabled'); }).map(function() { return $(this).data('proposal-id'); }).get();
+
+        if (!headingIds.length && !itemIds.length) {
+            alert('Nothing selected.');
+            return;
+        }
+
+        $btn.prop('disabled', true).text('Creating…');
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/ai/structure/accept',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ batch_id: batchId, heading_ids: headingIds, item_ids: itemIds }),
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(response) {
+                if (response.success) {
+                    location.reload();
+                } else {
+                    $btn.prop('disabled', false).text('Create selected');
+                    alert(response.message || 'Could not create structure.');
+                }
+            },
+            error: function() {
+                $btn.prop('disabled', false).text('Create selected');
+                alert('Connection error.');
+            }
+        });
+    });
+
+    $(document).on('click', '.wcp-page-ai-dismiss-btn', function() {
+        var $panel = $(this).closest('.wcp-page-ai-panel');
+        $panel.find('.wcp-page-ai-result').hide().empty().removeAttr('data-batch-id');
+        $panel.find('.wcp-page-ai-chip').removeClass('active');
     });
 
     $(document).on('change', '.wcp-item-select-cb', function() {

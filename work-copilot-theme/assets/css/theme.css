@@ -2294,8 +2294,21 @@ a.wcp-tree-label:hover {
     color: #333;
 }
 
-.wcp-item-content p {
+.wcp-item-content p,
+.wcp-item-content ul,
+.wcp-item-content ol {
     margin-bottom: 1.5em;
+}
+
+.wcp-item-content ul,
+.wcp-item-content ol {
+    padding-left: 1.5em;
+}
+
+.wcp-item-content p:last-child,
+.wcp-item-content ul:last-child,
+.wcp-item-content ol:last-child {
+    margin-bottom: 0;
 }
 
 .wcp-item-footer {
@@ -2695,14 +2708,32 @@ a.wcp-tag:hover {
     text-decoration: underline;
 }
 
-/* Item description — hidden by default, shown when toggle is active */
+/* Item description — hidden by default, shown when toggle is active.
+   Rendered as Markdown (theme.js, via data-raw) — no white-space:pre-wrap
+   here since real block elements (p/ul/li) from the rendered HTML handle
+   their own spacing; pre-wrap would turn the whitespace between them into
+   extra visible blank lines. */
 .wcp-item-description {
     display: none;
     font-size: 13px;
     color: #777;
     width: 100%;
-    white-space: pre-wrap;
     order: 99;
+}
+
+.wcp-item-description p,
+.wcp-item-description ul,
+.wcp-item-description ol {
+    margin: 0 0 6px;
+}
+.wcp-item-description p:last-child,
+.wcp-item-description ul:last-child,
+.wcp-item-description ol:last-child {
+    margin-bottom: 0;
+}
+.wcp-item-description ul,
+.wcp-item-description ol {
+    padding-left: 20px;
 }
 
 .wcp-items-section.wcp-show-descriptions .wcp-item-description {
@@ -3515,4 +3546,19 @@ a.wcp-tag:hover {
     display: flex;
     align-items: center;
     gap: 10px;
+}
+
+.wcp-page-ai-result {
+    margin-top: 8px;
+}
+
+.wcp-page-ai-thinking {
+    color: #aaa;
+    font-size: 12px;
+    font-style: italic;
+}
+
+.wcp-page-ai-error {
+    color: #c0392b;
+    font-size: 12px;
 }
