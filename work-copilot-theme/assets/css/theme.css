@@ -224,6 +224,48 @@ body.wcp-ai-panel-open .wcp-main-content {
     line-height: 1.2;
 }
 
+.wcp-page-toc {
+    background: #fff;
+    border-left: 3px solid #2271b1;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    margin-bottom: 30px;
+    padding: 14px 18px;
+}
+
+.wcp-page-toc-label {
+    color: #666;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.wcp-page-toc-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.wcp-page-toc-list li {
+    margin: 0;
+}
+
+.wcp-page-toc-list a {
+    color: #2271b1;
+    font-size: 14px;
+    text-decoration: none;
+}
+
+.wcp-page-toc-list a:hover {
+    color: #135e96;
+    text-decoration: underline;
+}
+
 /* Page content box (only when there's content) */
 .wcp-page-content-box {
     background: #fff;
