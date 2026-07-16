@@ -10,8 +10,14 @@ get_header();
 <div class="wcp-page-content">
 
     <?php
+    $page_id = 0;
+    $headings = array();
+
     while (have_posts()) :
         the_post();
+
+        $page_id = get_the_ID();
+        $headings = wcp_theme_get_page_headings($page_id);
     ?>
 
     <!-- Page Header: Breadcrumb + Title (outside of any container box) -->
@@ -26,6 +32,21 @@ get_header();
 
         <h1 class="wcp-page-title-clean"><?php the_title(); ?></h1>
     </header>
+
+    <?php if (!empty($headings)) : ?>
+    <nav class="wcp-page-toc" aria-label="<?php esc_attr_e('Page table of contents', 'work-copilot-theme'); ?>">
+        <div class="wcp-page-toc-label"><?php _e('Contents', 'work-copilot-theme'); ?></div>
+        <ul class="wcp-page-toc-list">
+            <?php foreach ($headings as $heading) : ?>
+                <li>
+                    <a href="#wcp-heading-<?php echo esc_attr($heading->ID); ?>">
+                        <?php echo esc_html($heading->post_title); ?>
+                    </a>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    </nav>
+    <?php endif; ?>
 
     <!-- Page Content (only show if there is content) -->
     <?php if (get_the_content()) : ?>
@@ -46,10 +67,6 @@ get_header();
 
     <?php
     endwhile;
-
-    // Get items and headings for this page
-    $page_id = get_the_ID();
-    $headings = wcp_theme_get_page_headings($page_id);
 
     // Show child pages if any
     $child_pages = get_pages(array(
@@ -177,7 +194,7 @@ get_header();
             $is_goal         = get_post_meta($heading_id, '_wcp_is_goal', true) === '1';
         ?>
             <div class="wcp-heading-group<?php echo $is_goal ? ' wcp-goal-group' : ''; ?>" data-heading-id="<?php echo esc_attr($heading_id); ?>">
-                <h3 class="wcp-heading-title-simple">
+                <h3 id="wcp-heading-<?php echo esc_attr($heading_id); ?>" class="wcp-heading-title-simple">
                     <span class="wcp-heading-drag-handle" title="Drag to reorder">⠿</span>
                     <button type="button" class="wcp-heading-collapse-toggle" data-heading-id="<?php echo esc_attr($heading_id); ?>" aria-expanded="true" title="Collapse items">▾</button>
                     <?php if ($is_goal) : ?>
