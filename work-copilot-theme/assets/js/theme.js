@@ -828,6 +828,7 @@ jQuery(document).ready(function($) {
         var $input = $row.find('.wcp-item-title-input');
 
         $title.hide();
+        $row.addClass('wcp-editing-title');
         $input.show().focus().select();
     });
 
@@ -842,6 +843,7 @@ jQuery(document).ready(function($) {
             var $row = $input.closest('.wcp-item-row');
             var $title = $row.find('.wcp-item-title');
             $input.val($title.text()).hide();
+            $row.removeClass('wcp-editing-title');
             $title.show();
         } else if (e.which === 221 && (e.ctrlKey || e.metaKey)) {
             // Ctrl+] or Cmd+] — indent
@@ -900,6 +902,7 @@ jQuery(document).ready(function($) {
 
         if (!newTitle || newTitle === $title.text()) {
             $input.val($title.text()).hide();
+            $row.removeClass('wcp-editing-title');
             $title.show();
             if (viaEnter) { wcpOpenQuickAddForRow($row); }
             return;
@@ -913,6 +916,7 @@ jQuery(document).ready(function($) {
             })
             .always(function() {
                 $input.hide();
+                $row.removeClass('wcp-editing-title');
                 $title.show();
                 if (viaEnter) { wcpOpenQuickAddForRow($row); }
             });
@@ -1025,6 +1029,33 @@ jQuery(document).ready(function($) {
         $row.toggleClass('wcp-task-done', done);
         $row.data('task-status', status);
         if (done) { wcpRemoveDoneRow($row); }
+    });
+
+    // Duplicate section (heading + all its items, task statuses reset to to-do)
+    $(document).on('click', '.wcp-heading-duplicate', function() {
+        var $btn      = $(this);
+        var headingId = $btn.data('heading-id');
+
+        if ($btn.prop('disabled')) return;
+        $btn.prop('disabled', true).text('[duplicating…]');
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/headings/' + headingId + '/duplicate',
+            method: 'POST',
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(response) {
+                if (response.success) {
+                    location.reload();
+                } else {
+                    alert('Could not duplicate section — please try again.');
+                    $btn.prop('disabled', false).text('[duplicate]');
+                }
+            },
+            error: function() {
+                alert('Could not duplicate section — please try again.');
+                $btn.prop('disabled', false).text('[duplicate]');
+            }
+        });
     });
 
     // Delete item

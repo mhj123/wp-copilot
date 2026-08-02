@@ -249,6 +249,13 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // Duplicate a section (heading + all its items, task statuses reset)
+        register_rest_route($namespace, '/headings/(?P<heading_id>\d+)/duplicate', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'duplicate_heading'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // NEW: Create heading
         register_rest_route($namespace, '/headings/create', array(
             'methods' => 'POST',
@@ -2648,6 +2655,15 @@ class WCP_REST_API {
             WCP_Taxonomy_Sync::instance()->sync_heading_to_taxonomy($heading_id, get_post($heading_id), true);
         }
         return rest_ensure_response( array('success' => true) );
+    }
+
+    public function duplicate_heading( $request ) {
+        $heading_id = (int) $request->get_param('heading_id');
+        $new_id = WCP_Section_Manager::instance()->duplicate_section( $heading_id );
+        if ( is_wp_error( $new_id ) ) {
+            return $new_id;
+        }
+        return rest_ensure_response( array( 'success' => true, 'new_heading_id' => $new_id ) );
     }
 
     public function reorder_headings( $request ) {

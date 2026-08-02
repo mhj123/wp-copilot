@@ -1,0 +1,130 @@
+/* Work Copilot workspace UI — loaded after the original theme as a visual layer. */
+.wcp-theme-container {
+    --wcp-bg: #f6f7fb;
+    --wcp-surface: #fff;
+    --wcp-surface-muted: #f8f9fc;
+    --wcp-border: #e8ebf1;
+    --wcp-border-strong: #d9dee8;
+    --wcp-text: #20242d;
+    --wcp-text-muted: #6b7280;
+    --wcp-text-faint: #98a1b2;
+    --wcp-accent: hsl(252 82% 62%);
+    --wcp-sidebar-width: 272px;
+    display: flex;
+    min-height: 100vh;
+    color: var(--wcp-text);
+    background: var(--wcp-bg);
+    font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.wcp-theme-container *, .wcp-theme-container *::before, .wcp-theme-container *::after { box-sizing: border-box; }
+.wcp-theme-container a { color: var(--wcp-accent); text-decoration: none; }
+.wcp-theme-container button:focus-visible, .wcp-theme-container a:focus-visible, .wcp-theme-container input:focus-visible, .wcp-theme-container select:focus-visible { outline: 3px solid color-mix(in srgb, var(--wcp-accent) 28%, transparent); outline-offset: 2px; }
+
+/* Navigation is deliberately quiet: the current area gets the colour, not every link. */
+.wcp-sidebar { position: sticky; top: 0; align-self: flex-start; width: var(--wcp-sidebar-width); height: 100vh; min-height: 0; overflow: hidden; flex: 0 0 var(--wcp-sidebar-width); background: #17191e; border: 0; color: #edf0f5; z-index: 10; }
+body.admin-bar .wcp-sidebar { top: 32px; height: calc(100vh - 32px); }
+.wcp-sidebar-header { padding: 22px 18px 15px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.wcp-sidebar-header h2 { font-size: 15px; letter-spacing: -.02em; }
+.wcp-sidebar-logo { display: inline-flex; align-items: center; gap: 9px; color: #fff; font-weight: 750; }
+.wcp-sidebar-logo::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--wcp-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--wcp-accent) 18%, transparent); }
+.wcp-page-navigation { padding: 12px 9px; overflow-y: auto; }
+.wcp-page-list, .wcp-page-list ul { margin: 0; padding: 0; list-style: none; }
+.wcp-page-list .wcp-page-list { margin-left: 13px; }
+.wcp-nav-row { min-width: 0; display: flex; align-items: center; gap: 2px; margin: 1px 0; border-radius: 7px; }
+.wcp-nav-row:hover { background: rgba(255,255,255,.06); }
+.wcp-nav-row > a { min-width: 0; flex: 1; padding: 6px 7px 6px 3px; overflow: hidden; color: #aeb6c4; font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.wcp-nav-row:hover > a { color: #fff; }
+.wcp-nav-toggle, .wcp-nav-toggle-spacer { width: 18px; flex: 0 0 18px; }
+.wcp-nav-toggle { padding: 0; border: 0; background: transparent; color: #747d8d; cursor: pointer; font-size: 10px; }
+.wcp-page-list li.current-page > .wcp-nav-row { background: color-mix(in srgb, var(--wcp-accent) 19%, #17191e); box-shadow: inset 2px 0 var(--wcp-accent); }
+.wcp-page-list li.current-page > .wcp-nav-row > a { color: #fff; font-weight: 650; }
+.wcp-sidebar-footer { padding: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+.wcp-add-page-btn { display: flex; align-items: center; justify-content: center; min-height: 38px; border-radius: 8px; background: var(--wcp-accent); color: #fff; font-size: 13px; font-weight: 700; box-shadow: 0 5px 14px color-mix(in srgb, var(--wcp-accent) 25%, transparent); }
+.wcp-add-page-btn:hover { color: #fff; filter: brightness(1.06); }
+
+.wcp-main-content { min-width: 0; min-height: 100vh; flex: 1; margin-left: 0; }
+body.wcp-ai-panel-open .wcp-main-content { margin-right: calc(50vw - 136px); }
+.wcp-site-header { display: none; }
+.wcp-content-wrapper { width: 100%; max-width: none; padding: 34px 42px 80px; }
+.wcp-page-content { max-width: 1280px; margin: 0 auto; }
+.wcp-page-header-clean { position: relative; margin-bottom: 23px; padding: 2px 0 0 17px; }
+.wcp-page-header-clean::before { position: absolute; inset: 1px auto 0 0; width: 4px; border-radius: 99px; background: var(--wcp-accent); content: ""; }
+.wcp-page-title-clean { margin: 8px 0 0; color: var(--wcp-text); font-size: clamp(27px, 3vw, 36px); font-weight: 760; letter-spacing: -.045em; line-height: 1.05; }
+.wcp-breadcrumbs { margin: 0; }
+.wcp-breadcrumb-list { gap: 1px; }
+.wcp-breadcrumb-link, .wcp-breadcrumb-current-text { padding: 2px 4px; color: var(--wcp-text-muted); font-size: 12px; }
+.wcp-breadcrumb-link:hover { color: var(--wcp-accent); background: color-mix(in srgb, var(--wcp-accent) 7%, transparent); border-radius: 4px; }
+.wcp-breadcrumb-home-icon, .wcp-breadcrumb-heading-icon { font-size: 11px; }
+.wcp-breadcrumb-separator { color: var(--wcp-text-faint); }
+
+/* Compact child-page cards make the structural next step scan faster than a bullet list. */
+.wcp-subpages-section { margin: 0 0 18px; }
+.wcp-subpages-section h2 { margin: 0 0 9px; color: var(--wcp-text-muted); font-size: 11px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+.wcp-subpages-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.wcp-subpage-item { margin: 0; }
+.wcp-subpage-item a { display: inline-flex; align-items: center; gap: 7px; padding: 8px 11px; border: 1px solid var(--wcp-border); border-radius: 8px; background: var(--wcp-surface); color: var(--wcp-text); font-size: 13px; font-weight: 600; box-shadow: 0 1px 2px rgba(20,31,50,.025); }
+.wcp-subpage-item a::before { width: 6px; height: 6px; border-radius: 50%; background: var(--wcp-accent); content: ""; }
+.wcp-subpage-item a:hover { border-color: color-mix(in srgb, var(--wcp-accent) 50%, var(--wcp-border)); color: var(--wcp-accent); }
+
+/* The list is a single information-dense workspace surface. */
+.wcp-items-section { overflow: hidden; padding: 0; border: 1px solid var(--wcp-border); border-radius: 12px; background: var(--wcp-surface); box-shadow: 0 12px 32px rgba(23,35,55,.045); }
+.wcp-items-toolbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 9px 11px; border: 0; border-bottom: 1px solid var(--wcp-border); background: #fcfcfd; }
+.wcp-filter-group { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--wcp-border); border-radius: 8px; background: var(--wcp-surface-muted); }
+.wcp-filter-btn, .wcp-items-toolbar .wcp-edit-link { border: 0; border-radius: 6px; background: transparent; color: var(--wcp-text-muted); cursor: pointer; font: 600 12px/1.25 inherit; padding: 6px 9px; }
+.wcp-filter-btn.active { background: #fff; color: var(--wcp-accent); box-shadow: 0 1px 3px rgba(20,31,50,.1); }
+.wcp-items-toolbar .wcp-edit-link:hover { background: var(--wcp-surface-muted); color: var(--wcp-text); }
+.wcp-items-toolbar .wcp-sort-priority { margin-left: auto; }
+.wcp-item-row { position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 5px 9px; min-height: 34px; padding: 6px 12px 6px 10px; border-bottom: 1px solid var(--wcp-border); background: #fff; transition: background .12s ease; }
+.wcp-item-row:hover, .wcp-item-row:focus-within { background: #fafbfe; }
+.wcp-drag-handle { width: 10px; color: var(--wcp-text-faint); cursor: grab; opacity: 0; }
+.wcp-item-row:hover .wcp-drag-handle { opacity: .65; }
+.wcp-task-checkbox { width: 17px; height: 17px; margin: 0; accent-color: var(--wcp-accent); }
+.wcp-item-title { min-width: 130px; flex: 1 1 280px; overflow: hidden; color: var(--wcp-text); font-size: 14px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.wcp-item-title-input { min-width: 130px; flex: 1 1 280px; border: 1px solid var(--wcp-border-strong); border-radius: 5px; padding: 2px 6px; color: var(--wcp-text); font: inherit; font-size: 14px; }
+/* While editing, the trailing link-style actions (+subtask, +context, +tag,
+   delete/view/ai/desc, pin) step aside so the title field can use their
+   space — the item-type/priority/status selects and due-date stay put and
+   stay tabbable straight out of the title field. */
+.wcp-item-row.wcp-editing-title .wcp-item-title-input { flex-grow: 3; }
+.wcp-item-row.wcp-editing-title .wcp-edit-link,
+.wcp-item-row.wcp-editing-title .wcp-source-link,
+.wcp-item-row.wcp-editing-title .wcp-pin-toggle { display: none; }
+.wcp-task-done .wcp-item-title { color: var(--wcp-text-faint); text-decoration: line-through; }
+.wcp-item-created { color: var(--wcp-text-faint); font-size: 11px; white-space: nowrap; }
+.wcp-row-actions { display: inline-flex; align-items: center; gap: 5px; }
+.wcp-inline-select, .wcp-due-date-input { min-width: 0; border: 1px solid var(--wcp-border); border-radius: 5px; background: var(--wcp-surface-muted); color: var(--wcp-text-muted); font-size: 10px; font-weight: 700; line-height: 1; padding: 4px 5px; text-transform: uppercase; }
+.wcp-item-row .wcp-edit-link, .wcp-source-link, .wcp-pin-toggle { border: 0; border-radius: 5px; background: transparent; color: var(--wcp-text-faint); cursor: pointer; font-size: 11px; opacity: 0; padding: 3px 4px; }
+.wcp-item-row:hover .wcp-edit-link, .wcp-item-row:focus-within .wcp-edit-link, .wcp-item-row:hover .wcp-source-link, .wcp-item-row:hover .wcp-pin-toggle, .wcp-item-row.wcp-pinned .wcp-pin-toggle { opacity: 1; }
+.wcp-item-row .wcp-edit-link:hover, .wcp-source-link:hover { background: color-mix(in srgb, var(--wcp-accent) 10%, transparent); color: var(--wcp-accent); }
+.wcp-item-delete:hover { color: #db4652 !important; }
+.wcp-item-description { flex: 0 0 calc(100% - 29px); margin-left: 19px; color: var(--wcp-text); font-size: 12px; line-height: 1.45; }
+.wcp-item-meta-pills { display: inline-flex; gap: 4px; }
+.wcp-pill { border-radius: 999px; background: var(--wcp-surface-muted); color: var(--wcp-text-muted); font-size: 10px; padding: 2px 7px; }
+.wcp-pill-context { background: color-mix(in srgb, var(--wcp-accent) 11%, white); color: var(--wcp-accent); }
+
+.wcp-heading-group { margin: 0; padding-bottom: 0; border-bottom: 1px solid var(--wcp-border); }
+.wcp-heading-title-simple { display: flex; align-items: center; gap: 6px; margin: 0; padding: 5px 13px 3px; background: #fcfcfd; color: var(--wcp-text); font-size: 14px; font-weight: 750; }
+.wcp-heading-body { padding-left: 8px; }
+/* Drag/collapse controls sit after the title so the title text itself starts
+   flush with the left edge — items nest visibly to the right of it. */
+.wcp-heading-drag-handle { order: 4; }
+.wcp-heading-collapse-toggle { order: 5; width: 20px; height: 20px; border: 0; border-radius: 5px; background: transparent; color: var(--wcp-text-faint); cursor: pointer; }
+.wcp-heading-collapse-toggle:hover { background: var(--wcp-surface-muted); color: var(--wcp-accent); }
+.wcp-heading-drag-handle, .wcp-heading-duplicate, .wcp-heading-delete { opacity: 0; }
+.wcp-heading-group:hover .wcp-heading-drag-handle, .wcp-heading-group:hover .wcp-heading-duplicate, .wcp-heading-group:hover .wcp-heading-delete { opacity: 1; }
+.wcp-heading-title-simple .wcp-heading-duplicate { order: 6; margin-left: auto; border: 0; background: transparent; color: var(--wcp-text-faint); cursor: pointer; font-size: 11px; }
+.wcp-heading-title-simple .wcp-heading-delete { order: 7; border: 0; background: transparent; color: var(--wcp-text-faint); cursor: pointer; font-size: 11px; }
+.wcp-goal-group { background: color-mix(in srgb, var(--wcp-accent) 4%, #fff); }
+.wcp-goal-badge { border-radius: 5px; background: var(--wcp-accent); color: #fff; font-size: 9px; font-weight: 800; letter-spacing: .08em; padding: 3px 6px; text-transform: uppercase; }
+.wcp-goal-description { margin: 0; padding: 0 14px 10px 13px; color: var(--wcp-text-muted); font-size: 12px; font-style: italic; }
+.wcp-quick-add-wrap { padding: 3px 13px 4px; }
+.wcp-btn-quick-add-item, .wcp-add-heading-wrap .wcp-edit-link { border: 0; background: transparent; color: var(--wcp-text-faint); cursor: pointer; font-size: 12px; font-weight: 600; }
+.wcp-btn-quick-add-item:hover, .wcp-add-heading-wrap .wcp-edit-link:hover { color: var(--wcp-accent); }
+.wcp-add-heading-wrap { display: flex; gap: 12px; flex-wrap: wrap; padding: 14px; border-top: 1px solid var(--wcp-border); }
+.wcp-page-content-box { overflow: hidden; margin-bottom: 18px; padding: 0; border: 1px solid var(--wcp-border); border-radius: 10px; background: #fff; box-shadow: none; }
+.wcp-section-header { display: flex; justify-content: space-between; padding: 9px 13px; border-bottom: 1px solid var(--wcp-border); background: var(--wcp-surface-muted); }
+.wcp-section-label { color: var(--wcp-text-faint); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.wcp-section-body { padding: 16px 18px; color: var(--wcp-text-muted); font-size: 13px; line-height: 1.65; }
+
+@media (max-width: 900px) { .wcp-theme-container { --wcp-sidebar-width: 218px; } .wcp-content-wrapper { padding: 26px 22px 60px; } .wcp-items-toolbar .wcp-sort-priority { margin-left: 0; } }
+@media (max-width: 640px) { .wcp-sidebar { display: none; } .wcp-content-wrapper { padding: 22px 14px 50px; } .wcp-page-title-clean { font-size: 28px; } .wcp-item-row { padding-right: 8px; } .wcp-row-actions { order: 5; flex-basis: 100%; margin-left: 26px; } .wcp-item-row .wcp-edit-link, .wcp-source-link, .wcp-pin-toggle { opacity: 1; } }

@@ -3,7 +3,7 @@
  * Plugin Name: Work Copilot
  * Plugin URI: https://wordpress.org/plugins/work-copilot
  * Description: Personal knowledge and work management system with AI-assisted sensemaking
- * Version: 1.1.0
+ * Version: 1.2.2
  * Author: Your Name
  * Author URI: https://yoursite.com
  * License: GPL v2 or later
@@ -15,13 +15,6 @@
 if (!defined('ABSPATH')) {
     exit;
 }
-
-// Debug: Log that plugin is loading
-file_put_contents(
-    __DIR__ . '/plugin-load-log.txt',
-    date('Y-m-d H:i:s') . " - Plugin loading v1.2.1\n",
-    FILE_APPEND
-);
 
 define('WCP_VERSION', '1.2.2');
 define('WCP_PLUGIN_DIR', plugin_dir_path(__FILE__));
@@ -59,6 +52,7 @@ class Work_Copilot {
         require_once WCP_PLUGIN_DIR . 'includes/class-memory-manager.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-prompt-builder.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-ai-actions.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-section-manager.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-raindrop-importer.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-csv-exporter.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-csv-importer.php';
