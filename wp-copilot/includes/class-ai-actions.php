@@ -1072,7 +1072,7 @@ class WCP_AI_Actions {
         }
 
         $ai_client = WCP_AI_Client::instance();
-        $response = $ai_client->request_with_conversation($sys, $usr, $conversation_history, 2048, 90);
+        $response = $ai_client->request_with_conversation($sys, $usr, $conversation_history, 8192, 120);
 
         if (is_wp_error($response)) {
             return $response;
@@ -1081,6 +1081,13 @@ class WCP_AI_Actions {
         if ($conversation_id) {
             $conversations_manager = WCP_Conversations_Manager::instance();
             $conversations_manager->add_message($conversation_id, 'user', $prompt);
+        }
+
+        if (($response['stop_reason'] ?? null) === 'max_tokens') {
+            return new WP_Error(
+                'response_truncated',
+                'The AI response was cut off before it finished (too many items to edit at once). Try narrowing the request to fewer items — e.g. by page section or item type.'
+            );
         }
 
         $parsed = $this->parse_json_response($response['content']);
@@ -1801,19 +1808,90 @@ class WCP_AI_Actions {
         $parsed = json_decode($json_text, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
-            // Try one more time with more aggressive cleaning
-            $json_text = preg_replace('/[\x00-\x1F\x7F]/u', '', $json_text); // Remove control characters
+            // AI responses (e.g. multi-line Gherkin/BDD statements) often contain raw
+            // newlines/tabs inside string values, which is invalid JSON. Escape them
+            // without touching whitespace that's actually between tokens.
+            $json_text = $this->escape_raw_control_chars_in_json_strings($json_text);
             $parsed = json_decode($json_text, true);
 
             if (json_last_error() !== JSON_ERROR_NONE) {
-                return new WP_Error(
-                    'json_parse_error',
-                    'Failed to parse JSON: ' . json_last_error_msg() . '. Extract attempted: ' . substr($json_text, 0, 100)
-                );
+                // Last resort: strip any remaining control characters entirely.
+                $json_text = preg_replace('/[\x00-\x1F\x7F]/u', '', $json_text);
+                $parsed = json_decode($json_text, true);
+
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    return new WP_Error(
+                        'json_parse_error',
+                        'Failed to parse JSON: ' . json_last_error_msg() . '. Extract attempted: ' . substr($json_text, 0, 100)
+                    );
+                }
             }
         }
 
         return $parsed;
+    }
+
+    /**
+     * Escape raw newline/tab/carriage-return characters that appear inside
+     * JSON string literals, leaving structural whitespace (between tokens)
+     * untouched. This fixes the common case where an AI response embeds a
+     * literal line break in a string value instead of using \n.
+     *
+     * @param string $json_text Candidate JSON text
+     * @return string JSON text with control chars inside strings escaped
+     */
+    private function escape_raw_control_chars_in_json_strings($json_text) {
+        $result = '';
+        $in_string = false;
+        $escaped = false;
+        $len = strlen($json_text);
+
+        for ($i = 0; $i < $len; $i++) {
+            $char = $json_text[$i];
+
+            if ($in_string) {
+                if ($escaped) {
+                    $result .= $char;
+                    $escaped = false;
+                    continue;
+                }
+
+                if ($char === '\\') {
+                    $result .= $char;
+                    $escaped = true;
+                    continue;
+                }
+
+                if ($char === '"') {
+                    $in_string = false;
+                    $result .= $char;
+                    continue;
+                }
+
+                if ($char === "\n") {
+                    $result .= '\\n';
+                    continue;
+                }
+                if ($char === "\r") {
+                    $result .= '\\r';
+                    continue;
+                }
+                if ($char === "\t") {
+                    $result .= '\\t';
+                    continue;
+                }
+
+                $result .= $char;
+                continue;
+            }
+
+            if ($char === '"') {
+                $in_string = true;
+            }
+            $result .= $char;
+        }
+
+        return $result;
     }
 
     /**

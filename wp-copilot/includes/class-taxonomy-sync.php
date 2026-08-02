@@ -141,6 +141,20 @@ class WCP_Taxonomy_Sync {
     }
 
     /**
+     * Public accessor for looking up the wcp_context term that mirrors a
+     * given Page or Heading post. Callers that need the term (e.g. to fetch
+     * an entity's items or duplicate it) should use this rather than
+     * re-implementing the ref_type/ref_id meta_query lookup.
+     *
+     * @param string $ref_type 'page' or 'wcp_heading'
+     * @param int    $ref_id   Post ID
+     * @return WP_Term|null
+     */
+    public function get_term_for_ref($ref_type, $ref_id) {
+        return $this->get_context_term_by_ref($ref_id, $ref_type);
+    }
+
+    /**
      * Get context term by reference
      */
     private function get_context_term_by_ref($ref_id, $ref_type) {

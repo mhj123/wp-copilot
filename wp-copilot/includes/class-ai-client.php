@@ -344,7 +344,8 @@ class WCP_AI_Client {
         return array(
             'content' => $content,
             'model' => $this->model,
-            'usage' => isset($response['usage']) ? $response['usage'] : null
+            'usage' => isset($response['usage']) ? $response['usage'] : null,
+            'stop_reason' => isset($response['stop_reason']) ? $response['stop_reason'] : null,
         );
     }
 

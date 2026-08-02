@@ -12,7 +12,7 @@
 
 <a class="skip-link screen-reader-text" href="#primary"><?php esc_html_e('Skip to content', 'work-copilot-theme'); ?></a>
 
-<div class="wcp-theme-container">
+<div class="wcp-theme-container" style="--wcp-accent: <?php echo esc_attr(wcp_theme_section_accent()); ?>;">
 
     <!-- Left Sidebar with Page Navigation -->
     <?php get_sidebar(); ?>

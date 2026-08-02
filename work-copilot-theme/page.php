@@ -202,6 +202,7 @@ get_header();
                     <?php endif; ?>
                     <span class="wcp-heading-title-text" data-heading-id="<?php echo esc_attr($heading_id); ?>"><?php echo esc_html($heading->post_title); ?></span>
                     <input class="wcp-heading-title-input" type="text" style="display:none;" value="<?php echo esc_attr($heading->post_title); ?>" data-heading-id="<?php echo esc_attr($heading_id); ?>">
+                    <button type="button" class="wcp-heading-duplicate wcp-edit-link" data-heading-id="<?php echo esc_attr($heading_id); ?>" title="Duplicate this section, resetting task statuses">[duplicate]</button>
                     <button type="button" class="wcp-heading-delete wcp-edit-link" data-heading-id="<?php echo esc_attr($heading_id); ?>">[delete]</button>
                 </h3>
                 <?php if ($is_goal && !empty($heading->post_content)) : ?>

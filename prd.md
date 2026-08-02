@@ -249,6 +249,7 @@ Audit data is retained even if outputs are dismissed.
 - Scheduled or autonomous AI
 - Learning systems (spaced repetition)
 - External corpus diffing
+- Page templates defining Sections, and recurring cron-based Section creation — design notes in `ROADMAP.md`
 
 ---
 

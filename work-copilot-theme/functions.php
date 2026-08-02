@@ -81,6 +81,37 @@ function wcp_theme_scripts() {
 }
 add_action('wp_enqueue_scripts', 'wcp_theme_scripts');
 
+// Load after the plugin's front-end stylesheet, when that stylesheet is used.
+// This is presentation-only: item behaviour and all REST interactions stay intact.
+function wcp_theme_workspace_ui() {
+    $dependencies = array('wcp-theme-style', 'wcp-theme-custom');
+    if (wp_style_is('work-copilot-public', 'registered')) {
+        $dependencies[] = 'work-copilot-public';
+    }
+    wp_enqueue_style('wcp-workspace-ui', get_template_directory_uri() . '/assets/css/workspace-ui.css', $dependencies, '1.0.' . filemtime(get_template_directory() . '/assets/css/workspace-ui.css'));
+}
+add_action('wp_enqueue_scripts', 'wcp_theme_workspace_ui', 100);
+
+/**
+ * Return a stable pastel accent for the top-level page that owns the current
+ * view. Descendants inherit it, so a user keeps a visual sense of place while
+ * moving through a deep page tree. No page IDs or manually maintained colour
+ * map are required.
+ */
+function wcp_theme_section_accent() {
+    $page_id = is_page() ? get_queried_object_id() : 0;
+    if (!$page_id) {
+        return 'hsl(252 82% 62%)';
+    }
+
+    $ancestors = get_post_ancestors($page_id);
+    $top_id = !empty($ancestors) ? (int) end($ancestors) : (int) $page_id;
+    // A golden-angle sequence distributes adjacent IDs across distinct hues.
+    $hue = (int) (($top_id * 137.508) % 360);
+
+    return sprintf('hsl(%d 68%% 54%%)', $hue);
+}
+
 // Get hierarchical page tree
 function wcp_theme_get_page_tree($parent_id = 0) {
     $args = array(
