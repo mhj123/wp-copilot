@@ -359,7 +359,7 @@ get_header();
         </div>
         <div class="wcp-section-body">
             <div class="wcp-page-notes-display<?php echo $page_notes ? '' : ' wcp-page-notes-empty'; ?>">
-                <?php echo $page_notes ? wp_kses_post($page_notes) : '<span class="wcp-page-notes-placeholder">Add notes…</span>'; ?>
+                <?php echo $page_notes ? nl2br( esc_html( $page_notes ) ) : '<span class="wcp-page-notes-placeholder">Add notes…</span>'; ?>
             </div>
             <div class="wcp-page-notes-editor" style="display:none;">
                 <textarea class="wcp-page-notes-textarea wcp-form-control" rows="4"><?php echo esc_textarea($page_notes); ?></textarea>

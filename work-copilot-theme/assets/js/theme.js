@@ -2191,9 +2191,16 @@ jQuery(document).ready(function($) {
             beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
             success: function(response) {
                 var $display = $wrap.find('.wcp-page-notes-display');
-                $display.html(
-                    notes ? notes : '<span class="wcp-page-notes-placeholder">Add notes…</span>'
-                );
+                if (notes) {
+                    // Escape via a text node, then convert newlines to <br> so
+                    // multiline notes render as they were typed — never inject raw HTML.
+                    var escaped = $('<div>').text(notes).html().replace(/\r\n|\r|\n/g, '<br>');
+                    $display.html(escaped);
+                } else {
+                    $display.empty().append(
+                        $('<span class="wcp-page-notes-placeholder">').text('Add notes…')
+                    );
+                }
                 $display.toggleClass('wcp-page-notes-empty', !notes);
                 $wrap.find('.wcp-page-notes-editor').hide();
                 $display.show();
