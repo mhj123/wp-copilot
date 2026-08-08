@@ -1,0 +1,645 @@
+<title>Work Copilot — Go-to-Market Plan</title>
+<style>
+  /* ---------- tokens: light is the base, both dark states re-declare ---------- */
+  :root {
+    --ground:      #F6F8F7;
+    --surface:     #FFFFFF;
+    --surface-2:   #EEF2F0;
+    --ink:         #151A19;
+    --ink-2:       #384240;
+    --muted:       #5B6664;
+    --rule:        #D6DDDA;
+    --rule-soft:   #E6EBE9;
+    --accent:      #0E6B59;
+    --accent-ink:  #0A4E41;
+    --accent-soft: #E0EFE9;
+    --critical:    #9E2F26;
+    --critical-bg: #F7E6E4;
+    --high:        #9A6620;
+    --high-bg:     #F8EEDC;
+    --info:        #3F6484;
+    --info-bg:     #E5EDF3;
+    --shadow:      0 1px 2px rgba(21,26,25,.05), 0 8px 24px -16px rgba(21,26,25,.28);
+
+    --f-display: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --f-body: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --f-mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #0F1413;
+      --surface:     #161B1A;
+      --surface-2:   #1D2423;
+      --ink:         #E7EDEB;
+      --ink-2:       #C3CDCA;
+      --muted:       #93A09D;
+      --rule:        #28312F;
+      --rule-soft:   #202726;
+      --accent:      #4CBEA1;
+      --accent-ink:  #7FD6BF;
+      --accent-soft: #14302A;
+      --critical:    #E58C82;
+      --critical-bg: #2E1A18;
+      --high:        #DFAE63;
+      --high-bg:     #2C2417;
+      --info:        #8FB4D2;
+      --info-bg:     #18242D;
+      --shadow:      0 1px 2px rgba(0,0,0,.4), 0 10px 30px -18px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:      #0F1413;
+    --surface:     #161B1A;
+    --surface-2:   #1D2423;
+    --ink:         #E7EDEB;
+    --ink-2:       #C3CDCA;
+    --muted:       #93A09D;
+    --rule:        #28312F;
+    --rule-soft:   #202726;
+    --accent:      #4CBEA1;
+    --accent-ink:  #7FD6BF;
+    --accent-soft: #14302A;
+    --critical:    #E58C82;
+    --critical-bg: #2E1A18;
+    --high:        #DFAE63;
+    --high-bg:     #2C2417;
+    --info:        #8FB4D2;
+    --info-bg:     #18242D;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 10px 30px -18px rgba(0,0,0,.8);
+  }
+
+  /* ---------- base ---------- */
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px 120px; }
+
+  h1, h2, h3, h4 { font-family: var(--f-display); font-weight: 700; text-wrap: balance; margin: 0; }
+  p { margin: 0; }
+  a { color: var(--accent); text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset: 2px; }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+  strong { font-weight: 700; color: var(--ink); }
+  code { font-family: var(--f-mono); font-size: .84em; background: var(--surface-2); padding: .12em .38em; border-radius: 3px; }
+
+  .eyebrow {
+    font-family: var(--f-mono); font-size: 11px; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--muted); font-weight: 500;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead { padding: 72px 0 40px; border-bottom: 2px solid var(--ink); }
+  .masthead .kicker { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; margin-bottom: 26px; }
+  .masthead h1 { font-size: clamp(38px, 6.2vw, 62px); line-height: 1.02; letter-spacing: -.028em; }
+  .masthead .thesis {
+    margin-top: 26px; font-size: clamp(19px, 2.3vw, 23px); line-height: 1.48;
+    color: var(--ink-2); max-width: 34ch;
+  }
+  .masthead .meta {
+    margin-top: 34px; display: flex; gap: 28px; flex-wrap: wrap;
+    font-family: var(--f-mono); font-size: 12px; color: var(--muted);
+  }
+
+  /* ---------- the gate callout ---------- */
+  .gate {
+    margin: 44px 0 0; padding: 28px 30px; background: var(--surface);
+    border: 1px solid var(--rule); border-left: 4px solid var(--accent);
+    border-radius: 3px; box-shadow: var(--shadow);
+  }
+  .gate h2 { font-size: 19px; letter-spacing: -.01em; margin-bottom: 8px; }
+  .gate p { color: var(--ink-2); font-size: 16px; }
+  .gate ol { margin: 18px 0 0; padding-left: 0; list-style: none; display: grid; gap: 14px; counter-reset: g; }
+  .gate li { display: grid; grid-template-columns: 26px 1fr; gap: 12px; align-items: start; font-size: 16px; counter-increment: g; }
+  .gate li::before {
+    content: counter(g); font-family: var(--f-mono); font-size: 11px; font-weight: 600;
+    color: var(--accent); background: var(--accent-soft); border-radius: 50%;
+    width: 22px; height: 22px; display: grid; place-items: center; margin-top: 4px;
+  }
+
+  /* ---------- workstream sections ---------- */
+  .ws { padding: 62px 0 0; }
+  .ws-head {
+    display: grid; grid-template-columns: 64px 1fr; gap: 20px;
+    align-items: start; padding-bottom: 22px; border-bottom: 1px solid var(--rule);
+  }
+  .ws-num {
+    font-family: var(--f-mono); font-size: 12px; font-weight: 600; letter-spacing: .06em;
+    color: var(--accent); border: 1px solid var(--accent); border-radius: 2px;
+    padding: 5px 0; text-align: center; margin-top: 6px;
+  }
+  .ws-head h2 { font-size: clamp(25px, 3.4vw, 33px); letter-spacing: -.022em; line-height: 1.14; }
+  .ws-head .sub { margin-top: 9px; color: var(--muted); font-size: 16.5px; max-width: 62ch; }
+  .ws-body { padding-top: 26px; display: grid; gap: 22px; max-width: 74ch; }
+  .ws-body.wide { max-width: none; }
+  .ws-body p { color: var(--ink-2); }
+  .ws-body h3 {
+    font-size: 17px; letter-spacing: -.006em; margin-top: 12px;
+    padding-bottom: 7px; border-bottom: 1px solid var(--rule-soft);
+  }
+  .ws-body ul { margin: 0; padding-left: 20px; display: grid; gap: 9px; color: var(--ink-2); }
+  .ws-body li::marker { color: var(--accent); }
+
+  /* ---------- tables ---------- */
+  .tw { overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-family: var(--f-display); font-size: 14px; }
+  th {
+    text-align: left; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted); font-weight: 500;
+    padding: 12px 15px; border-bottom: 1px solid var(--rule); white-space: nowrap;
+    background: var(--surface-2);
+  }
+  td { padding: 12px 15px; border-bottom: 1px solid var(--rule-soft); vertical-align: top; color: var(--ink-2); line-height: 1.5; }
+  tr:last-child td { border-bottom: none; }
+  td.nm { font-weight: 600; color: var(--ink); white-space: nowrap; }
+  td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+
+  .pill {
+    display: inline-block; font-family: var(--f-mono); font-size: 10px; letter-spacing: .07em;
+    text-transform: uppercase; padding: 3px 8px; border-radius: 2px; font-weight: 600; white-space: nowrap;
+  }
+  .p-crit { background: var(--critical-bg); color: var(--critical); }
+  .p-high { background: var(--high-bg);     color: var(--high); }
+  .p-med  { background: var(--info-bg);     color: var(--info); }
+  .p-ok   { background: var(--accent-soft); color: var(--accent-ink); }
+
+  /* ---------- name candidates ---------- */
+  .names { display: grid; gap: 14px; }
+  .name {
+    display: grid; grid-template-columns: minmax(150px, 190px) 1fr; gap: 24px;
+    padding: 20px 22px; background: var(--surface); border: 1px solid var(--rule); border-radius: 3px;
+  }
+  .name.pick { border-color: var(--accent); border-left-width: 4px; }
+  .name .n { font-family: var(--f-display); font-size: 24px; font-weight: 700; letter-spacing: -.022em; }
+  .name .n small { display: block; font-family: var(--f-mono); font-size: 10px; font-weight: 500;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-top: 7px; }
+  .name .r { font-size: 15.5px; color: var(--ink-2); }
+  .name .r em { color: var(--muted); font-style: italic; }
+
+  /* ---------- social post cards ---------- */
+  .posts { display: grid; gap: 18px; }
+  .post { background: var(--surface); border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+  .post-hd {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    padding: 11px 18px; background: var(--surface-2); border-bottom: 1px solid var(--rule);
+    font-family: var(--f-mono); font-size: 11px; letter-spacing: .07em; text-transform: uppercase;
+  }
+  .post-hd .ch { color: var(--ink); font-weight: 600; }
+  .post-hd .go { color: var(--muted); text-transform: none; letter-spacing: .02em; }
+  .post-bd { padding: 20px 22px; font-size: 15.5px; line-height: 1.6; color: var(--ink-2); white-space: pre-wrap; font-family: var(--f-display); }
+
+  /* ---------- timeline ---------- */
+  .phases { display: grid; gap: 0; }
+  .phase { display: grid; grid-template-columns: 150px 1fr; gap: 26px; padding: 22px 0; border-bottom: 1px solid var(--rule-soft); }
+  .phase:last-child { border-bottom: none; }
+  .phase .ph { font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--accent); font-weight: 600; padding-top: 3px; }
+  .phase .pt { font-family: var(--f-display); font-weight: 700; font-size: 16px; margin-bottom: 7px; }
+  .phase .pd { font-size: 15.5px; color: var(--ink-2); }
+
+  .note { font-size: 14.5px; color: var(--muted); font-style: italic; padding-left: 14px; border-left: 2px solid var(--rule); }
+
+  @media (max-width: 720px) {
+    body { font-size: 16px; }
+    .ws-head, .name, .phase { grid-template-columns: 1fr; gap: 10px; }
+    .ws-num { width: 58px; }
+    .masthead { padding-top: 48px; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="kicker">
+      <span class="eyebrow">Go-to-market plan</span>
+      <span class="eyebrow" style="color:var(--accent)">Working draft &middot; for decision</span>
+    </div>
+    <h1>Shipping Work&nbsp;Copilot as a WordPress plugin.</h1>
+    <p class="thesis">Every AI chat app gives you a list of conversations. That is not organisation &mdash; it is a pile. This is the filing system.</p>
+    <div class="meta">
+      <span>8 August 2026</span>
+      <span>Repo: mhj123/work-copilot @ a4cf254</span>
+      <span>129 features catalogued</span>
+      <span>23 launch blockers</span>
+    </div>
+  </header>
+
+  <section class="gate">
+    <h2>Four decisions that gate everything else</h2>
+    <p>Each of these changes what the other workstreams do. Nothing downstream should start until they are settled &mdash; and all four are cheapest to make right now, at zero installs.</p>
+    <ol>
+      <li><strong>The name.</strong> &ldquo;Copilot&rdquo; is Microsoft&rsquo;s in this exact product category. Renaming touches every prefix, table, taxonomy and REST namespace &mdash; trivial today, a migration nightmare after a thousand installs.</li>
+      <li><strong>Plugin or plugin&nbsp;+&nbsp;theme.</strong> Today the workspace UI lives in the theme, so &ldquo;install the plugin&rdquo; does not currently give anyone a working product. This decides the shape of the whole codebase.</li>
+      <li><strong>What ships in v1.</strong> Roughly a third of the repo is two unrelated products. The scope cut is in the companion spreadsheet and needs your sign-off.</li>
+      <li><strong>Whether hosted installs are in the launch story.</strong> Recommendation: not as a product, but capture the demand from day one.</li>
+    </ol>
+  </section>
+
+  <!-- ==================================================== 1 -->
+  <section class="ws">
+    <div class="ws-head">
+      <div class="ws-num">01</div>
+      <div>
+        <h2>Name and brand</h2>
+        <p class="sub">The current name is a trademark risk in precisely the category it competes in, and a rename is close to free today.</p>
+      </div>
+    </div>
+    <div class="ws-body">
+      <h3>Why &ldquo;Work Copilot&rdquo; cannot ship</h3>
+      <p>Microsoft has spent three years and a great deal of money making &ldquo;Copilot&rdquo; mean &ldquo;an AI assistant inside a software product&rdquo; &mdash; GitHub Copilot, Microsoft&nbsp;365 Copilot, Copilot Studio. An AI assistant plugin called <em>Work Copilot</em> is the confusion case that trademark law exists to prevent.</p>
+      <p>WordPress.org enforces this independently of any rights holder. Its guidelines prohibit plugin names that infringe trademarks, and plugins have been made to rename post-approval for far weaker collisions. That risk is survivable at zero installs and severe at ten thousand.</p>
+      <p>The rename reaches further than the display name: the <code>wcp_</code> prefix, the <code>wcp_context</code> taxonomy, the <code>wcp_heading</code> post type, five <code>wp_wcp_*</code> tables, the <code>work-copilot/v1</code> REST namespace and every option key. That is exactly why it belongs in the same pass as the scope cut, before a single external install exists.</p>
+
+      <h3>What the name has to carry</h3>
+      <ul>
+        <li>It becomes a platform, not just a plugin &mdash; add-ons will be named after it, so it must extend gracefully (<em>Name Voice</em>, <em>Name Graph</em>).</li>
+        <li>It should point at structure and grounding, not at chat. The competition owns &ldquo;chat&rdquo;.</li>
+        <li>Short enough for an admin menu item, distinct enough to search for.</li>
+        <li>Clean on: WordPress.org slug, the .com, a GitHub org, and a trademark register search in your jurisdiction. <em>Run all four before committing &mdash; the shortlist below is a starting point, not a clearance.</em></li>
+      </ul>
+
+      <h3>Shortlist</h3>
+    </div>
+    <div class="ws-body wide names">
+      <div class="name pick">
+        <div class="n">Groundwork<small>Recommended</small></div>
+        <div class="r">Two meanings, both exactly right. <em>Grounding</em> is the technical term for what the product actually does &mdash; generation grounded in your own corpus rather than the model&rsquo;s memory. <em>Groundwork</em> is the foundational preparation that makes later work fast. It keeps a thread back to &ldquo;Work&rdquo;, extends cleanly to add-ons, and says &ldquo;structure&rdquo; without saying &ldquo;AI&rdquo;. <em>Watch for: it is a common English word, so slug and domain availability are the real test.</em></div>
+      </div>
+      <div class="name">
+        <div class="n">Throughline<small>Runner-up</small></div>
+        <div class="r">The thread that connects everything &mdash; which is literally what missions and canonical references do across your corpus. More distinctive and more ownable than Groundwork. <em>Watch for: abstract; it needs the tagline to do more work.</em></div>
+      </div>
+      <div class="name">
+        <div class="n">Almanac</div>
+        <div class="r">A structured, indexed reference that accumulates over time. Fits the learning loop and the atomic-item model well. <em>Watch for: connotes annual and calendrical, which is not what this is.</em></div>
+      </div>
+      <div class="name">
+        <div class="n">Atrium</div>
+        <div class="r">A structured open space you move through, with everything arranged around it. Calm, architectural, distinct from the AI-tool naming crowd. <em>Watch for: says nothing about work or knowledge on its own.</em></div>
+      </div>
+    </div>
+    <div class="ws-body">
+      <h3>The brand system around it</h3>
+      <ul>
+        <li><strong>Tagline:</strong> <em>Structure for AI work.</em> Five syllables, no jargon, and it plants a flag against the pile-of-chats status quo.</li>
+        <li><strong>Positioning line:</strong> &ldquo;An open-source workspace where your AI assistant files its work into your structure &mdash; on your own server, with your own API key.&rdquo;</li>
+        <li><strong>Add-on convention:</strong> <em>Name + noun</em>, always. Voice, Graph, Bookmarks, Calendar. Never a cute sub-brand &mdash; the point of add-ons is that they obviously belong to the same system.</li>
+        <li><strong>Keep the vocabulary you already use.</strong> <em>Pages, items, contexts, missions, the corpus.</em> It is consistent, it is already in the code, and &ldquo;corpus&rdquo; in particular is a genuinely good word that no competitor uses.</li>
+        <li><strong>Visual identity:</strong> you need a 128px and 256px icon and a 772&times;250 and 1544&times;500 banner for the plugin directory before you can submit. Budget this as real design work &mdash; the banner is the first thing every prospective user sees.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ==================================================== 2 -->
+  <section class="ws">
+    <div class="ws-head">
+      <div class="ws-num">02</div>
+      <div>
+        <h2>The scope cut</h2>
+        <p class="sub">The companion spreadsheet catalogues all 129 features with a proposed action for each. Here is what it adds up to.</p>
+      </div>
+    </div>
+    <div class="ws-body">
+      <p>The workbook (<code>gtm/work-copilot-feature-inventory.xlsx</code>) has a row per feature, each citing the file it lives in, what it does, its maintenance burden, its known launch risk, and a proposed action. There is a yellow column for your decision and a summary tab that counts them live.</p>
+      <p>Six possible actions, and the distinction that matters most is between <em>flagging off</em> and <em>cutting</em>. Nothing recommended for a feature flag is bad &mdash; it is unfinished, redundant with something better, or too advanced for someone&rsquo;s first ten minutes. Flagging preserves the work at zero onboarding cost.</p>
+    </div>
+    <div class="ws-body wide">
+      <div class="tw"><table>
+        <thead><tr><th>Action</th><th>Meaning</th><th>The shape of it</th></tr></thead>
+        <tbody>
+          <tr><td class="nm"><span class="pill p-ok">Keep &mdash; core</span></td><td>Ships enabled in v1.</td><td>The content model, the AI proposal loop, the page/item/context structure, chat, action plans, CSV round-trip.</td></tr>
+          <tr><td class="nm"><span class="pill p-med">Flag off</span></td><td>Code stays, hidden behind a flag.</td><td>Page templates and the scheduler (both half-built), goals, coaching, fetch-posts, fetch-structure, the second dashboard, thinking budgets.</td></tr>
+          <tr><td class="nm"><span class="pill p-high">Fix first</span></td><td>Ships, but blocks launch as it stands.</td><td>The theme/plugin split, REST permissions, CDN assets, audit-log retention, bulk-edit parsing, markdown sanitisation.</td></tr>
+          <tr><td class="nm"><span class="pill p-med">Extract to add-on</span></td><td>Leaves core as a separate plugin.</td><td>Voice, Graph, Raindrop import, Calendar import. These <em>are</em> the extensibility proof &mdash; ship them alongside v1 and the platform claim is demonstrated, not asserted.</td></tr>
+          <tr><td class="nm"><span class="pill p-crit">Backup repo</span></td><td>Cut from the public repository.</td><td>Wiretap, OpenBiografy, the Hermes delegation plugin, personal scripts and CSVs, the internal strategy PRD.</td></tr>
+          <tr><td class="nm"><span class="pill p-crit">Delete</span></td><td>Removed outright.</td><td><code>version-check.php</code>, <code>deploy.sh</code>, the Caddy auth shim, duplicate AI actions.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="ws-body">
+      <h3>The single biggest clarity win</h3>
+      <p>Wiretap (crypto and equity influencer tracking, trade plans, earliness scoring) and OpenBiografy (biography generation from documents) are roughly 5,500 lines of two entirely different products, for two entirely different audiences, sitting in the repository a prospective user will browse. Wiretap additionally carries a financial-recommendation surface that no one wants attached to this launch.</p>
+      <p>Cutting them to a private repo costs the launch nothing and removes the single most confusing thing about the project. Two ideas inside them are worth porting back into core later: Wiretap&rsquo;s AI spend tracking, and OpenBiografy&rsquo;s extract-then-reconcile pattern.</p>
+      <p class="note">Feature flags do not exist in the codebase yet. Building that layer is a prerequisite for this workstream, not a consequence of it &mdash; see workstream 04.</p>
+    </div>
+  </section>
+
+  <!-- ==================================================== 3 -->
+  <section class="ws">
+    <div class="ws-head">
+      <div class="ws-num">03</div>
+      <div>
+        <h2>Bugs and blockers</h2>
+        <p class="sub">Twenty-three issues visible from reading the source, ranked by what would hurt most if it shipped. Full list on the &ldquo;Launch blockers&rdquo; tab.</p>
+      </div>
+    </div>
+    <div class="ws-body wide">
+      <div class="tw"><table>
+        <thead><tr><th>Blocker</th><th>Why it matters</th><th>Sev</th></tr></thead>
+        <tbody>
+          <tr><td class="nm">Workspace UI lives in the theme</td><td>WordPress.org distributes plugins and themes separately and reviews themes under stricter rules. &ldquo;Install the plugin&rdquo; does not currently produce a working product. Decide the architecture before writing anything else.</td><td><span class="pill p-crit">Critical</span></td></tr>
+          <tr><td class="nm">SortableJS &amp; marked.js from jsDelivr</td><td><code>functions.php:61,66</code>. Loading assets from third-party CDNs is a hard WP.org rejection, and it leaks every visitor&rsquo;s IP address. Bundle both locally with their licences.</td><td><span class="pill p-crit">Critical</span></td></tr>
+          <tr><td class="nm">Caddy auth shim hardcoding a username</td><td><code>wcp-delegation.php:33</code>. Personal server infrastructure in shippable code.</td><td><span class="pill p-crit">Critical</span></td></tr>
+          <tr><td class="nm"><code>deploy.sh</code> with a production IP</td><td>Publishes your server&rsquo;s address the moment the repo goes public.</td><td><span class="pill p-crit">Critical</span></td></tr>
+          <tr><td class="nm"><code>version-check.php</code></td><td>Directly-reachable PHP outside the WordPress bootstrap. A rejection pattern and a security smell.</td><td><span class="pill p-crit">Critical</span></td></tr>
+          <tr><td class="nm">Personal data in <code>scripts/</code></td><td>Your own tweet and bookmark exports, plus editor lock files, committed to a repo about to become public.</td><td><span class="pill p-crit">Critical</span></td></tr>
+          <tr><td class="nm">REST permission callbacks</td><td>At least one of roughly fifty endpoints uses <code>__return_true</code>. Every one needs an explicit capability check, not just a nonce.</td><td><span class="pill p-crit">Critical</span></td></tr>
+          <tr><td class="nm">Migrations never run on update</td><td><code>dbDelta</code> only fires on the activation hook, and <code>wcp_db_version</code> is written but never compared. Existing installs silently keep an old schema &mdash; and only notice once they have data worth losing.</td><td><span class="pill p-high">High</span></td></tr>
+          <tr><td class="nm">No <code>uninstall.php</code></td><td>Five custom tables with no cleanup path. Reviewers look for this.</td><td><span class="pill p-high">High</span></td></tr>
+          <tr><td class="nm">REST lockdown filter sits in the theme</td><td>A theme silently blocking all anonymous REST access site-wide will break other plugins. Right instinct, wrong layer &mdash; move it into the plugin and scope it to your namespace.</td><td><span class="pill p-high">High</span></td></tr>
+          <tr><td class="nm">Audit log has no retention or purge</td><td>Unbounded growth, storing full prompts. It is named in <code>readme.txt</code> as a privacy feature, so it has to survive scrutiny.</td><td><span class="pill p-high">High</span></td></tr>
+          <tr><td class="nm">Bulk &ldquo;edit items&rdquo; JSON parsing</td><td>Already patched twice per your changelog, and it has the largest blast radius of any AI action &mdash; it rewrites many items at once.</td><td><span class="pill p-high">High</span></td></tr>
+          <tr><td class="nm">Markdown sanitisation</td><td>Model output rendered into the page. Confirm escaping before anyone else runs this.</td><td><span class="pill p-high">High</span></td></tr>
+          <tr><td class="nm">&ldquo;Rewrite page content&rdquo; has no undo</td><td>Destructive and irreversible from the UI. Snapshot to a WordPress revision first.</td><td><span class="pill p-high">High</span></td></tr>
+          <tr><td class="nm">Thin Anthropic error handling</td><td>No retry, no backoff, weak surfacing. Bring-your-own-key is the headline promise; a bad key must produce a clear message, not silence.</td><td><span class="pill p-high">High</span></td></tr>
+          <tr><td class="nm">Hardcoded model IDs in a template</td><td>Rots with every model release. Move to a filterable config array.</td><td><span class="pill p-med">Medium</span></td></tr>
+          <tr><td class="nm">Synchronous embedding on save</td><td>API latency and cost on every single edit. Queue it.</td><td><span class="pill p-med">Medium</span></td></tr>
+          <tr><td class="nm">RAG degrades silently without a key</td><td>&ldquo;Entire corpus&rdquo; quietly does nothing. It must explain its own requirement.</td><td><span class="pill p-med">Medium</span></td></tr>
+          <tr><td class="nm">Page mission is admin-only</td><td>A headline differentiator, hidden in wp-admin &mdash; which contradicts the &ldquo;it all happens in a website&rdquo; pitch.</td><td><span class="pill p-med">Medium</span></td></tr>
+          <tr><td class="nm">Item row density</td><td>The biggest first-run comprehension risk in the product, and the highest-leverage UX work available.</td><td><span class="pill p-med">Medium</span></td></tr>
+          <tr><td class="nm">Horizontal-drag nesting on touch</td><td>An unusual interaction, likely broken on tablets. Verify or gate it to pointer devices.</td><td><span class="pill p-med">Medium</span></td></tr>
+          <tr><td class="nm"><code>readme.txt</code> placeholders</td><td>Author and URI fields still read &ldquo;Your Name&rdquo; and &ldquo;yoursite.com&rdquo;.</td><td><span class="pill p-med">Medium</span></td></tr>
+          <tr><td class="nm">CSS after the reverted redesign</td><td>A redesign was committed and then reverted. Every marketing screenshot comes from here.</td><td><span class="pill p-med">Medium</span></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="ws-body">
+      <p class="note">This list comes from reading the code, not from running it. It is a starting backlog, not a substitute for a QA pass or a security review &mdash; and given the plugin handles API keys and executes model output against a database, an independent security review before launch is money well spent.</p>
+    </div>
+  </section>
+
+  <!-- ==================================================== 4 -->
+  <section class="ws">
+    <div class="ws-head">
+      <div class="ws-num">04</div>
+      <div>
+        <h2>Launch-critical features to build</h2>
+        <p class="sub">Not in the code today, and the launch does not work without them. Ordered by dependency.</p>
+      </div>
+    </div>
+    <div class="ws-body">
+      <h3>Prerequisites</h3>
+      <ul>
+        <li><strong>A feature-flag layer.</strong> Every &ldquo;flag off&rdquo; decision in the spreadsheet depends on this existing. A filterable registry plus a settings screen for advanced users. Build it first.</li>
+        <li><strong><code>uninstall.php</code> and schema versioning.</strong> Clean removal of five tables and all options; an <code>admin_init</code> version check that re-runs <code>dbDelta</code> when the stored version is behind.</li>
+        <li><strong>A capability gate.</strong> The product is documented as single-user but not enforced as single-user. On a multi-author site today, that is a data-exposure question you do not want asked for you. Gate everything behind one explicit capability and fail closed.</li>
+      </ul>
+
+      <h3>The first-run experience</h3>
+      <p>This is where the launch is won or lost. A fresh install is an empty WordPress site, and an empty knowledge tool teaches nobody anything. Four pieces:</p>
+      <ul>
+        <li><strong>A setup wizard.</strong> Paste your Anthropic key &rarr; a real <em>Test connection</em> call that reports what actually came back &rarr; choose a starter structure &rarr; done. Optional OpenAI key, clearly labelled as unlocking corpus-wide context.</li>
+        <li><strong>A starter corpus.</strong> One click installs a small worked example: an Areas/Projects tree, a page carrying a written protocol, and half a dozen items. This exists so that <em>Action plan from context</em> &mdash; your single most differentiated feature &mdash; produces something impressive within two minutes of install, instead of failing quietly against an empty index.</li>
+        <li><strong>Empty states that teach.</strong> Every surface with no content should say what goes there and offer the one action that fills it. Cheap to build, disproportionate effect on activation.</li>
+        <li><strong>Lean on the &ldquo;Onboard&rdquo; action you already have.</strong> It greets, summarises and suggests. That is the product explaining itself in its own voice &mdash; make it the wizard&rsquo;s final step.</li>
+      </ul>
+
+      <h3>Trust and cost, which are the same thing here</h3>
+      <ul>
+        <li><strong>An API spend meter.</strong> Bring-your-own-key means the user pays per call, and unexplained bills generate support load and uninstalls in equal measure. Wiretap already has a &ldquo;Runs &amp; Budget&rdquo; screen &mdash; port the idea into core: tokens and estimated cost per action, per day, with an optional cap.</li>
+        <li><strong>A &ldquo;what was sent&rdquo; disclosure.</strong> One click on any AI response to see the exact context pack that went to the model. It is a debugging tool, a privacy answer, and the most persuasive possible demonstration that context scoping is real.</li>
+        <li><strong>A verified export round-trip.</strong> &ldquo;No lock-in&rdquo; is a claim until export &rarr; fresh install &rarr; import reproduces the corpus exactly. Test it, then say so in the marketing copy.</li>
+        <li><strong>Page mission on the front end.</strong> Move it out of wp-admin. It is a headline differentiator currently hidden in the place the pitch says you never have to go.</li>
+      </ul>
+
+      <h3>On hosted installs</h3>
+      <p>Do not build hosting for v1. It converts a product problem into an operations business overnight &mdash; uptime, backups, per-tenant key custody, support &mdash; and you would be running it while the plugin is still finding its shape.</p>
+      <p>Instead, put a waitlist form on the site from day one. It costs an afternoon, and the signup rate against download volume tells you whether hosting is a real business or a thing people say they want. If the answer is yes, a managed WordPress host partnership is a faster route than building it yourself.</p>
+      <p class="note">Business model, for the record: open-source core, free on WordPress.org &mdash; paid add-ons are the revenue line, hosted installs are the option you keep open. That model only works if the free core is genuinely complete, which is another argument for the scope cut in workstream 02.</p>
+    </div>
+  </section>
+
+  <!-- ==================================================== 5 -->
+  <section class="ws">
+    <div class="ws-head">
+      <div class="ws-num">05</div>
+      <div>
+        <h2>WordPress.org requirements</h2>
+        <p class="sub">The directory is the distribution channel that makes the whole plan work. Its review is human, unhurried, and unforgiving.</p>
+      </div>
+    </div>
+    <div class="ws-body">
+      <p>Submit early. The queue commonly runs several weeks, and a rejection restarts it. Everything below should be true before you submit, not after the reviewer finds it.</p>
+    </div>
+    <div class="ws-body wide">
+      <div class="tw"><table>
+        <thead><tr><th>Requirement</th><th>Where you stand</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="nm">GPLv2+ for all code and bundled assets</td><td>Declared in the plugin header. SortableJS (MIT) and marked (MIT) are compatible &mdash; but must be bundled with their licence files, not fetched.</td><td><span class="pill p-high">Action</span></td></tr>
+          <tr><td class="nm">No assets from third-party CDNs</td><td>Two libraries currently load from jsDelivr. Hard rejection.</td><td><span class="pill p-crit">Blocker</span></td></tr>
+          <tr><td class="nm">Plugin name must not infringe a trademark</td><td>&ldquo;Copilot&rdquo; in an AI-assistant plugin. See workstream 01.</td><td><span class="pill p-crit">Blocker</span></td></tr>
+          <tr><td class="nm">No directly-executable PHP outside the bootstrap</td><td><code>version-check.php</code>. Delete it.</td><td><span class="pill p-crit">Blocker</span></td></tr>
+          <tr><td class="nm">Unique prefix on every global</td><td><code>wcp_</code> is four characters but not distinctive. Pick a genuinely unique prefix during the rename.</td><td><span class="pill p-high">Action</span></td></tr>
+          <tr><td class="nm">Sanitise input, escape output, nonce and capability checks</td><td>Nonces and escaping are broadly present; capability coverage across ~50 REST endpoints is not verified.</td><td><span class="pill p-high">Action</span></td></tr>
+          <tr><td class="nm">Use the WordPress HTTP API</td><td>All four external services go through <code>wp_remote_*</code>. No raw cURL anywhere.</td><td><span class="pill p-ok">Clear</span></td></tr>
+          <tr><td class="nm">No phoning home; disclose external services</td><td>The <code>readme.txt</code> External Services section is genuinely strong &mdash; it names each provider, what is sent, when, and links their terms. Reviewers rarely see this done well.</td><td><span class="pill p-ok">Clear</span></td></tr>
+          <tr><td class="nm">Must function without a paid service</td><td>Fully usable as a structured notes system with no API key at all. Say this louder.</td><td><span class="pill p-ok">Clear</span></td></tr>
+          <tr><td class="nm">No obfuscated or minified-only code</td><td>All source is readable.</td><td><span class="pill p-ok">Clear</span></td></tr>
+          <tr><td class="nm">Complete <code>readme.txt</code> headers</td><td>Present and well-formed, but author and URI fields are still placeholders and the &ldquo;Tested up to&rdquo; needs re-verifying against current WordPress.</td><td><span class="pill p-med">Action</span></td></tr>
+          <tr><td class="nm">Internationalisation with a matching text domain</td><td>Consistent use of <code>__()</code> and <code>_e()</code>. Text domain must be updated with the rename.</td><td><span class="pill p-med">Action</span></td></tr>
+          <tr><td class="nm">Directory assets</td><td>Icon (128 and 256), banner (772&times;250 and 1544&times;500), screenshots with captions. None exist yet.</td><td><span class="pill p-high">Action</span></td></tr>
+          <tr><td class="nm">Clean uninstall</td><td>No <code>uninstall.php</code>; five tables left behind.</td><td><span class="pill p-high">Action</span></td></tr>
+          <tr><td class="nm">Theme submission (if you keep the split)</td><td>A separate submission under a stricter review, on its own timeline. The strongest argument for folding the UI into the plugin.</td><td><span class="pill p-crit">Decision</span></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="ws-body">
+      <p>After approval you push releases through SVN, tag by version, and every release needs a <code>readme.txt</code> changelog entry. Worth wiring up a GitHub Action that builds the plugin zip and pushes the tag, so releasing is not a manual ritual you come to dread.</p>
+    </div>
+  </section>
+
+  <!-- ==================================================== 6 -->
+  <section class="ws">
+    <div class="ws-head">
+      <div class="ws-num">06</div>
+      <div>
+        <h2>Documentation and onboarding</h2>
+        <p class="sub">The product is conceptually unusual. Pages, headings, contexts, items and missions is five new ideas before anything happens, and documentation is how that cost gets paid down.</p>
+      </div>
+    </div>
+    <div class="ws-body">
+      <h3>Build the documentation site in the product</h3>
+      <p>The single best move available here: run the public docs site on the plugin itself. It is simultaneously the documentation, the live demo, the SEO surface, and the proof that the thing is real &mdash; a visitor reading &ldquo;pages hold items, items carry contexts&rdquo; is looking at a page holding items carrying contexts. It also means you dogfood every rough edge before your users find it.</p>
+
+      <h3>Six documents, in this order</h3>
+      <ul>
+        <li><strong>Install and connect.</strong> Five minutes, screenshotted, including what a working &ldquo;Test connection&rdquo; looks like and what each key unlocks.</li>
+        <li><strong>Core concepts.</strong> One page, one diagram. Pages are contexts, headings are sub-contexts, items are atoms that can live in several places at once. If someone only reads one page, this is it.</li>
+        <li><strong>Your first workspace.</strong> A worked example building an Areas/Projects tree from nothing, ending with a chat that demonstrably knows where it is.</li>
+        <li><strong>Writing missions and protocols.</strong> The highest-leverage document you will write. It is the analogue of an <code>AGENTS.md</code> guide, and it is what turns the product from a note-taker into something that works the way you work.</li>
+        <li><strong>Getting the assistant to co-author.</strong> Action plans, accepting as nested items, saving chat messages as items, extracting memories &mdash; the learning loop, explained end to end.</li>
+        <li><strong>Extending it.</strong> The add-on model, the REST surface, and the hooks. This is the document that recruits contributors.</li>
+      </ul>
+
+      <h3>A three-minute video, non-negotiable</h3>
+      <p>This product is spatial &mdash; structure, nesting, a panel that files things where you are standing. Prose is the wrong medium for that, and no screenshot carries it. One tight demo: empty install &rarr; structure appears &rarr; chat that knows the page &rarr; action plan grounded in a protocol you wrote &rarr; the plan lands as real nested items. That video is the single asset every channel in workstream 07 will reuse.</p>
+
+      <h3>Open-source hygiene</h3>
+      <ul>
+        <li><code>LICENSE</code>, <code>CONTRIBUTING.md</code>, <code>SECURITY.md</code> with a disclosure address, a code of conduct, and issue and PR templates.</li>
+        <li>A real <code>CHANGELOG.md</code> kept in step with the <code>readme.txt</code> changelog.</li>
+        <li>GitHub Discussions rather than Issues for questions, so the issue tracker stays a work queue.</li>
+        <li>Rewrite the existing internal docs for an external reader. <code>DOCUMENTATION.md</code> is excellent raw material and currently addressed to you. <code>PRD-COMPOUNDING-LOOPS.md</code> stays private.</li>
+        <li>Keep <code>AGENTS.md</code> and the <code>agent-os</code> standards public. They signal to contributors &mdash; and to AI coding tools &mdash; that this repo has conventions.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ==================================================== 7 -->
+  <section class="ws">
+    <div class="ws-head">
+      <div class="ws-num">07</div>
+      <div>
+        <h2>Messaging and launch</h2>
+        <p class="sub">The positioning, who to say it to, and what the posts actually say.</p>
+      </div>
+    </div>
+    <div class="ws-body">
+      <h3>The one idea</h3>
+      <p>Do not compete on assistant quality &mdash; you are calling the same models everyone else is. Compete on <em>what happens to the output</em>. Every AI product produces walls of text and then abandons them in a scrolling list. This one files them.</p>
+      <p><strong>The line:</strong> &ldquo;Your AI chats are a pile of unsorted text. This gives them a filing system &mdash; and lets the assistant do the filing.&rdquo;</p>
+      <p>Three supporting proofs, in descending order of persuasiveness: an assistant that writes back into your corpus so the next conversation is better than the last; context scoped to where you are standing, working against a mission you wrote; and it runs on your server with your key, so nothing about it is rented.</p>
+
+      <h3>Who this is actually for</h3>
+      <ul>
+        <li><strong>Self-hosters.</strong> The strongest fit by some distance. Already run WordPress, already own their data, already have API keys, already suspicious of SaaS. They need the least convincing of anyone.</li>
+        <li><strong>Knowledge-work operators &mdash; consultants, solo founders, agency owners.</strong> Live in projects and protocols, feel the pain of scattered chats acutely, but need the WordPress part to be invisible.</li>
+        <li><strong>The PKM crowd.</strong> Obsidian and Logseq users who want an AI that participates in the vault rather than sitting beside it. Opinionated, vocal, and they will tell you exactly what is wrong &mdash; which is useful.</li>
+      </ul>
+
+      <h3>Where you sit</h3>
+    </div>
+    <div class="ws-body wide">
+      <div class="tw"><table>
+        <thead><tr><th>Against</th><th>Their strength</th><th>Your line</th></tr></thead>
+        <tbody>
+          <tr><td class="nm">ChatGPT / Claude Projects</td><td>Effortless, free-ish, everyone already has one.</td><td>A project is a folder of conversations. This is a corpus of atomic items the assistant writes into &mdash; and you keep it when you cancel.</td></tr>
+          <tr><td class="nm">Notion AI</td><td>Beautiful, collaborative, huge distribution.</td><td>AI is a feature bolted onto their editor. Here the loop <em>is</em> the product &mdash; and you are not paying per seat forever for your own notes.</td></tr>
+          <tr><td class="nm">Obsidian + plugins</td><td>Local-first, deep plugin culture, beloved.</td><td>Local files with an AI beside them. This is a web workspace where the assistant is inside the corpus and co-authors into it.</td></tr>
+          <tr><td class="nm">Claude Code / agent CLIs</td><td>Genuinely powerful, real agency.</td><td>A terminal, a repo, and code to manage. Same co-authoring loop, no terminal &mdash; for work that is not software.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="ws-body wide">
+      <div class="tw"><table>
+        <thead><tr><th>Channel</th><th>Fit</th><th>How to play it</th></tr></thead>
+        <tbody>
+          <tr><td class="nm">r/selfhosted</td><td><span class="pill p-ok">Strongest</span></td><td>Your people. Lead with self-hosted, bring-your-own-key, no SaaS. Do not lead with AI.</td></tr>
+          <tr><td class="nm">Hacker News (Show HN)</td><td><span class="pill p-ok">Strongest</span></td><td>Open source + self-hosted + a real opinion about AI tooling. One shot &mdash; fire it only when the install is genuinely smooth.</td></tr>
+          <tr><td class="nm">r/WordPress, Post Status, WP Tavern</td><td><span class="pill p-ok">Strong</span></td><td>&ldquo;WordPress as an application platform&rdquo; is a story this community actively wants told.</td></tr>
+          <tr><td class="nm">X / build-in-public</td><td><span class="pill p-med">Good</span></td><td>Slow burn, starting before launch. Short screen recordings out-perform everything else.</td></tr>
+          <tr><td class="nm">r/PKM, r/ObsidianMD, r/LocalLLaMA</td><td><span class="pill p-med">Good</span></td><td>Contribute for weeks before you post about yourself. These subs punish drive-by launches.</td></tr>
+          <tr><td class="nm">Product Hunt</td><td><span class="pill p-med">Moderate</span></td><td>Worth a day for backlinks. Self-hosted developer tools rarely win there &mdash; set expectations low.</td></tr>
+          <tr><td class="nm">LinkedIn</td><td><span class="pill p-med">Moderate</span></td><td>The consultant and agency audience. Lead with the messy-chats problem, never with the plugin.</td></tr>
+          <tr><td class="nm">YouTube</td><td><span class="pill p-ok">Strong</span></td><td>The three-minute demo, plus a longer &ldquo;how I structure my work&rdquo; walkthrough. Highest-converting asset you will make.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="ws-body">
+      <h3>Copy to start from</h3>
+    </div>
+    <div class="ws-body wide posts">
+      <div class="post">
+        <div class="post-hd"><span class="ch">X &mdash; thread opener</span><span class="go">Pin it; make tweet 2 a 20-second screen recording</span></div>
+        <div class="post-bd">Every AI app gives you the same thing: a sidebar of old conversations.
+
+That's not organisation. That's a pile.
+
+So I built the other thing — a workspace where you define the structure first, and the assistant files its work into it.
+
+Open source. Your server, your API key. 🧵</div>
+      </div>
+      <div class="post">
+        <div class="post-hd"><span class="ch">Hacker News &mdash; Show HN</span><span class="go">Post the first comment yourself, immediately</span></div>
+        <div class="post-bd">Title:
+Show HN: Open-source WordPress plugin that turns AI chat into a structured corpus
+
+First comment:
+I got tired of my AI conversations being write-only. Genuinely good thinking would happen, then vanish into a scroll of chat history I'd never open again.
+
+This is the fix I built for myself. You create a page hierarchy for your areas and projects. Chats live inside pages, so the assistant always has that page's context plus a mission you wrote for it. Anything useful becomes an "item" — one atomic thing, tagged, filed under one or more pages. The assistant can write items and pages back into the corpus, so it accumulates rather than evaporating, and later answers are grounded in protocols you defined earlier.
+
+It's a WordPress plugin because I wanted zero infrastructure I'd have to maintain and no database I didn't already understand. Bring your own Anthropic key. Nothing leaves your server unless you configure a key and click something — there's an audit log of every call.
+
+It's single-user today, and the AI never writes to the database without you accepting the change. Happy to answer anything.</div>
+      </div>
+      <div class="post">
+        <div class="post-hd"><span class="ch">r/selfhosted</span><span class="go">Lead with self-hosted; the AI is the second sentence</span></div>
+        <div class="post-bd">Title:
+Self-hosted AI workspace as a WordPress plugin — bring your own key, no SaaS, no telemetry
+
+Body:
+I wanted an AI workspace I actually owned, so I built one on top of WordPress rather than adding another subscription.
+
+- Runs entirely on your own install. No account, no telemetry, no phoning home.
+- Bring your own Anthropic key. Optional OpenAI key if you want semantic search over everything.
+- Your notes are native WP posts and pages — no proprietary format. Full CSV export.
+- Every AI call is logged: prompt, context sent, response, and whether you accepted it.
+- The assistant never writes to the database without you clicking accept.
+
+The idea is that AI chat is write-only by default. Here you build a page structure for your projects, chats happen inside pages, and useful output gets filed as atomic items you can tag and reuse.
+
+GPLv2, code's on GitHub. Curious what people here would want before trusting it with their notes.</div>
+      </div>
+      <div class="post">
+        <div class="post-hd"><span class="ch">LinkedIn</span><span class="go">Problem first; the product is the last line</span></div>
+        <div class="post-bd">I went looking for a decision I'd made three months ago. I knew I'd reasoned it through properly, with an AI, at length.
+
+I never found it. It was somewhere in 40,000 words of chat history that no search was ever going to surface, because I couldn't remember which conversation it was in or what I'd called it.
+
+That's the thing nobody mentions about working with AI: the thinking is good and the output is disposable. Every session starts from nothing, and nothing compounds.
+
+So I built the opposite. You define the structure — your areas, your projects, your protocols. The assistant works inside that structure, and files what's worth keeping back into it as small, tagged, findable pieces. Next month's conversation starts from everything you've already worked out.
+
+It's open source and it runs on your own server. Link in comments.</div>
+      </div>
+    </div>
+    <div class="ws-body">
+      <h3>Sequencing</h3>
+    </div>
+    <div class="ws-body wide phases">
+      <div class="phase">
+        <div class="ph">Phase 1</div>
+        <div><div class="pt">Decide, then cut</div><div class="pd">Settle the four gating decisions. Rename everything in one pass. Cut Wiretap, OpenBiografy, delegation and the personal scripts to a private repo. Build the feature-flag layer and flag off what the spreadsheet says. Nothing public happens yet.</div></div>
+      </div>
+      <div class="phase">
+        <div class="ph">Phase 2</div>
+        <div><div class="pt">Make it safe to publish</div><div class="pd">Every Critical blocker, then every High. Bundle the CDN libraries, audit all REST permissions, add <code>uninstall.php</code> and migrations, wire up the capability gate. This is the phase where the repo becomes publishable.</div></div>
+      </div>
+      <div class="phase">
+        <div class="ph">Phase 3</div>
+        <div><div class="pt">Make it survivable for a stranger</div><div class="pd">Setup wizard, starter corpus, empty states, spend meter, page mission on the front end. Then find five people who are not you, watch them install it cold, and fix whatever they trip over. Nothing else in this plan matters more than that observation.</div></div>
+      </div>
+      <div class="phase">
+        <div class="ph">Phase 4</div>
+        <div><div class="pt">Submit and write</div><div class="pd">Submit to WordPress.org early &mdash; review runs for weeks and you want that clock running while you work. Build the docs site on the product itself, record the demo video, make the directory assets, open the repo, put up the hosting waitlist.</div></div>
+      </div>
+      <div class="phase">
+        <div class="ph">Phase 5</div>
+        <div><div class="pt">Launch, in that order</div><div class="pd">r/selfhosted and r/WordPress first &mdash; friendliest audiences, and a live rehearsal for the questions. Fix what they surface. Then Show HN and Product Hunt on the same day, once approval has landed and the install is genuinely smooth. Save your one HN shot for the version that works.</div></div>
+      </div>
+    </div>
+    <div class="ws-body">
+      <h3>What to measure</h3>
+      <ul>
+        <li><strong>Activation, not installs.</strong> The number that matters is what fraction of installs configure a key and create more than ten items in week one. Installs are vanity; that ratio is the product working.</li>
+        <li><strong>Return rate at day 7 and day 30.</strong> This is a habit product. If people do not come back, no amount of messaging fixes it.</li>
+        <li><strong>Add-on attach rate.</strong> Directly tests whether the extensibility model is a business or a slogan.</li>
+        <li><strong>Hosting waitlist signups per hundred downloads.</strong> The cheapest possible read on whether hosted installs are worth building.</li>
+        <li><strong>Support volume by cause.</strong> Every repeated question is a documentation or onboarding bug. Track the causes, not the tickets.</li>
+      </ul>
+
+      <h3>Risks worth naming now</h3>
+      <ul>
+        <li><strong>&ldquo;WordPress&rdquo; is a liability with the AI-tools crowd and an asset with self-hosters.</strong> Do not fight it &mdash; segment. Lead with WordPress on r/selfhosted and r/WordPress; lead with the workflow everywhere else and let WordPress be the reassuring detail further down.</li>
+        <li><strong>Two API keys for the flagship feature is real friction.</strong> Corpus-wide context needs OpenAI as well as Anthropic. Either abstract the embeddings provider so one key can do both, or be very clear that it is optional &mdash; but do not let someone discover it halfway through setup.</li>
+        <li><strong>Single-user is a hard ceiling on the consultant and agency segment.</strong> Fine for v1, but it will be the most common feature request from your most commercially interesting audience. Have an answer ready.</li>
+        <li><strong>The frontier labs can ship a version of this.</strong> Projects and memory features already move in this direction. Your defensible ground is ownership and extensibility, not features &mdash; so keep saying &ldquo;your server, your data, your add-ons&rdquo;, because that is the part they structurally cannot copy.</li>
+        <li><strong>One HN shot.</strong> A Show HN that lands on a rough install burns the channel for a year. The discipline is to hold it until phase 5, however tempting it is at the end of phase 3.</li>
+      </ul>
+    </div>
+  </section>
+
+</div>
