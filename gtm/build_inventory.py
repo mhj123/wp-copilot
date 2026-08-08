@@ -739,6 +739,13 @@ def build():
     su["B2"].font = TITLE_FONT
     su["B3"] = "Counts recalculate from the Feature inventory tab. 'Yours' stays at zero until you fill in the decision column."
     su["B3"].font = SUB_FONT
+    su["B4"] = ("These cells are live formulas. They compute the moment the file opens in Excel, "
+                "LibreOffice, Numbers or Google Sheets - if a preview shows them blank, that preview "
+                "is not calculating, not a broken sheet.")
+    su["B4"].font = SUB_FONT
+    su.merge_cells("B4:E4")
+    su["B4"].alignment = WRAP
+    su.row_dimensions[4].height = 28
 
     su["B5"] = "By proposed action"
     su["B5"].font = BODY_B
@@ -787,15 +794,12 @@ def build():
     row += 3
     su.cell(row=row, column=2, value="By bundle").font = BODY_B
     row += 1
-    for i, h in enumerate(["Bundle", "Features", "Keep - core", "Read"], start=2):
+    for i, h in enumerate(["Bundle", "Features", "Keep - core",
+                           "Share proposed as core"], start=2):
         c = su.cell(row=row, column=i, value=h)
         c.fill = H_FILL
         c.font = H_FONT
         c.border = BOX
-    su.cell(row=row, column=5, value="Share of the catalogue that is proposed core")
-    su.cell(row=row, column=5).fill = H_FILL
-    su.cell(row=row, column=5).font = H_FONT
-    su.cell(row=row, column=5).border = BOX
     row += 1
     for b in bundles:
         su.cell(row=row, column=2, value=b).font = BODY
