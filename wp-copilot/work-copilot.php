@@ -38,6 +38,9 @@ class Work_Copilot {
     }
 
     private function includes() {
+        // Feature flags first — anything below may gate itself on one.
+        require_once WCP_PLUGIN_DIR . 'includes/class-features.php';
+
         require_once WCP_PLUGIN_DIR . 'includes/class-post-types.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-taxonomies.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-taxonomy-sync.php';
@@ -118,6 +121,9 @@ class Work_Copilot {
     }
 
     public function activate() {
+        // Activation runs outside the normal bootstrap, so load flags here too —
+        // registration below may gate on one. Table creation never does.
+        require_once WCP_PLUGIN_DIR . 'includes/class-features.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-post-types.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-taxonomies.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-memory-manager.php';
