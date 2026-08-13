@@ -57,13 +57,15 @@ function wcp_theme_scripts() {
     // Custom theme styles
     wp_enqueue_style('wcp-theme-custom', get_template_directory_uri() . '/assets/css/theme.css', array(), '2.8.1');
 
-    // SortableJS for drag-to-reorder
-    wp_enqueue_script('sortablejs', 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js', array(), '1.15.2', true);
+    // SortableJS for drag-to-reorder. Bundled locally (MIT) — see
+    // assets/js/vendor/Sortable.LICENSE.txt.
+    wp_enqueue_script('sortablejs', get_template_directory_uri() . '/assets/js/vendor/Sortable.min.js', array(), '1.15.2', true);
 
     // Markdown renderer — used to render item titles/descriptions, independent
     // of whether AI features are enabled (content may have been AI-generated
-    // earlier and still needs to render correctly).
-    wp_enqueue_script('marked', 'https://cdn.jsdelivr.net/npm/marked/marked.min.js', array(), '12.0.0', true);
+    // earlier and still needs to render correctly). Bundled locally (MIT) —
+    // see assets/js/vendor/marked.LICENSE.md.
+    wp_enqueue_script('marked', get_template_directory_uri() . '/assets/js/vendor/marked.min.js', array(), '12.0.0', true);
 
     // Theme JavaScript
     wp_enqueue_script('wcp-theme-js', get_template_directory_uri() . '/assets/js/theme.js', array('jquery', 'sortablejs', 'marked'), '1.13.0', true);

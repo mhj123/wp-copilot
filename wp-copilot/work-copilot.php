@@ -4,8 +4,8 @@
  * Plugin URI: https://wordpress.org/plugins/work-copilot
  * Description: Personal knowledge and work management system with AI-assisted sensemaking
  * Version: 1.2.2
- * Author: Your Name
- * Author URI: https://yoursite.com
+ * Author: mhj123
+ * Author URI: https://profiles.wordpress.org/mhj123/
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: work-copilot
