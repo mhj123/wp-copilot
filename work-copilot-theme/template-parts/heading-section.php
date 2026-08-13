@@ -142,6 +142,5 @@ $heading_creator_class = $heading_created_by === 'hermes' ? ' wcp-by-hermes' : (
             <?php endif; ?>
         </div>
 
-        <?php if (function_exists('wcpg_render_tables')) wcpg_render_tables($page_id, $heading_id); ?>
     </div>
 </div>

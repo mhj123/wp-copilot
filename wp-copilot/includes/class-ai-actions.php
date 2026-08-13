@@ -118,137 +118,6 @@ class WCP_AI_Actions {
     }
 
     /**
-     * Execute generate single item action
-     *
-     * @param string $prompt User's request for item generation
-     * @param int $page_id Current page ID for context
-     * @param bool $use_rag Whether to include RAG items
-     * @param string $conversation_id Conversation ID
-     * @return array|WP_Error Response with proposals requiring approval
-     */
-    public function generate_single_item($prompt, $page_id, $use_rag, $conversation_id) {
-        // Get current user
-        $user_id = get_current_user_id();
-        if (!$user_id) {
-            return new WP_Error('auth_error', 'User not authenticated');
-        }
-
-        // Build context with character limits
-        $context_builder = WCP_Context_Builder::instance();
-        $context_data = $context_builder->build_hierarchical_context($page_id, array(
-            'include_items' => true,
-            'item_limit' => 20,
-            'use_rag' => $use_rag,
-            'query' => $prompt,
-            'rag_limit' => 10,
-            'limits' => array(
-                'max_chars_per_item' => 50000,
-                'max_chars_page_summary' => 8000
-            )
-        ));
-
-        // Build system prompt (4 layers)
-        $prompt_builder = WCP_Prompt_Builder::instance();
-        $system_prompt = $prompt_builder->build_system_prompt('generate-single', $page_id);
-
-        // Build user message with context
-        $user_message = $prompt_builder->build_user_message($prompt, $context_data);
-
-        // Get conversation history
-        $conversations_manager = WCP_Conversations_Manager::instance();
-        $messages = $conversations_manager->get_messages($conversation_id, 10);
-
-        // Format conversation history for AI
-        $conversation_history = array();
-        foreach ($messages as $msg) {
-            $conversation_history[] = array(
-                'role' => $msg['role'],
-                'content' => $msg['content']
-            );
-        }
-
-        // Call AI with conversation history
-        $ai_client = WCP_AI_Client::instance();
-        $response = $ai_client->request_with_conversation(
-            $system_prompt,
-            $user_message,
-            $conversation_history,
-            4096
-        );
-
-        if (is_wp_error($response)) {
-            return $response;
-        }
-
-        // Save user message to conversation
-        $conversations_manager->add_message($conversation_id, 'user', $prompt);
-
-        // Parse JSON from response
-        $parsed_item = $this->parse_json_response($response['content']);
-
-        if (is_wp_error($parsed_item)) {
-            // Save error to conversation
-            $error_msg = 'Failed to parse AI response: ' . $parsed_item->get_error_message();
-            $conversations_manager->add_message($conversation_id, 'system', $error_msg);
-
-            return $parsed_item;
-        }
-
-        // Validate item structure
-        if (!isset($parsed_item['title']) || !isset($parsed_item['content'])) {
-            $error = new WP_Error('invalid_item', 'AI response missing required fields (title, content)');
-            $conversations_manager->add_message($conversation_id, 'system', $error->get_error_message());
-            return $error;
-        }
-
-        // Create proposal
-        $proposal_id = wp_generate_uuid4();
-        $proposal = array(
-            'proposal_id' => $proposal_id,
-            'action_type' => 'generate-single',
-            'item' => $parsed_item,
-            'conversation_id' => $conversation_id,
-            'page_id' => $page_id,
-            'created_at' => current_time('mysql')
-        );
-
-        // Store proposal in transient (expires in 1 hour)
-        set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
-
-        // Save assistant response to conversation (with proposal reference)
-        $conversations_manager->add_message(
-            $conversation_id,
-            'assistant',
-            'Generated item proposal (requires approval)',
-            array('proposal_id' => $proposal_id)
-        );
-
-        // Log AI action (pending acceptance)
-        $logger = WCP_AI_Logger::instance();
-        $action_id = $logger->log_action(array(
-            'action_type' => 'generate_single_item',
-            'user_id' => $user_id,
-            'model' => $response['model'],
-            'prompt' => $prompt,
-            'input_context' => json_encode($context_data),
-            'output_snapshot' => json_encode($parsed_item),
-            'context_post_id' => $page_id,
-            'accepted_items' => array(),
-            'dismissed_items' => array()
-        ));
-
-        return array(
-            'outcome' => 'create_items',
-            'proposals' => array($proposal),
-            'action_id' => $action_id,
-            'metadata' => array(
-                'model' => $response['model'],
-                'tokens' => $response['usage'] ?? null
-            )
-        );
-    }
-
-    /**
      * Chat/Q&A action for frontend widget
      *
      * @param string $prompt User's question
@@ -1728,9 +1597,7 @@ class WCP_AI_Actions {
         $table = $wpdb->prefix . 'wcp_ai_actions';
 
         // Find recent action for this proposal (within last hour)
-        $action_type_search = isset($proposal['action_type']) && $proposal['action_type'] === 'generate-single'
-            ? 'generate_single_item'
-            : 'generate_items';
+        $action_type_search = 'generate_items';
 
         $action = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM $table

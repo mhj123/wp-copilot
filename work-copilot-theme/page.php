@@ -63,8 +63,6 @@ get_header();
     </div>
     <?php endif; ?>
 
-    <?php if (function_exists('wcpg_connections_panel')) wcpg_connections_panel(get_the_ID()); ?>
-
     <?php
     endwhile;
 
@@ -344,8 +342,6 @@ get_header();
         </div>
 
     </section>
-
-    <?php if (function_exists('wcpg_render_tables')) wcpg_render_tables($page_id, 0); ?>
 
     <!-- Page Notes (bottom, collapsible) -->
     <?php $page_notes = get_post_meta($page_id, '_wcp_page_notes', true); ?>
