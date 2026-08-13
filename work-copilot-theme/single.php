@@ -106,9 +106,6 @@ get_header();
             </section>
             <?php endif; ?>
 
-            <?php // Related to: semantic + structural connections (graph add-on). ?>
-            <?php if (function_exists('wcpg_connections_panel')) wcpg_connections_panel(get_the_ID()); ?>
-
             <div class="wcp-item-actions">
                 <?php
                 // Get edit link - pass post ID explicitly

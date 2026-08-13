@@ -1345,11 +1345,6 @@ class WCP_REST_API {
                 $result = $ai_actions->coaching_dialogue($prompt, $page_id, $use_rag, $conversation_id);
                 break;
 
-            case 'generate_single_item':
-                $use_rag = ($context_mode === 'corpus');
-                $result = $ai_actions->generate_single_item($prompt, $page_id, $use_rag, $conversation_id);
-                break;
-
             default:
                 return rest_ensure_response(array(
                     'success' => false,
