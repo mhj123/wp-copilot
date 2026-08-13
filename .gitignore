@@ -42,5 +42,13 @@ wp-copilot/debug-test.php
 *.temp
 .claude/
 
+# LibreOffice/OpenOffice lock files
+.~lock.*#
+
+# Personal import data — never commit source exports (tweets, bookmarks, etc.)
+scripts/
+*.csv
+!wp-copilot/sample-import.csv
+
 # RTF files (keep markdown, exclude rich text)
 *.rtf

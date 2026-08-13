@@ -14,8 +14,9 @@ if (!defined('ABSPATH')) {
 /**
  * Reverse-proxy gate shim.
  *
- * The site sits behind a Caddy HTTP Basic Auth gate (default user "michael").
- * Browsers cache those gate credentials and resend them on every request,
+ * Where the site sits behind an HTTP Basic Auth gate at the reverse proxy
+ * (Caddy, nginx, or similar), browsers cache those gate credentials and
+ * resend them on every request,
  * including admin pages and REST calls. WordPress then sees Basic Auth in
  * $_SERVER and (a) warns that Application Passwords are unavailable, hiding
  * the create form, and (b) may try the gate credentials as an Application
@@ -24,14 +25,15 @@ if (!defined('ABSPATH')) {
  * Strip the gate's credentials before WordPress reads them, so it never sees
  * them. Real Application Password clients (the Hermes agent) authenticate as
  * a DIFFERENT user, so they are left untouched — which is exactly why the
- * agent must not reuse the gate's username. Override the username to match
- * your Caddyfile via define('WCPD_GATE_AUTH_USER', '...') in wp-config.php.
+ * agent must not reuse the gate's username. Set the gate username to match
+ * your proxy config via define('WCPD_GATE_AUTH_USER', '...') in wp-config.php.
+ * If that constant is not defined, this shim does nothing.
  *
  * Runs at plugin load (before determine_current_user) so it covers the same
  * request's auth, including REST.
  */
-$wcpd_gate_user = defined('WCPD_GATE_AUTH_USER') ? WCPD_GATE_AUTH_USER : 'michael';
-if (isset($_SERVER['PHP_AUTH_USER']) && $_SERVER['PHP_AUTH_USER'] === $wcpd_gate_user) {
+$wcpd_gate_user = defined('WCPD_GATE_AUTH_USER') ? WCPD_GATE_AUTH_USER : '';
+if ($wcpd_gate_user !== '' && isset($_SERVER['PHP_AUTH_USER']) && $_SERVER['PHP_AUTH_USER'] === $wcpd_gate_user) {
     unset(
         $_SERVER['PHP_AUTH_USER'],
         $_SERVER['PHP_AUTH_PW'],

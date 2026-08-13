@@ -1,5 +1,5 @@
 === Work Copilot ===
-Contributors: yourwporgusername
+Contributors: mhj123
 Tags: notes, knowledge management, productivity, ai, second brain
 Requires at least: 6.3
 Tested up to: 6.7
