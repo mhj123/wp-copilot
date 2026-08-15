@@ -43,6 +43,17 @@ all-purpose gate. It cannot distinguish reading from deleting, or acting on
 your own content from acting on someone else's, and it has nothing to say
 about spending money.
 
+**This was a decision, not an oversight.** `claude.md` states the principle
+plainly: *"Single-user first — No multi-user permissions in MVP."* On a
+personal install with one administrator, a single `edit_posts` gate is a
+reasonable simplification and the findings below are all unreachable.
+
+What changes is distribution. A plugin on WordPress.org lands on sites with
+Contributors, Authors and Editors, and reviewers test capability handling
+directly. The MVP assumption is sound; it just does not survive publication,
+and every finding below is a consequence of shipping that assumption to
+multi-user sites rather than of anyone getting it wrong.
+
 The fix is not to raise it to `manage_options` — that breaks multi-user use.
 It is to gate each endpoint on what the endpoint actually does. See the
 capability map at the end.

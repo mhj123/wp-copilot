@@ -52,3 +52,7 @@ scripts/
 
 # RTF files (keep markdown, exclude rich text)
 *.rtf
+
+# Python bytecode
+__pycache__/
+*.py[cod]
