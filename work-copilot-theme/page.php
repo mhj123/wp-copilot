@@ -121,6 +121,7 @@ get_header();
         <div id="wcp-page-ai-panel" class="wcp-page-ai-panel" style="display:none;" data-page-id="<?php echo esc_attr($page_id); ?>">
             <div class="wcp-page-ai-chips">
                 <button type="button" class="wcp-page-ai-chip" data-action="generate_structure">Generate structure</button>
+                <button type="button" class="wcp-page-ai-chip" data-action="brainstorm_gaps">Brainstorm gaps</button>
             </div>
             <form class="wcp-page-ai-prompt-form" style="display:none;">
                 <textarea class="wcp-page-ai-prompt-input wcp-form-control" rows="3" placeholder="Describe the headings and items to generate…"></textarea>
@@ -146,6 +147,13 @@ get_header();
             if ($_ht) $local_context_ids[] = $_ht->term_id;
         }
         ?>
+
+        <!-- Brainstorm before/after: the "before" wrapper is always present and
+             inert (full-width, single column) — only .wcp-brainstorm-active on
+             the section switches to the 2-col split. Wrapping the existing
+             markup here (rather than moving it via JS) avoids re-parenting
+             elements SortableJS/select-mode are already bound to. -->
+        <div class="wcp-brainstorm-before">
 
         <!-- Pinned items — lifted to the top of the page -->
         <?php $pinned_items = wcp_theme_get_page_pinned_items($page_id); ?>
@@ -225,6 +233,9 @@ get_header();
         <?php endforeach; ?>
         </div><!-- #wcp-headings-sortable -->
 
+        </div><!-- .wcp-brainstorm-before -->
+        <div class="wcp-brainstorm-after" style="display:none;"></div>
+
         <!-- Dynamic listings -->
         <?php
         $dynamic_listings = json_decode(get_post_meta($page_id, '_wcp_dynamic_listings', true) ?: '[]', true);
@@ -287,6 +298,9 @@ get_header();
         <!-- Selection mode: create goal from selected items -->
         <div id="wcp-selection-bar" style="display:none;" data-page-id="<?php echo esc_attr($page_id); ?>">
             <span id="wcp-selection-count">0 items selected</span>
+            <?php if (get_option('wcp_ai_enabled', false)) : ?>
+            <button type="button" id="wcp-brainstorm-selected-btn" class="wcp-btn wcp-btn-primary wcp-btn-sm" disabled>Brainstorm selected</button>
+            <?php endif; ?>
             <button type="button" id="wcp-goal-from-selected-btn" class="wcp-btn wcp-btn-primary wcp-btn-sm" disabled>Create goal from selected</button>
             <button type="button" id="wcp-delete-selected-btn" class="wcp-btn wcp-btn-danger wcp-btn-sm" disabled>Delete selected</button>
             <button type="button" id="wcp-selection-cancel-btn" class="wcp-edit-link">cancel</button>

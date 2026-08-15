@@ -7,6 +7,39 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+/**
+ * Best-effort repair for text where JSON escape sequences (\n, \n\n, \uXXXX)
+ * lost their leading backslash before reaching WordPress — a known Hermes
+ * agent encoding bug (external to this repo, see HERMES-INTEGRATION.md),
+ * where "\n\nCore" arrives as literal "nnCore" and "—" as "u2014".
+ *
+ * Only repairs patterns that couldn't plausibly occur in real prose: a bare
+ * "u" followed by exactly 4 hex digits (real words never do this), and a
+ * bare "n"/"nn" glued directly against punctuation with no surrounding
+ * whitespace (real prose always has a space there). Ordinary text is left
+ * untouched.
+ *
+ * @param string $text
+ * @return string
+ */
+function wcp_theme_repair_escaped_text($text) {
+    if (!is_string($text) || $text === '') {
+        return $text;
+    }
+
+    // \uXXXX with the backslash stripped
+    $text = preg_replace_callback('/u([0-9a-fA-F]{4})/', function($m) {
+        return mb_convert_encoding(pack('n', hexdec($m[1])), 'UTF-8', 'UTF-16BE');
+    }, $text);
+
+    // \n\n and \n with the backslash stripped — only where glued directly to
+    // punctuation with no space, which real prose never does.
+    $text = preg_replace('/([.:;])nn(?=[A-Z0-9\-])/', "$1\n\n", $text);
+    $text = preg_replace('/([.:;])n(?=[A-Z0-9\-])/', "$1\n", $text);
+
+    return $text;
+}
+
 // Theme setup
 function wcp_theme_setup() {
     // Add default posts and comments RSS feed links to head
@@ -54,8 +87,9 @@ function wcp_theme_scripts() {
     // Main theme stylesheet
     wp_enqueue_style('wcp-theme-style', get_stylesheet_uri(), array(), '1.2.0');
 
-    // Custom theme styles
-    wp_enqueue_style('wcp-theme-custom', get_template_directory_uri() . '/assets/css/theme.css', array(), '2.8.1');
+    // Custom theme styles — filemtime()-versioned so edits always bust the
+    // browser cache without needing a manual version bump (see workspace-ui.css).
+    wp_enqueue_style('wcp-theme-custom', get_template_directory_uri() . '/assets/css/theme.css', array(), filemtime(get_template_directory() . '/assets/css/theme.css'));
 
     // SortableJS for drag-to-reorder. Bundled locally (MIT) — see
     // assets/js/vendor/Sortable.LICENSE.txt.
@@ -67,8 +101,8 @@ function wcp_theme_scripts() {
     // see assets/js/vendor/marked.LICENSE.md.
     wp_enqueue_script('marked', get_template_directory_uri() . '/assets/js/vendor/marked.min.js', array(), '12.0.0', true);
 
-    // Theme JavaScript
-    wp_enqueue_script('wcp-theme-js', get_template_directory_uri() . '/assets/js/theme.js', array('jquery', 'sortablejs', 'marked'), '1.13.0', true);
+    // Theme JavaScript — filemtime()-versioned, same reasoning as theme.css above.
+    wp_enqueue_script('wcp-theme-js', get_template_directory_uri() . '/assets/js/theme.js', array('jquery', 'sortablejs', 'marked'), filemtime(get_template_directory() . '/assets/js/theme.js'), true);
 
     // Localize script with data
     wp_localize_script('wcp-theme-js', 'wcpThemeData', array(
@@ -109,7 +143,9 @@ function wcp_theme_section_accent() {
     $ancestors = get_post_ancestors($page_id);
     $top_id = !empty($ancestors) ? (int) end($ancestors) : (int) $page_id;
     // A golden-angle sequence distributes adjacent IDs across distinct hues.
-    $hue = (int) (($top_id * 137.508) % 360);
+    // fmod() (not %) since 137.508 is non-integer — PHP 8.1+ deprecates the
+    // modulo operator's implicit float-to-int coercion.
+    $hue = (int) fmod($top_id * 137.508, 360);
 
     return sprintf('hsl(%d 68%% 54%%)', $hue);
 }

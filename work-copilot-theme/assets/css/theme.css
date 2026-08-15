@@ -2790,6 +2790,18 @@ a.wcp-tag:hover {
     display: block;
 }
 
+/* Hermes delegation reports are review text like any other description —
+   respect the same show/hide toggle rather than always rendering. The
+   status pill, clarification Q&A, and artifact list stay visible regardless
+   (they may need the user's attention), only the narrative report text hides. */
+.wcp-delegation-report-text {
+    display: none;
+}
+
+.wcp-items-section.wcp-show-descriptions .wcp-delegation-report-text {
+    display: block;
+}
+
 /* Hide non-essential actions when toggle is active */
 .wcp-items-section.wcp-hide-actions .wcp-item-view-link,
 .wcp-items-section.wcp-hide-actions .wcp-item-ai-btn,
@@ -3541,6 +3553,14 @@ a.wcp-tag:hover {
 }
 
 .wcp-item-row.wcp-desc-closed .wcp-item-description {
+    display: none !important;
+}
+
+.wcp-item-row.wcp-desc-open .wcp-delegation-report-text {
+    display: block;
+}
+
+.wcp-item-row.wcp-desc-closed .wcp-delegation-report-text {
     display: none !important;
 }
 

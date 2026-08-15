@@ -68,6 +68,16 @@ body.wcp-ai-panel-open .wcp-main-content { margin-right: calc(50vw - 136px); }
 
 /* The list is a single information-dense workspace surface. */
 .wcp-items-section { overflow: hidden; padding: 0; border: 1px solid var(--wcp-border); border-radius: 12px; background: var(--wcp-surface); box-shadow: 0 12px 32px rgba(23,35,55,.045); }
+
+/* Brainstorm before/after split — inert single-column until activated. */
+.wcp-brainstorm-active .wcp-items-toolbar,
+.wcp-brainstorm-active #wcp-page-ai-panel { grid-column: 1 / -1; }
+.wcp-brainstorm-active { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
+.wcp-brainstorm-before { min-width: 0; }
+.wcp-brainstorm-after { min-width: 0; border-left: 1px solid var(--wcp-border); background: var(--wcp-surface-muted); }
+.wcp-brainstorm-after-inner { padding: 13px; }
+.wcp-brainstorm-after-title { margin: 0 0 10px; color: var(--wcp-text-muted); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.wcp-brainstorm-after .wcp-struct-actions { position: sticky; bottom: 0; margin-top: 10px; padding: 10px 0 2px; background: var(--wcp-surface-muted); }
 .wcp-items-toolbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 9px 11px; border: 0; border-bottom: 1px solid var(--wcp-border); background: #fcfcfd; }
 .wcp-filter-group { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--wcp-border); border-radius: 8px; background: var(--wcp-surface-muted); }
 .wcp-filter-btn, .wcp-items-toolbar .wcp-edit-link { border: 0; border-radius: 6px; background: transparent; color: var(--wcp-text-muted); cursor: pointer; font: 600 12px/1.25 inherit; padding: 6px 9px; }

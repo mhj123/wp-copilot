@@ -1042,6 +1042,357 @@ class WCP_AI_Actions {
     }
 
     /**
+     * Brainstorm Mode A: given a specific set of existing item IDs (selected
+     * by the user), propose a rewrite for each (optional — the model may
+     * decide an item needs no change) and/or new sub-items typed task/info/
+     * spec, to be created as real post_parent children of that item.
+     * AI guardrail: everything is a proposal — nothing is written here.
+     */
+    public function brainstorm_items($item_ids, $protocol = '', $page_id = 0, $conversation_id = null) {
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new WP_Error('auth_error', 'User not authenticated');
+        }
+
+        $item_ids = array_filter(array_map('intval', (array) $item_ids));
+        if (empty($item_ids)) {
+            return new WP_Error('no_items', 'No items selected to brainstorm against');
+        }
+
+        $by_id = array();
+        $items_listing = '';
+        foreach ($item_ids as $id) {
+            $post = get_post($id);
+            if (!$post || $post->post_type !== 'post') {
+                continue;
+            }
+            $by_id[$id] = array('title' => $post->post_title, 'content' => $post->post_content);
+            $content = wp_strip_all_tags($post->post_content);
+            if (strlen($content) > 500) {
+                $content = substr($content, 0, 500) . '…';
+            }
+            $items_listing .= "ID {$id}: \"{$post->post_title}\" — " . ($content !== '' ? $content : '(no description)') . "\n";
+        }
+
+        if (empty($by_id)) {
+            return new WP_Error('no_items', 'None of the selected items could be found');
+        }
+
+        $sys = "You are helping the user brainstorm improvements to a specific set of existing items. "
+             . "For EACH item listed below, decide: (a) whether it would benefit from a rewritten title/description "
+             . "— omit or set 'rewrite' to null if it's already fine as-is, don't rewrite just to rewrite; and "
+             . "(b) 0 or more new sub-items that would usefully break it down further, each typed 'task', 'info', or "
+             . "'spec' depending on what it represents (a to-do, background/reference info, or a requirement/spec "
+             . "respectively). Return ONLY a JSON object: {\"items\": [{\"item_id\": <id, must match one from the "
+             . "list>, \"rewrite\": {\"title\": \"...\", \"content\": \"...\"} or null, \"subitems\": "
+             . "[{\"title\": \"...\", \"content\": \"...\", \"item_type\": \"task|info|spec\"}]}]}. "
+             . "Content may use Markdown (bullet lists with -, **bold**, headings with #) where it improves clarity.";
+        if (trim($protocol) !== '') {
+            $sys .= " The user has also prescribed the following format/protocol to follow — apply it to both "
+                  . "rewrites and sub-items where relevant: " . trim($protocol);
+        }
+        $usr = "Items to brainstorm against:\n{$items_listing}";
+
+        $conversation_history = array();
+        if ($conversation_id) {
+            $conversations_manager = WCP_Conversations_Manager::instance();
+            $messages = $conversations_manager->get_messages($conversation_id, 10);
+            foreach ($messages as $msg) {
+                $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
+            }
+        }
+
+        $ai_client = WCP_AI_Client::instance();
+        $response = $ai_client->request_with_conversation($sys, $usr, $conversation_history, 8192, 120);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        if ($conversation_id) {
+            $conversations_manager = WCP_Conversations_Manager::instance();
+            $conversations_manager->add_message($conversation_id, 'user', '[Brainstorm on selected items] ' . $protocol);
+        }
+
+        if (($response['stop_reason'] ?? null) === 'max_tokens') {
+            return new WP_Error(
+                'response_truncated',
+                'The AI response was cut off before it finished (too many items selected at once). Try brainstorming against fewer items.'
+            );
+        }
+
+        $parsed = $this->parse_json_response($response['content']);
+        if (is_wp_error($parsed)) {
+            return $parsed;
+        }
+        $entries = isset($parsed['items']) && is_array($parsed['items']) ? $parsed['items'] : (is_array($parsed) ? $parsed : array());
+        if (empty($entries)) {
+            return new WP_Error('invalid_response', 'AI did not propose any changes');
+        }
+
+        $proposals = array();
+        $batch_id  = wp_generate_uuid4();
+        $index     = 0;
+
+        foreach ($entries as $entry) {
+            $item_id = isset($entry['item_id']) ? (int) $entry['item_id'] : 0;
+            if (!$item_id || !isset($by_id[$item_id])) {
+                continue; // AI referenced something outside the selected set — skip, don't guess
+            }
+            $original = $by_id[$item_id];
+
+            if (!empty($entry['rewrite']) && is_array($entry['rewrite'])) {
+                $proposal_id = wp_generate_uuid4();
+                $proposal = array(
+                    'proposal_id'     => $proposal_id,
+                    'batch_id'        => $batch_id,
+                    'index'           => $index++,
+                    'action_type'     => 'edit_item',
+                    'item_id'         => $item_id,
+                    'original'        => $original,
+                    'item'            => array(
+                        'title'   => isset($entry['rewrite']['title']) ? $entry['rewrite']['title'] : $original['title'],
+                        'content' => isset($entry['rewrite']['content']) ? $entry['rewrite']['content'] : $original['content'],
+                    ),
+                    'conversation_id' => $conversation_id,
+                    'page_id'         => $page_id,
+                    'created_at'      => current_time('mysql'),
+                );
+                set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
+                $proposals[] = $proposal;
+            }
+
+            foreach ((array) ($entry['subitems'] ?? array()) as $sub) {
+                if (empty($sub['title'])) {
+                    continue;
+                }
+                $sub_type = in_array($sub['item_type'] ?? '', array('task', 'info', 'spec'), true) ? $sub['item_type'] : 'task';
+                $proposal_id = wp_generate_uuid4();
+                $proposal = array(
+                    'proposal_id'     => $proposal_id,
+                    'batch_id'        => $batch_id,
+                    'index'           => $index++,
+                    'action_type'     => 'brainstorm_subitem',
+                    'parent_item_id'  => $item_id,
+                    'item'            => array(
+                        'title'     => $sub['title'],
+                        'content'   => $sub['content'] ?? '',
+                        'item_type' => $sub_type,
+                    ),
+                    'conversation_id' => $conversation_id,
+                    'page_id'         => $page_id,
+                    'created_at'      => current_time('mysql'),
+                );
+                set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
+                $proposals[] = $proposal;
+            }
+        }
+
+        if (empty($proposals)) {
+            return new WP_Error('no_matching_items', 'Could not match the AI’s response to any selected item');
+        }
+
+        set_transient('wcp_batch_' . $batch_id, array(
+            'proposal_ids'    => array_column($proposals, 'proposal_id'),
+            'page_id'         => $page_id,
+            'conversation_id' => $conversation_id,
+        ), HOUR_IN_SECONDS);
+
+        $logger = WCP_AI_Logger::instance();
+        $logger->log_action(array(
+            'action_type'     => 'brainstorm_items',
+            'user_id'         => $user_id,
+            'model'           => $response['model'],
+            'prompt'          => $protocol,
+            'input_context'   => json_encode(array('item_ids' => $item_ids)),
+            'output_snapshot' => json_encode($entries),
+            'context_post_id' => $page_id,
+            'accepted_items'  => array(),
+            'dismissed_items' => array(),
+        ));
+
+        return array(
+            'outcome'   => 'brainstorm_items',
+            'proposals' => $proposals,
+            'batch_id'  => $batch_id,
+            'metadata'  => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null),
+        );
+    }
+
+    /**
+     * Brainstorm Mode B: reviews every existing item in scope (a whole page,
+     * for now — heading scope is a documented follow-on) against the page
+     * mission and proposes both new items filling gaps and rewrites of
+     * existing items that could be improved — unlike Mode A, this is not
+     * limited to a user-selected subset.
+     * AI guardrail: everything is a proposal — nothing is written here.
+     */
+    public function brainstorm_gaps($page_id, $protocol = '', $context_mode = 'page', $selected_pages = array(), $conversation_id = null) {
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new WP_Error('auth_error', 'User not authenticated');
+        }
+
+        $context_builder = WCP_Context_Builder::instance();
+        $context_data = $context_builder->build_context_by_mode($page_id, $context_mode, array(
+            'selected_pages' => $selected_pages,
+            'query'          => $protocol,
+            'include_items'  => true,
+            'item_limit'     => 40,
+        ));
+
+        $candidate_items = $context_data['items'] ?? array();
+
+        $by_id = array();
+        $items_listing = '';
+        foreach ($candidate_items as $it) {
+            $by_id[(int) $it['id']] = $it;
+            $content = wp_strip_all_tags($it['content'] ?? '');
+            if (strlen($content) > 500) {
+                $content = substr($content, 0, 500) . '…';
+            }
+            $items_listing .= "ID {$it['id']}: \"{$it['title']}\" — " . ($content !== '' ? $content : '(no description)') . "\n";
+        }
+
+        $mission_context = WCP_Mission_Loader::instance()->get_mission_context($page_id);
+        $mission_text = trim(($mission_context['global'] ?? '') . "\n" . ($mission_context['page'] ?? ''));
+
+        $sys = "You are reviewing an existing set of items on a page against its stated goal, looking for gaps. "
+             . "Below is the page's mission/goal (if any) and the full list of items already present, each with its "
+             . "ID. Propose two things: (a) NEW top-level items that fill genuine gaps — things the mission implies "
+             . "but that nothing in the existing list already covers (don't propose anything that duplicates or "
+             . "near-duplicates an existing item); and (b) rewrites of any EXISTING items (by ID) that are vague, "
+             . "incomplete, or could clearly be improved — only include items that genuinely need it, not every "
+             . "item. Return ONLY a JSON object: {\"new_items\": [{\"title\": \"...\", \"content\": \"...\", "
+             . "\"item_type\": \"task|info|learning|spec\"}], \"rewrites\": [{\"item_id\": <id, must match one from "
+             . "the list>, \"title\": \"...\", \"content\": \"...\"}]}. Content may use Markdown (bullet lists with "
+             . "-, **bold**, headings with #) where it improves clarity.";
+        if (trim($protocol) !== '') {
+            $sys .= " The user has also prescribed the following format/protocol to follow: " . trim($protocol);
+        }
+        $usr = "Page mission/goal:\n" . ($mission_text !== '' ? $mission_text : '(none set)')
+             . "\n\nExisting items:\n" . ($items_listing !== '' ? $items_listing : '(none yet)');
+
+        $conversation_history = array();
+        if ($conversation_id) {
+            $conversations_manager = WCP_Conversations_Manager::instance();
+            $messages = $conversations_manager->get_messages($conversation_id, 10);
+            foreach ($messages as $msg) {
+                $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
+            }
+        }
+
+        $ai_client = WCP_AI_Client::instance();
+        $response = $ai_client->request_with_conversation($sys, $usr, $conversation_history, 8192, 120);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        if ($conversation_id) {
+            $conversations_manager = WCP_Conversations_Manager::instance();
+            $conversations_manager->add_message($conversation_id, 'user', '[Brainstorm gaps] ' . $protocol);
+        }
+
+        if (($response['stop_reason'] ?? null) === 'max_tokens') {
+            return new WP_Error(
+                'response_truncated',
+                'The AI response was cut off before it finished (too many items on this page). Try again — this is usually transient — or narrow the page down first.'
+            );
+        }
+
+        $parsed = $this->parse_json_response($response['content']);
+        if (is_wp_error($parsed)) {
+            return $parsed;
+        }
+        $new_items = isset($parsed['new_items']) && is_array($parsed['new_items']) ? $parsed['new_items'] : array();
+        $rewrites  = isset($parsed['rewrites']) && is_array($parsed['rewrites']) ? $parsed['rewrites'] : array();
+
+        if (empty($new_items) && empty($rewrites)) {
+            return new WP_Error('invalid_response', 'AI did not propose any gaps or improvements');
+        }
+
+        $proposals = array();
+        $batch_id  = wp_generate_uuid4();
+        $index     = 0;
+
+        foreach ($new_items as $item) {
+            if (empty($item['title']) || !isset($item['content'])) {
+                continue;
+            }
+            $proposal_id = wp_generate_uuid4();
+            $proposal = array(
+                'proposal_id'     => $proposal_id,
+                'batch_id'        => $batch_id,
+                'index'           => $index++,
+                'action_type'     => 'generate-multiple',
+                'item'            => $item,
+                'conversation_id' => $conversation_id,
+                'page_id'         => $page_id,
+                'created_at'      => current_time('mysql'),
+            );
+            set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
+            $proposals[] = $proposal;
+        }
+
+        foreach ($rewrites as $edit) {
+            $item_id = isset($edit['item_id']) ? (int) $edit['item_id'] : 0;
+            if (!$item_id || !isset($by_id[$item_id])) {
+                continue; // AI referenced something outside the candidate set — skip, don't guess
+            }
+            $original = $by_id[$item_id];
+            $proposal_id = wp_generate_uuid4();
+            $proposal = array(
+                'proposal_id'     => $proposal_id,
+                'batch_id'        => $batch_id,
+                'index'           => $index++,
+                'action_type'     => 'edit_item',
+                'item_id'         => $item_id,
+                'original'        => array('title' => $original['title'], 'content' => $original['content']),
+                'item'            => array(
+                    'title'   => isset($edit['title']) ? $edit['title'] : $original['title'],
+                    'content' => isset($edit['content']) ? $edit['content'] : $original['content'],
+                ),
+                'conversation_id' => $conversation_id,
+                'page_id'         => $page_id,
+                'created_at'      => current_time('mysql'),
+            );
+            set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
+            $proposals[] = $proposal;
+        }
+
+        if (empty($proposals)) {
+            return new WP_Error('no_matching_items', 'Could not turn the AI’s response into any usable proposals');
+        }
+
+        set_transient('wcp_batch_' . $batch_id, array(
+            'proposal_ids'    => array_column($proposals, 'proposal_id'),
+            'page_id'         => $page_id,
+            'conversation_id' => $conversation_id,
+        ), HOUR_IN_SECONDS);
+
+        $logger = WCP_AI_Logger::instance();
+        $logger->log_action(array(
+            'action_type'     => 'brainstorm_gaps',
+            'user_id'         => $user_id,
+            'model'           => $response['model'],
+            'prompt'          => $protocol,
+            'input_context'   => json_encode(array('context_mode' => $context_mode, 'page_id' => $page_id)),
+            'output_snapshot' => json_encode($parsed),
+            'context_post_id' => $page_id,
+            'accepted_items'  => array(),
+            'dismissed_items' => array(),
+        ));
+
+        return array(
+            'outcome'   => 'brainstorm_gaps',
+            'proposals' => $proposals,
+            'batch_id'  => $batch_id,
+            'metadata'  => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null),
+        );
+    }
+
+    /**
      * Structure-aware generation: the model sees the current page's existing
      * headings (with ids) and items, and proposes new headings and/or items
      * placed under new headings, existing headings, or page level. Combines the
@@ -1548,6 +1899,57 @@ class WCP_AI_Actions {
             );
         }
 
+        // Handle Brainstorm sub-item proposals — creates a real post_parent
+        // child of an existing item, typed task/info/spec, inheriting the
+        // parent's wcp_context (mirrors create_item()'s inheritance behavior).
+        if (isset($proposal['action_type']) && $proposal['action_type'] === 'brainstorm_subitem') {
+            $parent_item_id = (int) ($proposal['parent_item_id'] ?? 0);
+            $new = isset($proposal['item']) ? $proposal['item'] : array();
+
+            if (!$parent_item_id || get_post_type($parent_item_id) !== 'post') {
+                return new WP_Error('invalid_proposal', 'Sub-item proposal refers to a missing parent item');
+            }
+            if (empty($new['title'])) {
+                return new WP_Error('invalid_proposal', 'Sub-item proposal is missing a title');
+            }
+
+            $sub_id = wp_insert_post(array(
+                'post_type'    => 'post',
+                'post_title'   => sanitize_text_field($new['title']),
+                'post_content' => wp_kses_post($new['content'] ?? ''),
+                'post_status'  => 'publish',
+                'post_author'  => $user_id,
+                'post_parent'  => $parent_item_id,
+            ));
+
+            if (is_wp_error($sub_id)) {
+                return $sub_id;
+            }
+
+            WCP_Post_Types::mark_creator($sub_id, 'copilot');
+
+            $parent_contexts = wp_get_post_terms($parent_item_id, 'wcp_context', array('fields' => 'ids'));
+            if (!is_wp_error($parent_contexts) && !empty($parent_contexts)) {
+                wp_set_post_terms($sub_id, $parent_contexts, 'wcp_context');
+            }
+
+            $sub_type = in_array($new['item_type'] ?? '', array('task', 'info', 'spec'), true) ? $new['item_type'] : 'task';
+            wp_set_post_terms($sub_id, array($sub_type), 'item_type');
+            if ($sub_type === 'task') {
+                wp_set_post_terms($sub_id, array('to-do'), 'task_status');
+            } elseif ($sub_type === 'spec') {
+                wp_set_post_terms($sub_id, array('draft'), 'spec_status');
+            }
+
+            delete_transient('wcp_proposal_' . $proposal_id);
+
+            return array(
+                'created_posts' => array($sub_id),
+                'message'       => 'Sub-item created successfully',
+                'debug'         => array('item_id' => $sub_id, 'parent_item_id' => $parent_item_id),
+            );
+        }
+
         // Handle both single and multiple item proposals
         $item = isset($proposal['item']) ? $proposal['item'] : null;
 
@@ -1632,7 +2034,7 @@ class WCP_AI_Actions {
      * @param string $response AI response text
      * @return array|WP_Error Parsed JSON or error
      */
-    private function parse_json_response($response) {
+    public function parse_json_response($response) {
         $original = $response;
 
         // Remove markdown code blocks if present
