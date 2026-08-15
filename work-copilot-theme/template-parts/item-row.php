@@ -223,7 +223,7 @@ $_delegation_labels = array(
             <?php endforeach; ?>
 
             <?php if (!empty($_dlg['report'])) : ?>
-                <div class="wcp-delegation-report-text"><?php echo nl2br(esc_html($_dlg['report'])); ?></div>
+                <div class="wcp-delegation-report-text"><?php echo nl2br(esc_html(wcp_theme_repair_escaped_text($_dlg['report']))); ?></div>
             <?php endif; ?>
 
             <?php if (!empty($_dlg['artifact_ids'])) : ?>

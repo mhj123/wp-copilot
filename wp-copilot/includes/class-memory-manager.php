@@ -104,9 +104,10 @@ class WCP_Memory_Manager {
 
         // Call AI
         $ai_client = WCP_AI_Client::instance();
-        $response = $ai_client->request(
+        $response = $ai_client->request_with_conversation(
             $system_prompt,
             $user_prompt,
+            array(),
             2048
         );
 
@@ -273,6 +274,15 @@ class WCP_Memory_Manager {
         if (!is_wp_error($page_id)) {
             // Mark as special system page
             update_post_meta($page_id, '_wcp_is_memories_page', '1');
+
+            // Explicitly sync the wcp_context term rather than relying on the
+            // save_post_page hook firing during this same request — on some
+            // activation paths WCP_Taxonomy_Sync isn't guaranteed to be wired
+            // up yet, which silently leaves save_memory() unable to find a
+            // context term to attach memories to.
+            if (class_exists('WCP_Taxonomy_Sync')) {
+                WCP_Taxonomy_Sync::instance()->sync_page_to_taxonomy($page_id, get_post($page_id), false);
+            }
         }
 
         return $page_id;

@@ -1310,6 +1310,15 @@ class WCP_REST_API {
                 $result = $ai_actions->edit_items($prompt, $page_id, $context_mode, $selected_pages, $conversation_id);
                 break;
 
+            case 'brainstorm_items':
+                $item_ids = array_map('intval', (array) ($request->get_param('item_ids') ?: array()));
+                $result = $ai_actions->brainstorm_items($item_ids, $prompt, $page_id, $conversation_id);
+                break;
+
+            case 'brainstorm_gaps':
+                $result = $ai_actions->brainstorm_gaps($page_id, $prompt, $context_mode, $selected_pages, $conversation_id);
+                break;
+
             case 'taxonomy_outline':
                 $result = $ai_actions->taxonomy_outline($prompt, $conversation_id);
                 break;
