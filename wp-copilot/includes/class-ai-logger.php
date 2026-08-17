@@ -159,4 +159,31 @@ class WCP_AI_Logger {
     private function generate_action_id() {
         return 'wcp_ai_' . wp_generate_uuid4();
     }
+
+    /**
+     * Delete audit log rows older than the retention window. readme.txt
+     * names this log as a privacy/auditability feature, which cuts both
+     * ways — it stores full prompts and AI responses (potentially
+     * containing note content) indefinitely otherwise, growing unbounded.
+     * Called daily via the wcp_ai_actions_retention cron event.
+     *
+     * @return int Number of rows deleted
+     */
+    public function purge_old_actions() {
+        global $wpdb;
+
+        // Filterable — a site owner who wants a longer/shorter audit trail
+        // can adjust this without a code change.
+        $days = (int) apply_filters('wcp_ai_log_retention_days', 90);
+        if ($days <= 0) {
+            return 0; // 0 or negative disables purging, not "delete everything"
+        }
+
+        $deleted = $wpdb->query($wpdb->prepare(
+            "DELETE FROM {$wpdb->prefix}wcp_ai_actions WHERE timestamp < DATE_SUB(NOW(), INTERVAL %d DAY)",
+            $days
+        ));
+
+        return $deleted === false ? 0 : (int) $deleted;
+    }
 }
