@@ -117,6 +117,33 @@ class WCP_Conversations_Manager {
     }
 
     /**
+     * Whether the given (or current) user may read/use this conversation.
+     * Conversations have no WP_Post backing, so there's no current_user_can()
+     * meta capability to lean on — this is the equivalent check for this data
+     * type. Admins (manage_options) can always access any conversation,
+     * mirroring the admin-bypass every other object-ownership check in this
+     * plugin already has via edit_others_posts/delete_others_posts.
+     *
+     * @param string $conversation_id
+     * @param int|null $user_id Defaults to the current user.
+     * @return bool
+     */
+    public function user_can_access($conversation_id, $user_id = null) {
+        if (current_user_can('manage_options')) {
+            return true;
+        }
+
+        $user_id = $user_id !== null ? (int) $user_id : get_current_user_id();
+        $conversation = $this->get_conversation($conversation_id);
+
+        if (!$conversation) {
+            return false;
+        }
+
+        return (int) $conversation->user_id === $user_id;
+    }
+
+    /**
      * Get conversation messages
      *
      * @param string $conversation_id The conversation ID

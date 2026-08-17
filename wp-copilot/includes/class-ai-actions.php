@@ -1755,6 +1755,38 @@ class WCP_AI_Actions {
         $debug_info = array();
         $page_id = $proposal['page_id'] ?? 0;
 
+        // Ownership check — one chokepoint for both the single-proposal
+        // (decide_proposals) and batch (handle_batch_decision) callers.
+        // The target ID is read from the STORED proposal (captured when the
+        // proposal was created), never from the current request — the whole
+        // point of a proposal is that the write target was fixed at
+        // creation time, so checking a request-supplied ID here would
+        // validate the wrong object and defeat this entirely.
+        //
+        // Item-targeting actions check the actual item being edited/nested
+        // under — its real author, not whatever page/heading context
+        // surfaced it (an item can belong to multiple Pages/Headings; being
+        // able to see it in a context you own does not make it yours).
+        // Everything else (new heading/page/item) targets the page_id it
+        // attaches to. page_id === 0 is a legitimate "site-wide" sentinel
+        // elsewhere in this codebase — nothing to own, skip rather than
+        // erroring on the coarse edit_posts gate's own territory.
+        $proposal_action_type = $proposal['action_type'] ?? '';
+        $auth_target_id = null;
+        if ($proposal_action_type === 'edit_item') {
+            $auth_target_id = (int) ($proposal['item_id'] ?? 0);
+        } elseif ($proposal_action_type === 'brainstorm_subitem') {
+            $auth_target_id = (int) ($proposal['parent_item_id'] ?? 0);
+        } elseif ($proposal_action_type !== 'extract_memories') {
+            $auth_target_id = (int) $page_id;
+        }
+        if ($auth_target_id) {
+            $auth = WCP_REST_Auth::require_object($auth_target_id, 'edit_post');
+            if (is_wp_error($auth)) {
+                return $auth;
+            }
+        }
+
         // Get or create context term for this page
         $terms = get_terms(array(
             'taxonomy' => 'wcp_context',

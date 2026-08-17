@@ -538,6 +538,13 @@ class WCP_REST_API {
         $tags        = $request->get_param('tags');
         $post_parent = (int) $request->get_param('post_parent');
 
+        if ( $post_parent ) {
+            $auth = WCP_REST_Auth::require_object( $post_parent, 'edit_post' );
+            if ( is_wp_error( $auth ) ) {
+                return $auth;
+            }
+        }
+
         // Inherit context and tags from parent item when not explicitly supplied
         if ( $post_parent ) {
             if ( empty( $contexts ) ) {
@@ -1158,6 +1165,11 @@ class WCP_REST_API {
             ));
         }
 
+        $auth = WCP_REST_Auth::require_object( $post_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
+
         $manager = WCP_Embeddings_Manager::instance();
         $result = $manager->generate_embedding($post_id);
 
@@ -1245,6 +1257,13 @@ class WCP_REST_API {
                 'success' => false,
                 'message' => 'Missing required parameters (action_type, prompt)',
             ));
+        }
+
+        // A conversation_id is client-supplied and otherwise trusted as-is by
+        // every downstream AI action (history read, reply appended) — verify
+        // it belongs to the caller before it's used for anything.
+        if ($conversation_id && !WCP_Conversations_Manager::instance()->user_can_access($conversation_id)) {
+            return new WP_Error('forbidden', 'Permission denied', array('status' => 403));
         }
 
         // Check if AI is enabled
@@ -1482,6 +1501,18 @@ class WCP_REST_API {
         }
         $page_id = (int) $batch['page_id'];
 
+        // accept_structure() creates directly rather than going through
+        // execute_proposal(), so it needs its own ownership check on the
+        // batch's stored target page — same reasoning as the chokepoint in
+        // execute_proposal(): the ID comes from the stored batch, not the
+        // request, and page_id === 0 (site-wide) has nothing to own.
+        if ($page_id) {
+            $auth = WCP_REST_Auth::require_object($page_id, 'edit_post');
+            if (is_wp_error($auth)) {
+                return $auth;
+            }
+        }
+
         // 1. New headings first → ref => term_id.
         $ref_term         = array();
         $created_headings = 0;
@@ -1709,6 +1740,11 @@ class WCP_REST_API {
             ));
         }
 
+        $auth = WCP_REST_Auth::require_object( $post_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
+
         // Add size validation and truncation
         $max_draft_chars = 15000; // ~3,750 tokens (conservative limit)
 
@@ -1916,6 +1952,11 @@ class WCP_REST_API {
             return new WP_Error('invalid_parent_type', 'Parent type must be page or wcp_heading', array('status' => 400));
         }
 
+        $auth = WCP_REST_Auth::require_object( $parent_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
+
         // Create heading
         $heading_id = wp_insert_post(array(
             'post_type' => 'wcp_heading',
@@ -1986,6 +2027,10 @@ class WCP_REST_API {
                 'success' => false,
                 'message' => 'Missing conversation_id parameter'
             ));
+        }
+
+        if (!WCP_Conversations_Manager::instance()->user_can_access($conversation_id)) {
+            return new WP_Error('forbidden', 'Permission denied', array('status' => 403));
         }
 
         $ai_actions = WCP_AI_Actions::instance();
@@ -2062,6 +2107,20 @@ class WCP_REST_API {
             $default_term = $page_id ? $this->resolve_page_term($page_id) : 0;
             if ($default_term) {
                 $context_ids = array($default_term);
+            }
+        }
+
+        // context_ids are wcp_context term IDs, not post IDs — the ownable
+        // object is the Page/Heading each term mirrors (via its
+        // wcp_ref_type/wcp_ref_id term meta), not the term itself.
+        foreach ($context_ids as $context_term_id) {
+            $ref_id = (int) get_term_meta($context_term_id, 'wcp_ref_id', true);
+            if (!$ref_id) {
+                continue; // term isn't a Page/Heading mirror — nothing to own
+            }
+            $auth = WCP_REST_Auth::require_object($ref_id, 'edit_post');
+            if (is_wp_error($auth)) {
+                return $auth;
             }
         }
 
@@ -2486,6 +2545,11 @@ class WCP_REST_API {
             return new WP_Error( 'invalid_parent', 'Parent must be a published page', array( 'status' => 400 ) );
         }
 
+        $auth = WCP_REST_Auth::require_object( $parent_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
+
         $result = WCP_Page_Scheduler::create_child_page( $parent_id, $title );
 
         if ( is_wp_error( $result ) ) {
@@ -2563,6 +2627,11 @@ class WCP_REST_API {
 
         if ( ! in_array( $parent_type, array( 'page', 'wcp_heading' ), true ) ) {
             return new WP_Error( 'invalid_parent_type', 'parent_type must be page or wcp_heading', array( 'status' => 400 ) );
+        }
+
+        $auth = WCP_REST_Auth::require_object( $parent_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
         }
 
         // Create the goal heading
@@ -2652,6 +2721,10 @@ class WCP_REST_API {
         if ( ! $post || $post->post_type !== 'wcp_heading' ) {
             return new WP_Error('not_found', 'Heading not found', array('status' => 404));
         }
+        $auth = WCP_REST_Auth::require_object( $heading_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
         $title = sanitize_text_field( $request->get_param('title') );
         if ( $title ) {
             wp_update_post( array('ID' => $heading_id, 'post_title' => $title) );
@@ -2663,6 +2736,10 @@ class WCP_REST_API {
 
     public function duplicate_heading( $request ) {
         $heading_id = (int) $request->get_param('heading_id');
+        $auth = WCP_REST_Auth::require_object( $heading_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
         $new_id = WCP_Section_Manager::instance()->duplicate_section( $heading_id );
         if ( is_wp_error( $new_id ) ) {
             return $new_id;
@@ -2673,6 +2750,9 @@ class WCP_REST_API {
     public function reorder_headings( $request ) {
         $heading_ids = array_map('intval', (array) $request->get_param('heading_ids'));
         foreach ( $heading_ids as $order => $id ) {
+            if ( ! current_user_can( 'edit_post', $id ) ) {
+                continue;
+            }
             wp_update_post( array( 'ID' => $id, 'menu_order' => $order ) );
         }
         return rest_ensure_response( array('success' => true) );
@@ -2684,6 +2764,10 @@ class WCP_REST_API {
         $item    = get_post( $item_id );
         if ( ! $item || $item->post_type !== 'post' ) {
             return new WP_Error( 'not_found', 'Item not found', array('status' => 404) );
+        }
+        $auth = WCP_REST_Auth::require_object( $item_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
         }
 
         $ai_client  = WCP_AI_Client::instance();
@@ -2941,7 +3025,14 @@ class WCP_REST_API {
             return new WP_Error('not_found', 'Heading not found', array('status' => 404));
         }
 
-        wp_delete_post($heading_id, true); // true = force delete, skip trash
+        if ( ! current_user_can('delete_post', $heading_id) ) {
+            return new WP_Error('forbidden', 'Permission denied', array('status' => 403));
+        }
+
+        // wp_delete_post()'s trash-redirect only applies to 'post'/'page' —
+        // for a custom post type it force-deletes regardless of the $force
+        // arg, so wp_trash_post() must be called explicitly to be recoverable.
+        wp_trash_post($heading_id);
         return rest_ensure_response(array('success' => true));
     }
 
@@ -2955,6 +3046,10 @@ class WCP_REST_API {
         }
         if ( (int) $proposal['page_id'] !== $page_id ) {
             return new WP_Error('mismatch', 'Proposal does not belong to this page', array('status' => 403));
+        }
+        $auth = WCP_REST_Auth::require_object( $page_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
         }
 
         $new_content = wp_kses_post( $proposal['content'] );
@@ -2974,6 +3069,10 @@ class WCP_REST_API {
         $page_id = (int) $request->get_param('page_id');
         if ( ! get_post($page_id) ) {
             return new WP_Error('not_found', 'Page not found', array('status' => 404));
+        }
+        $auth = WCP_REST_Auth::require_object( $page_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
         }
         $notes = wp_kses_post( $request->get_param('notes') ?: '' );
         update_post_meta($page_id, '_wcp_page_notes', $notes);
@@ -2999,6 +3098,10 @@ class WCP_REST_API {
         if ( ! get_post($item_id) ) {
             return new WP_Error('not_found', 'Item not found', array('status' => 404));
         }
+        $auth = WCP_REST_Auth::require_object( $item_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
         if ( empty($title) ) {
             return new WP_Error('missing_title', 'Title is required', array('status' => 400));
         }
@@ -3014,6 +3117,10 @@ class WCP_REST_API {
     public function toggle_subtask( $request ) {
         $item_id    = (int) $request->get_param('item_id');
         $subtask_id = $request->get_param('subtask_id');
+        $auth = WCP_REST_Auth::require_object( $item_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
         $subtasks   = $this->get_subtasks($item_id);
 
         foreach ( $subtasks as &$st ) {
@@ -3030,6 +3137,10 @@ class WCP_REST_API {
     public function delete_subtask( $request ) {
         $item_id    = (int) $request->get_param('item_id');
         $subtask_id = $request->get_param('subtask_id');
+        $auth = WCP_REST_Auth::require_object( $item_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
         $subtasks   = array_filter(
             $this->get_subtasks($item_id),
             function($st) use ($subtask_id) { return $st['id'] !== $subtask_id; }
@@ -3084,6 +3195,10 @@ class WCP_REST_API {
         if ( ! get_post( $page_id ) ) {
             return new WP_Error('not_found', 'Page not found', array('status' => 404));
         }
+        $auth = WCP_REST_Auth::require_object( $page_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
 
         $title          = sanitize_text_field( $request->get_param('title') );
         $item_type      = sanitize_key( $request->get_param('item_type') ?: '' );
@@ -3116,6 +3231,10 @@ class WCP_REST_API {
     public function delete_dynamic_listing( $request ) {
         $page_id    = (int) $request->get_param('page_id');
         $listing_id = $request->get_param('listing_id');
+        $auth = WCP_REST_Auth::require_object( $page_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
 
         $listings = json_decode( get_post_meta($page_id, '_wcp_dynamic_listings', true) ?: '[]', true );
         $listings = array_values( array_filter($listings, function($l) use ($listing_id) {

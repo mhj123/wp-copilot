@@ -44,6 +44,7 @@ class Work_Copilot {
         require_once WCP_PLUGIN_DIR . 'includes/class-post-types.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-taxonomies.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-taxonomy-sync.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-rest-auth.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-rest-api.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-ai-logger.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-ai-client.php';
