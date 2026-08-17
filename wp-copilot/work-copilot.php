@@ -20,6 +20,11 @@ define('WCP_VERSION', '1.2.2');
 define('WCP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WCP_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WCP_PLUGIN_FILE', __FILE__);
+// Bump whenever create_tables()'s schema changes. Compared against the
+// wcp_db_version option on every admin_init — dbDelta() only ever ran on
+// activation before, so an existing install that's simply updated in place
+// (never deactivated/reactivated) would silently keep its old schema forever.
+define('WCP_DB_VERSION', '2.0.0');
 
 class Work_Copilot {
 
@@ -81,6 +86,17 @@ class Work_Copilot {
         // Raindrop cron hook
         add_action('wcp_raindrop_import', array('WCP_Raindrop_Importer', 'run_static'));
 
+        // AI audit log retention — daily purge of rows past the retention window
+        add_action('wcp_ai_actions_retention', array($this, 'run_ai_log_retention'));
+
+        // Self-healing: ensure the retention event is always scheduled, same
+        // pattern as the Raindrop import self-heal below.
+        add_action('init', function() {
+            if (!wp_next_scheduled('wcp_ai_actions_retention')) {
+                wp_schedule_event(time(), 'daily', 'wcp_ai_actions_retention');
+            }
+        });
+
         // Page scheduler: ensure the 15-min check event is always registered
         add_action('init', function() {
             WCP_Page_Scheduler::instance()->ensure_cron_scheduled();
@@ -99,6 +115,20 @@ class Work_Copilot {
                 wp_schedule_event(time(), $freq, 'wcp_raindrop_import');
             }
         });
+
+        // Run any pending schema migration on every admin page load, not just
+        // activation — dbDelta() is safe to re-run (it diffs and only applies
+        // what changed), so this stays cheap once the version matches.
+        add_action('admin_init', array($this, 'maybe_upgrade_db'));
+    }
+
+    public function maybe_upgrade_db() {
+        if (get_option('wcp_db_version') === WCP_DB_VERSION) {
+            return;
+        }
+        require_once WCP_PLUGIN_DIR . 'includes/class-post-types.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-taxonomies.php';
+        $this->create_tables();
     }
 
     public function init() {
@@ -141,11 +171,22 @@ class Work_Copilot {
 
         // Schedule Raindrop import cron
         wcp_schedule_raindrop_import();
+
+        // Schedule the AI audit log retention purge
+        if (!wp_next_scheduled('wcp_ai_actions_retention')) {
+            wp_schedule_event(time(), 'daily', 'wcp_ai_actions_retention');
+        }
     }
 
     public function deactivate() {
         flush_rewrite_rules();
         wp_clear_scheduled_hook('wcp_raindrop_import');
+        wp_clear_scheduled_hook('wcp_ai_actions_retention');
+    }
+
+    public function run_ai_log_retention() {
+        require_once WCP_PLUGIN_DIR . 'includes/class-ai-logger.php';
+        WCP_AI_Logger::instance()->purge_old_actions();
     }
 
     private function create_tables() {
@@ -247,7 +288,7 @@ class Work_Copilot {
         }
 
         // Update database version
-        update_option('wcp_db_version', '2.0.0');
+        update_option('wcp_db_version', WCP_DB_VERSION);
     }
 
     public function load_textdomain() {

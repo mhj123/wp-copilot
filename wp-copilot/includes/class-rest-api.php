@@ -215,7 +215,7 @@ class WCP_REST_API {
             ),
         ));
 
-        register_rest_route($namespace, '/prompts/(?P<index>\d+)', array(
+        register_rest_route($namespace, '/prompts/(?P<id>[a-zA-Z0-9_-]+)', array(
             'methods' => 'DELETE',
             'callback' => array($this, 'delete_prompt'),
             'permission_callback' => array($this, 'check_permission'),
@@ -369,7 +369,13 @@ class WCP_REST_API {
     }
 
     public function check_permission() {
-        return current_user_can('edit_posts');
+        // 'edit_posts' is held by Contributor, WordPress's lowest
+        // content-creating role — readme.txt documents Work Copilot as a
+        // single-Administrator-only install; 'edit_published_posts' (held by
+        // Author and above, not Contributor) makes that policy real in code
+        // rather than relying on the docs alone. See "Requirements &
+        // Supported Setup" in readme.txt.
+        return current_user_can('edit_published_posts');
     }
 
     /**
@@ -1125,7 +1131,11 @@ class WCP_REST_API {
         set_time_limit(120);
 
         $post_type = $request->get_param('post_type') ?: 'post';
-        $limit = $request->get_param('limit') ?: 50;
+        // Hard cap regardless of what's requested — the 50-item default was
+        // already sized against the 120s execution limit above (~1-2s per
+        // embedding call); an uncapped $limit lets a single request exhaust
+        // that timeout and burn through the site owner's API key for nothing.
+        $limit = max(1, min((int) ($request->get_param('limit') ?: 50), 50));
         $offset = $request->get_param('offset') ?: 0;
 
         $manager = WCP_Embeddings_Manager::instance();
@@ -1837,8 +1847,12 @@ class WCP_REST_API {
             ));
         }
 
-        // Add new prompt
+        // Add new prompt. Addressed by a stable id rather than array index —
+        // index-based deletes race under concurrent requests (two tabs, a
+        // double-click): both read the same array, and whichever update_option()
+        // lands second silently un-deletes or deletes the wrong entry.
         $prompts[] = array(
+            'id' => wp_generate_uuid4(),
             'label' => $label,
             'prompt' => $prompt,
             'created_at' => current_time('mysql'),
@@ -1857,18 +1871,26 @@ class WCP_REST_API {
      * NEW: Delete a prompt chip
      */
     public function delete_prompt($request) {
-        $index = intval($request->get_param('index'));
+        $id = sanitize_text_field($request->get_param('id'));
 
         $prompts = get_option('wcp_saved_prompts', array());
 
-        if (!isset($prompts[$index])) {
+        $index = null;
+        foreach ($prompts as $i => $p) {
+            if (isset($p['id']) && $p['id'] === $id) {
+                $index = $i;
+                break;
+            }
+        }
+
+        if ($index === null) {
             return rest_ensure_response(array(
                 'success' => false,
                 'message' => 'Prompt not found',
             ));
         }
 
-        // Remove prompt at index
+        // Remove the matched prompt by its resolved position
         array_splice($prompts, $index, 1);
 
         update_option('wcp_saved_prompts', $prompts);
