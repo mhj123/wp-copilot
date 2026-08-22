@@ -48,7 +48,12 @@ if (empty($saved_prompts)) {
     <div class="wcp-ai-container">
         <!-- Header -->
         <div class="wcp-ai-header">
-            <h3><?php _e('AI Assistant', 'work-copilot'); ?></h3>
+            <div class="wcp-ai-header-left">
+                <button type="button" class="wcp-ai-expand" aria-label="Expand to full screen">
+                    <span class="dashicons dashicons-fullscreen-alt"></span>
+                </button>
+                <h3><?php _e('AI Assistant', 'work-copilot'); ?></h3>
+            </div>
             <div class="wcp-ai-header-actions">
                 <button type="button" class="wcp-ai-minimize" aria-label="Minimize">
                     <span class="dashicons dashicons-minus"></span>
@@ -116,12 +121,16 @@ if (empty($saved_prompts)) {
         <div class="wcp-ai-action-chips">
             <?php if ($embedded) : ?>
             <button type="button" class="wcp-ai-action-chip" data-action="chat_qa"><?php _e('Ask anything', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip" data-action="web_search"><?php _e('Web search', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip wcp-ai-action-chip--canned" data-action="taxonomy_outline" data-prompt="Give me a taxonomy outline of the corpus."><?php _e('Taxonomy outline', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip wcp-ai-action-chip--canned" data-action="mission_priorities" data-prompt="Give me the 5 most important things I can work on to move the needle against my mission."><?php _e('5 things for my mission', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip wcp-ai-action-chip--canned" data-action="weekly_summary" data-prompt="Summarise what happened in the last week."><?php _e('What happened this week', 'work-copilot'); ?></button>
             <?php else : ?>
             <button type="button" class="wcp-ai-action-chip wcp-ai-action-chip--onboard" data-action="onboard"><?php _e('Onboard', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip" data-action="web_search"><?php _e('Web search', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="generate_structure"><?php _e('Generate structure', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip" data-action="import_document"><?php _e('Import document', 'work-copilot'); ?></button>
+            <input type="file" id="wcp-ai-document-upload" accept=".md,text/markdown" style="display:none;">
             <button type="button" class="wcp-ai-action-chip" data-action="generate_pages"><?php _e('Create sub-pages', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="create_goal"><?php _e('Create goal', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="rewrite_content"><?php _e('Edit page', 'work-copilot'); ?></button>
@@ -165,7 +174,7 @@ if (empty($saved_prompts)) {
 
             <div class="wcp-ai-loading" style="display: none;">
                 <span class="spinner is-active"></span>
-                <span><?php _e('AI is thinking...', 'work-copilot'); ?></span>
+                <span class="wcp-ai-loading-text"><?php _e('AI is thinking...', 'work-copilot'); ?></span>
             </div>
         </div>
 

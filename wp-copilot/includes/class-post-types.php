@@ -36,6 +36,35 @@ class WCP_Post_Types {
         }
     }
 
+    /**
+     * menu_order a newly created heading should get to land at the bottom
+     * of its parent's existing headings, matching the "document you append
+     * to" paradigm (new content goes after what's already there, existing
+     * content stays put). Without this, new headings default to menu_order 0
+     * and tie with any other unordered heading, falling back to alphabetical
+     * title sort (wcp_theme_get_page_headings()'s 'menu_order title' orderby)
+     * — which reads as "new headings appear in alphabetical order" even
+     * though nothing actually sorted them that way on purpose.
+     *
+     * @param string $parent_type 'page' or 'wcp_heading'
+     * @param int    $parent_id
+     * @return int
+     */
+    public static function next_heading_menu_order($parent_type, $parent_id) {
+        global $wpdb;
+
+        $max = $wpdb->get_var($wpdb->prepare(
+            "SELECT MAX(p.menu_order) FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pt ON pt.post_id = p.ID AND pt.meta_key = '_wcp_parent_type' AND pt.meta_value = %s
+             INNER JOIN {$wpdb->postmeta} pid ON pid.post_id = p.ID AND pid.meta_key = '_wcp_parent_id' AND pid.meta_value = %s
+             WHERE p.post_type = 'wcp_heading' AND p.post_status = 'publish'",
+            $parent_type,
+            $parent_id
+        ));
+
+        return $max !== null ? ((int) $max + 1) : 0;
+    }
+
     public function register_post_types() {
         // Heading post type
         $labels = array(

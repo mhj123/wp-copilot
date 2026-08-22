@@ -188,6 +188,23 @@ MD;
                 . "\"page\" (page level). Use an empty headings array if creating no new headings. "
                 . "Start your response with { and end with }.",
 
+            'split-markdown' => "You are given a markdown document to split into structure on the CURRENT PAGE, "
+                . "plus the page's existing structure (each existing heading's id and items already under it). "
+                . "Segment the document faithfully: each markdown heading (#, ##, ###, etc.) becomes a heading; "
+                . "each paragraph, bullet point, or distinct idea underneath becomes one item. Preserve the "
+                . "document's own structure and meaning — do not invent content that isn't in the document, and "
+                . "do not skip sections. Place each item under a NEW heading (matching the document's own "
+                . "heading it appeared under), an EXISTING page heading (by id, only if the document content "
+                . "clearly belongs there instead), or at PAGE level (only for content with no clear heading).\n\n"
+                . "IMPORTANT: Respond with ONLY a valid JSON object. No text before or after. Format:\n"
+                . '{"headings":[{"ref":"h1","title":"Heading title"}],"items":[{"title":"Item title","content":"Detail or empty","item_type":"task","target":{"type":"new","ref":"h1"}}]}' . "\n\n"
+                . "Rules: item_type is one of task|info|learning|spec — pick whichever best matches what the "
+                . "content represents (a to-do reads as task, reference/background as info, a requirement/spec "
+                . "as spec, a lesson/insight as learning). target.type is one of: "
+                . "\"new\" (also give \"ref\" matching a heading in your headings list), "
+                . "\"existing\" (also give \"id\" = an existing heading id from the structure), or "
+                . "\"page\" (page level). Start your response with { and end with }.",
+
             'generate-pages' => "Generate sub-page proposals to be created as child pages under the current page. "
                 . "Each page should represent a distinct area of work or topic that warrants its own dedicated space. "
                 . "Page titles should be clear and descriptive. Content is optional — a brief description of the page's purpose is ideal.\n\n"

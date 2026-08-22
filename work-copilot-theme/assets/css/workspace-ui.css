@@ -44,6 +44,8 @@ body.admin-bar .wcp-sidebar { top: 32px; height: calc(100vh - 32px); }
 
 .wcp-main-content { min-width: 0; min-height: 100vh; flex: 1; margin-left: 0; }
 body.wcp-ai-panel-open .wcp-main-content { margin-right: calc(50vw - 136px); }
+body.wcp-ai-panel-open.wcp-ai-panel-expanded .wcp-main-content { display: none; }
+.wcp-ai-widget.expanded { width: calc(100vw - var(--wcp-sidebar-width, 272px)); }
 .wcp-site-header { display: none; }
 .wcp-content-wrapper { width: 100%; max-width: none; padding: 34px 42px 80px; }
 .wcp-page-content { max-width: 1280px; margin: 0 auto; }

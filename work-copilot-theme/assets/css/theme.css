@@ -159,6 +159,10 @@ body.wcp-ai-panel-open .wcp-main-content {
     margin-right: calc(50vw - 140px);
 }
 
+body.wcp-ai-panel-open.wcp-ai-panel-expanded .wcp-main-content {
+    display: none;
+}
+
 .wcp-site-header {
     background: #fff;
     border-bottom: 1px solid #ddd;

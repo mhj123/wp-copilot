@@ -97,6 +97,10 @@
                 this.closeWidget();
             });
 
+            $(document).on('click', '.wcp-ai-expand', () => {
+                this.toggleExpandWidget();
+            });
+
             // Action buttons
             $(document).on('click', '.wcp-ai-action-btn', (e) => {
                 const action = $(e.currentTarget).data('action');
@@ -252,6 +256,13 @@
                     $('#wcp-ai-prompt').focus();
                     return;
                 }
+                if (action === 'import_document') {
+                    // Needs a file, not a typed prompt — open the file picker
+                    // instead of focusing the textarea.
+                    $('.wcp-ai-action-chip').removeClass('active');
+                    $('#wcp-ai-document-upload').trigger('click');
+                    return;
+                }
                 if ($chip.hasClass('wcp-ai-action-chip--canned')) {
                     // Site-level canned-prompt chips (taxonomy outline, mission
                     // priorities, weekly summary) fire immediately with a fixed
@@ -272,6 +283,13 @@
             // Save-as-mission offer — rendered dynamically after onboard
             $(document).on('click', '.wcp-ai-save-mission-btn', () => {
                 this.saveSuggestedMission();
+            });
+
+            // Markdown document import — fires once a file is chosen via the
+            // hidden input the "Import document" chip triggers.
+            $(document).on('change', '#wcp-ai-document-upload', (e) => {
+                this.importDocument(e.target.files[0]);
+                $(e.target).val(''); // allow re-selecting the same file next time
             });
 
             // Send message
@@ -888,7 +906,7 @@
 
             // Clear input and show loading
             $('#wcp-ai-prompt').val('');
-            this.showLoading(true);
+            this.showLoading(true, this.buildLoadingMessage(this.currentAction));
             $('.wcp-ai-send-btn').prop('disabled', true);
 
             // Append user message immediately
@@ -997,6 +1015,55 @@
         },
 
         /**
+         * Import a markdown document — reads the file client-side (same
+         * pattern the .ics calendar import already uses), POSTs its raw text
+         * to a dedicated endpoint (not /ai/actions/execute — this needs file
+         * content, not a typed prompt), then reuses handleActionResult()
+         * unchanged since the response is the same outcome:'create_structure'
+         * shape generate_structure() already returns.
+         */
+        importDocument: function(file) {
+            if (!file) { return; }
+
+            this.appendMessage('user', 'Imported document: ' + file.name);
+            this.showLoading(true, 'Reading your document and splitting it into headings and items...');
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                $.ajax({
+                    url: wcpAiWidgetData.restUrl + '/ai/documents/split-markdown',
+                    method: 'POST',
+                    beforeSend: (xhr) => {
+                        xhr.setRequestHeader('X-WP-Nonce', wcpAiWidgetData.nonce);
+                    },
+                    data: {
+                        markdown_content: e.target.result,
+                        page_id: wcpAiWidgetData.pageId,
+                        conversation_id: this.conversationId
+                    },
+                    success: (response) => {
+                        this.showLoading(false);
+                        this.currentAction = 'chat';
+                        if (response.success) {
+                            this.handleActionResult(response);
+                        } else {
+                            this.showError(response.message || 'Could not import document');
+                        }
+                    },
+                    error: (xhr) => {
+                        this.showLoading(false);
+                        this.showError('Connection error: ' + xhr.statusText);
+                    }
+                });
+            };
+            reader.onerror = () => {
+                this.showLoading(false);
+                this.showError('Could not read the file — please try again.');
+            };
+            reader.readAsText(file);
+        },
+
+        /**
          * Handle action result
          */
         handleActionResult: function(result) {
@@ -1040,9 +1107,10 @@
             }
             if (result.outcome === 'chat') {
                 this.appendMessage('assistant', result.message);
-                if (this.conversationId) {
-                    this.extractMemories();
-                }
+                // Automatic memory extraction disabled — it fired unprompted after
+                // every reply, which read as forced/clunky. extractMemories() is
+                // still here, just no longer auto-called; wire it to an explicit
+                // user action (e.g. a "remember this" button) if this comes back.
             } else if (result.outcome === 'create_items') {
                 this.currentBatchId = result.batch_id || null;
                 this.showProposals(result.proposals);
@@ -1287,6 +1355,9 @@
             const itemIds = $('.wcp-struct-item-cb:checked').filter(function() { return !$(this).prop('disabled'); }).map(function() { return $(this).data('proposal-id'); }).get();
             if (!headingIds.length && !itemIds.length) { this.showError('Nothing selected.'); return; }
 
+            const $btn = $('.wcp-struct-create');
+            $btn.prop('disabled', true).text('Creating…');
+
             $.ajax({
                 url: wcpAiWidgetData.restUrl + '/ai/structure/accept',
                 method: 'POST',
@@ -1299,10 +1370,14 @@
                         this.dismissStructure();
                         setTimeout(() => location.reload(), 700);
                     } else {
+                        $btn.prop('disabled', false).text('Create selected');
                         this.showError(r.message || 'Could not create structure.');
                     }
                 },
-                error: () => this.showError('Connection error.')
+                error: () => {
+                    $btn.prop('disabled', false).text('Create selected');
+                    this.showError('Connection error.');
+                }
             });
         },
 
@@ -1460,24 +1535,118 @@
         },
 
         minimizeWidget: function() {
-            $('#wcp-ai-widget').addClass('minimized').removeClass('closed');
-            $('body').removeClass('wcp-ai-panel-open');
+            $('#wcp-ai-widget').addClass('minimized').removeClass('closed expanded');
+            $('body').removeClass('wcp-ai-panel-open wcp-ai-panel-expanded');
         },
 
         closeWidget: function() {
-            $('#wcp-ai-widget').addClass('closed').removeClass('minimized');
-            $('body').removeClass('wcp-ai-panel-open');
+            $('#wcp-ai-widget').addClass('closed').removeClass('minimized expanded');
+            $('body').removeClass('wcp-ai-panel-open wcp-ai-panel-expanded');
+        },
+
+        toggleExpandWidget: function() {
+            const $widget = $('#wcp-ai-widget').toggleClass('expanded');
+            const expanded = $widget.hasClass('expanded');
+            $('body').toggleClass('wcp-ai-panel-expanded', expanded);
+            $('.wcp-ai-expand')
+                .attr('aria-label', expanded ? 'Collapse to side panel' : 'Expand to full screen')
+                .find('.dashicons')
+                .toggleClass('dashicons-fullscreen-alt', !expanded)
+                .toggleClass('dashicons-fullscreen-exit-alt', expanded);
         },
 
         /**
-         * Show loading state
+         * Show loading state, optionally with a message describing what's
+         * actually happening (defaults to the generic fallback text baked
+         * into the template).
          */
-        showLoading: function(show) {
+        showLoading: function(show, message) {
             if (show) {
+                $('.wcp-ai-loading-text').text(message || 'AI is thinking...');
                 $('.wcp-ai-loading').show();
             } else {
                 $('.wcp-ai-loading').hide();
             }
+        },
+
+        // Per-action_type verb phrase for the loading message. Anything not
+        // listed here falls back to a generic "Working on it".
+        AI_LOADING_VERBS: {
+            chat: 'Reading',
+            chat_qa: 'Reading',
+            coaching: 'Reading',
+            coaching_dialogue: 'Reading',
+            web_search: 'Searching the web and reading',
+            taxonomy_outline: 'Reading your site structure',
+            mission_priorities: 'Reading recent items against your mission',
+            weekly_summary: 'Reading items from the last 7 days',
+            generate_structure: 'Reading and drafting headings and items',
+            generate_headings: 'Reading and drafting headings',
+            generate_items: 'Reading and drafting items',
+            generate_pages: 'Drafting sub-pages',
+            rewrite_content: 'Reading and rewriting page content',
+            append_content: 'Reading and drafting content to append',
+            edit_items: 'Reading and reviewing items',
+            iterate_items: 'Reading and reworking items',
+            spot_gaps: 'Reading items to spot gaps',
+            fetch_posts: 'Fetching posts',
+            fetch_structure: 'Reading page structure',
+            auto: 'Figuring out the best way to help'
+        },
+
+        // Per-action_type item cap, mirroring the server-side constants in
+        // class-ai-actions.php. Only actions with a meaningfully-informative
+        // cap are listed; omitted actions don't get a constraint clause.
+        AI_LOADING_ITEM_LIMITS: {
+            expand_draft: 10
+        },
+
+        /**
+         * Flatten this.pagesCache's nested {id, title, children} tree into a
+         * flat id -> title lookup map. Cheap enough to rebuild on demand
+         * rather than maintaining a second cache.
+         */
+        flattenPagesCache: function(pages, out) {
+            out = out || {};
+            (pages || []).forEach((page) => {
+                out[page.id] = page.title;
+                if (page.children && page.children.length) {
+                    this.flattenPagesCache(page.children, out);
+                }
+            });
+            return out;
+        },
+
+        /**
+         * Build a short, honest description of what's about to happen for a
+         * given action_type, using only data already available client-side
+         * (this.contextMode, this.selectedPages, wcpAiWidgetData.pageName).
+         * No live counts — those aren't known until the response returns.
+         */
+        buildLoadingMessage: function(actionType) {
+            const verb = this.AI_LOADING_VERBS[actionType] || 'Working on it';
+            let scope;
+
+            if (this.contextMode === 'select') {
+                const titleMap = this.flattenPagesCache(this.pagesCache);
+                const titles = (this.selectedPages || [])
+                    .map((sel) => titleMap[sel.page_id])
+                    .filter(Boolean);
+                scope = titles.length
+                    ? 'from ' + this.selectedPages.length + ' selected page' + (this.selectedPages.length === 1 ? '' : 's') + ' (' + titles.join(', ') + ')'
+                    : 'from ' + (this.selectedPages || []).length + ' selected page' + ((this.selectedPages || []).length === 1 ? '' : 's');
+            } else if (this.contextMode === 'corpus') {
+                scope = 'across your entire site';
+            } else {
+                scope = 'on this page' + (wcpAiWidgetData.pageName ? ' (' + wcpAiWidgetData.pageName + ')' : '');
+            }
+
+            let message = verb + ' ' + scope + '...';
+            const limit = this.AI_LOADING_ITEM_LIMITS[actionType];
+            if (limit) {
+                message = verb + ' ' + scope + ' (up to ' + limit + ' items)...';
+            }
+            return message;
         },
 
         /**
@@ -1583,7 +1752,7 @@
          * Fire the onboard action immediately (no user prompt required)
          */
         runOnboard: function() {
-            this.showLoading(true);
+            this.showLoading(true, 'Reviewing this page and drafting an intro...');
             $('.wcp-ai-action-chip').removeClass('active');
 
             $.ajax({
@@ -1618,8 +1787,25 @@
          */
         runCannedAction: function(actionType, promptText) {
             $('.wcp-ai-action-chip').removeClass('active');
-            this.showLoading(true);
+            this.showLoading(true, this.buildLoadingMessage(actionType));
             this.appendMessage('user', promptText);
+
+            const data = {
+                action_type: actionType,
+                prompt: promptText,
+                page_id: wcpAiWidgetData.pageId,
+                conversation_id: this.conversationId,
+                context_mode: this.contextMode,
+                model: this.selectedModel,
+                thinking_budget: this.thinkingBudget
+            };
+
+            // Canned/chip actions previously ignored the user's page
+            // selection in 'select' mode — only sendMessage() sent it. Match
+            // that behavior so the loading message's claimed scope is accurate.
+            if (this.contextMode === 'select') {
+                data.selected_pages = this.selectedPages;
+            }
 
             $.ajax({
                 url: wcpAiWidgetData.restUrl + '/ai/actions/execute',
@@ -1627,15 +1813,7 @@
                 beforeSend: (xhr) => {
                     xhr.setRequestHeader('X-WP-Nonce', wcpAiWidgetData.nonce);
                 },
-                data: {
-                    action_type: actionType,
-                    prompt: promptText,
-                    page_id: wcpAiWidgetData.pageId,
-                    conversation_id: this.conversationId,
-                    context_mode: this.contextMode,
-                    model: this.selectedModel,
-                    thinking_budget: this.thinkingBudget
-                },
+                data: data,
                 success: (response) => {
                     this.showLoading(false);
                     if (response.success) {

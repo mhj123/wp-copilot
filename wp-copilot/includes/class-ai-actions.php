@@ -34,6 +34,10 @@ class WCP_AI_Actions {
      * @return array|WP_Error Response with message and metadata
      */
     public function coaching_dialogue($prompt, $page_id, $use_rag, $conversation_id) {
+        // Same item_limit=200 context load as chat_qa() — needs the same
+        // extended timeout headroom.
+        set_time_limit(120);
+
         // Get current user
         $user_id = get_current_user_id();
         if (!$user_id) {
@@ -44,7 +48,7 @@ class WCP_AI_Actions {
         $context_builder = WCP_Context_Builder::instance();
         $context_data = $context_builder->build_hierarchical_context($page_id, array(
             'include_items' => true,
-            'item_limit' => 20,
+            'item_limit' => 200,
             'use_rag' => $use_rag,
             'query' => $prompt,
             'rag_limit' => 10,
@@ -80,7 +84,8 @@ class WCP_AI_Actions {
             $system_prompt,
             $user_message,
             $conversation_history,
-            4096
+            4096,
+            120
         );
 
         if (is_wp_error($response)) {
@@ -128,6 +133,12 @@ class WCP_AI_Actions {
      * @return array|WP_Error Response with message
      */
     public function chat_qa($prompt, $page_id, $context_mode = 'page', $selected_pages = array(), $conversation_id = null) {
+        // Large-context, free-form Q&A can legitimately take longer than the
+        // 30s default (esp. with the full item_limit=200 page context and
+        // conversation history) — match the timeout used by other
+        // context-heavy actions (edit_items/iterate_items/spot_gaps).
+        set_time_limit(120);
+
         // Get current user
         $user_id = get_current_user_id();
         if (!$user_id) {
@@ -140,7 +151,7 @@ class WCP_AI_Actions {
             'selected_pages' => $selected_pages,
             'query' => $prompt,
             'include_items' => true,
-            'item_limit' => 20,
+            'item_limit' => 200,
             'limits' => array(
                 'max_chars_per_item' => 50000,
                 'max_chars_page_summary' => 8000
@@ -174,7 +185,8 @@ class WCP_AI_Actions {
             $system_prompt,
             $user_message,
             $conversation_history,
-            4096
+            4096,
+            120
         );
 
         if (is_wp_error($response)) {
@@ -213,6 +225,110 @@ class WCP_AI_Actions {
     }
 
     /**
+     * Web search: runs a live web search via Exa, then has Claude synthesise
+     * the raw results into a focused answer before returning to the user.
+     * Raw Exa results were tried first (a flat itemized findings list, no
+     * synthesis) on the theory that an already-itemized list splits more
+     * reliably via the "save as item(s)" flow's "multiple" mode — but in
+     * practice Exa's raw results are often noisy/diverse (API docs, articles,
+     * commentary all mixed together), so a synthesis pass wins on quality.
+     * Source links are preserved via markdown citations so findings remain
+     * traceable and still savable.
+     * AI guardrail: read-only — answers in chat, writes nothing. Saving any
+     * finding as an item is a separate, explicit user action.
+     */
+    public function web_search($query, $page_id = 0, $conversation_id = null) {
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new WP_Error('auth_error', 'User not authenticated');
+        }
+        if (trim($query) === '') {
+            return new WP_Error('empty_query', 'A search query is required');
+        }
+
+        $exa_client = WCP_Exa_Client::instance();
+        if (!$exa_client->is_configured()) {
+            return new WP_Error('not_configured', 'Exa API key not configured. Add one in Work Copilot → Settings.');
+        }
+
+        $findings = $exa_client->search($query);
+        if (is_wp_error($findings)) {
+            return $findings;
+        }
+
+        if (empty($findings)) {
+            return array(
+                'outcome' => 'chat',
+                'message' => "No web results found for \"{$query}\".",
+            );
+        }
+
+        $raw_listing = '';
+        foreach ($findings as $finding) {
+            $raw_listing .= "Title: {$finding['title']}\nURL: {$finding['url']}\n";
+            if ($finding['snippet'] !== '') {
+                $raw_listing .= "Excerpt: {$finding['snippet']}\n";
+            }
+            $raw_listing .= "\n";
+        }
+
+        $sys = "You are helping the user with a web search. Below are raw search results for their query — they "
+             . "are often noisy: a mix of relevant material, tangential articles, API docs, and commentary. "
+             . "Synthesise them into a clear, focused answer to the query: filter out anything irrelevant or "
+             . "low-value, don't just list every result. Cite the specific sources you actually draw from as "
+             . "markdown links, e.g. [source title](url) — never cite a source you didn't use. Structure the "
+             . "answer with short paragraphs or bullet points so distinct findings stay identifiable (useful if "
+             . "the user later saves parts of this as separate items). Do not fabricate anything not present in "
+             . "the results below.";
+        $usr = "Query: {$query}\n\nRaw search results:\n{$raw_listing}";
+
+        $conversation_history = array();
+        if ($conversation_id) {
+            $conversations_manager = WCP_Conversations_Manager::instance();
+            $messages = $conversations_manager->get_messages($conversation_id, 10);
+            foreach ($messages as $msg) {
+                $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
+            }
+        }
+
+        $ai_client = WCP_AI_Client::instance();
+        $response = $ai_client->request_with_conversation($sys, $usr, $conversation_history, 2048, 60);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        if (($response['stop_reason'] ?? null) === 'max_tokens') {
+            return new WP_Error(
+                'response_truncated',
+                'The AI response was cut off before it finished. Try a narrower query.'
+            );
+        }
+
+        $message = $response['content'];
+
+        if ($conversation_id) {
+            $conversations_manager = WCP_Conversations_Manager::instance();
+            $conversations_manager->add_message($conversation_id, 'user', $query);
+            $conversations_manager->add_message($conversation_id, 'assistant', $message);
+        }
+
+        $logger = WCP_AI_Logger::instance();
+        $logger->log_action('web_search', array(
+            'model'           => $response['model'],
+            'prompt'          => $query,
+            'input_context'   => array('page_id' => $page_id, 'raw_findings' => $findings),
+            'output'          => $message,
+            'context_post_id' => $page_id,
+        ));
+
+        return array(
+            'outcome' => 'chat',
+            'message' => $message,
+        );
+    }
+
+    /**
      * Site-level: a readable taxonomy outline of the whole corpus (every
      * Page → Heading, walked from the wcp_context taxonomy tree).
      * AI guardrail: read-only — answers in chat, writes nothing.
@@ -242,7 +358,7 @@ class WCP_AI_Actions {
         }
 
         $ai_client = WCP_AI_Client::instance();
-        $response  = $ai_client->request_with_conversation($system_prompt, $user_message, $conversation_history, 2048);
+        $response  = $ai_client->request_with_conversation($system_prompt, $user_message, $conversation_history, 2048, 90);
         if (is_wp_error($response)) {
             return $response;
         }
@@ -333,7 +449,7 @@ class WCP_AI_Actions {
         }
 
         $ai_client = WCP_AI_Client::instance();
-        $response  = $ai_client->request_with_conversation($system_prompt, $user_message, $conversation_history, 2048);
+        $response  = $ai_client->request_with_conversation($system_prompt, $user_message, $conversation_history, 2048, 90);
         if (is_wp_error($response)) {
             return $response;
         }
@@ -422,7 +538,7 @@ class WCP_AI_Actions {
         }
 
         $ai_client = WCP_AI_Client::instance();
-        $response  = $ai_client->request_with_conversation($system_prompt, $user_message, $conversation_history, 1024);
+        $response  = $ai_client->request_with_conversation($system_prompt, $user_message, $conversation_history, 1024, 90);
         if (is_wp_error($response)) {
             return $response;
         }
@@ -613,7 +729,7 @@ class WCP_AI_Actions {
             'selected_pages' => $selected_pages,
             'query' => $prompt,
             'include_items' => true,
-            'item_limit' => 20,
+            'item_limit' => 200,
             'limits' => array(
                 'max_chars_per_item' => 50000,
                 'max_chars_page_summary' => 8000
@@ -775,7 +891,7 @@ class WCP_AI_Actions {
             'selected_pages' => $selected_pages,
             'query' => $prompt,
             'include_items' => true,
-            'item_limit' => 20,
+            'item_limit' => 200,
             'limits' => array(
                 'max_chars_per_item' => 50000,
                 'max_chars_page_summary' => 8000
@@ -901,7 +1017,7 @@ class WCP_AI_Actions {
             'selected_pages' => $selected_pages,
             'query' => $prompt,
             'include_items' => true,
-            'item_limit' => 40,
+            'item_limit' => 200,
         ));
 
         $candidate_items = $context_data['items'] ?? array();
@@ -1048,50 +1164,72 @@ class WCP_AI_Actions {
      * spec, to be created as real post_parent children of that item.
      * AI guardrail: everything is a proposal — nothing is written here.
      */
-    public function brainstorm_items($item_ids, $protocol = '', $page_id = 0, $conversation_id = null) {
+    /**
+     * Iterate: apply a transformation instruction to every item in scope —
+     * an explicit selection if $item_ids is given, otherwise every item
+     * visible in the page/context scope. Unlike edit_items() (which lets the
+     * AI decide which items its instruction "refers to"), every item in
+     * scope is guaranteed a rewrite proposal here — the instruction is
+     * assumed to apply to all of them, whatever it says (any format,
+     * structure, or example the user specifies at request time — nothing
+     * about the transformation is hardcoded). Reuses the existing edit_item
+     * proposal shape.
+     * AI guardrail: everything is a proposal — nothing is written here.
+     */
+    public function iterate_items($item_ids, $prompt, $page_id = 0, $context_mode = 'page', $selected_pages = array(), $conversation_id = null) {
         $user_id = get_current_user_id();
         if (!$user_id) {
             return new WP_Error('auth_error', 'User not authenticated');
         }
+        if (trim($prompt) === '') {
+            return new WP_Error('missing_prompt', 'An instruction is required — describe how each item should be rewritten');
+        }
 
         $item_ids = array_filter(array_map('intval', (array) $item_ids));
-        if (empty($item_ids)) {
-            return new WP_Error('no_items', 'No items selected to brainstorm against');
-        }
 
         $by_id = array();
         $items_listing = '';
-        foreach ($item_ids as $id) {
-            $post = get_post($id);
-            if (!$post || $post->post_type !== 'post') {
-                continue;
+
+        if (!empty($item_ids)) {
+            foreach ($item_ids as $id) {
+                $post = get_post($id);
+                if (!$post || $post->post_type !== 'post') {
+                    continue;
+                }
+                $by_id[$id] = array('title' => $post->post_title, 'content' => $post->post_content);
             }
-            $by_id[$id] = array('title' => $post->post_title, 'content' => $post->post_content);
-            $content = wp_strip_all_tags($post->post_content);
-            if (strlen($content) > 500) {
-                $content = substr($content, 0, 500) . '…';
+        } else {
+            // No explicit selection — every item currently in scope.
+            $context_builder = WCP_Context_Builder::instance();
+            $context_data = $context_builder->build_context_by_mode($page_id, $context_mode, array(
+                'selected_pages' => $selected_pages,
+                'query'          => $prompt,
+                'include_items'  => true,
+                'item_limit'     => 200,
+            ));
+            foreach ($context_data['items'] ?? array() as $it) {
+                $by_id[(int) $it['id']] = array('title' => $it['title'], 'content' => $it['content'] ?? '');
             }
-            $items_listing .= "ID {$id}: \"{$post->post_title}\" — " . ($content !== '' ? $content : '(no description)') . "\n";
         }
 
         if (empty($by_id)) {
-            return new WP_Error('no_items', 'None of the selected items could be found');
+            return new WP_Error('no_items', 'No items found to iterate over');
         }
 
-        $sys = "You are helping the user brainstorm improvements to a specific set of existing items. "
-             . "For EACH item listed below, decide: (a) whether it would benefit from a rewritten title/description "
-             . "— omit or set 'rewrite' to null if it's already fine as-is, don't rewrite just to rewrite; and "
-             . "(b) 0 or more new sub-items that would usefully break it down further, each typed 'task', 'info', or "
-             . "'spec' depending on what it represents (a to-do, background/reference info, or a requirement/spec "
-             . "respectively). Return ONLY a JSON object: {\"items\": [{\"item_id\": <id, must match one from the "
-             . "list>, \"rewrite\": {\"title\": \"...\", \"content\": \"...\"} or null, \"subitems\": "
-             . "[{\"title\": \"...\", \"content\": \"...\", \"item_type\": \"task|info|spec\"}]}]}. "
-             . "Content may use Markdown (bullet lists with -, **bold**, headings with #) where it improves clarity.";
-        if (trim($protocol) !== '') {
-            $sys .= " The user has also prescribed the following format/protocol to follow — apply it to both "
-                  . "rewrites and sub-items where relevant: " . trim($protocol);
+        foreach ($by_id as $id => $it) {
+            $content = wp_strip_all_tags($it['content']);
+            if (strlen($content) > 500) {
+                $content = substr($content, 0, 500) . '…';
+            }
+            $items_listing .= "ID {$id}: \"{$it['title']}\" — " . ($content !== '' ? $content : '(no description)') . "\n";
         }
-        $usr = "Items to brainstorm against:\n{$items_listing}";
+
+        $sys = "You are applying an instruction to EVERY item in the list below — every single item listed must "
+             . "appear in your response with a rewritten title/description, none may be skipped, even if the "
+             . "instruction only requires a small change for a particular item. Return ONLY a JSON array: "
+             . "[{\"id\": <item id, must match one from the list>, \"title\": \"...\", \"content\": \"...\"}, ...]. "
+             . "Content may use Markdown (bullet lists with -, **bold**, headings with #) where it improves clarity.";
+        $usr = "Instruction: {$prompt}\n\nItems:\n{$items_listing}";
 
         $conversation_history = array();
         if ($conversation_id) {
@@ -1111,13 +1249,13 @@ class WCP_AI_Actions {
 
         if ($conversation_id) {
             $conversations_manager = WCP_Conversations_Manager::instance();
-            $conversations_manager->add_message($conversation_id, 'user', '[Brainstorm on selected items] ' . $protocol);
+            $conversations_manager->add_message($conversation_id, 'user', '[Iterate items] ' . $prompt);
         }
 
         if (($response['stop_reason'] ?? null) === 'max_tokens') {
             return new WP_Error(
                 'response_truncated',
-                'The AI response was cut off before it finished (too many items selected at once). Try brainstorming against fewer items.'
+                'The AI response was cut off before it finished (too many items in scope). Try again with a smaller selection.'
             );
         }
 
@@ -1125,71 +1263,43 @@ class WCP_AI_Actions {
         if (is_wp_error($parsed)) {
             return $parsed;
         }
-        $entries = isset($parsed['items']) && is_array($parsed['items']) ? $parsed['items'] : (is_array($parsed) ? $parsed : array());
+        $entries = is_array($parsed) ? $parsed : array();
         if (empty($entries)) {
             return new WP_Error('invalid_response', 'AI did not propose any changes');
         }
 
         $proposals = array();
         $batch_id  = wp_generate_uuid4();
-        $index     = 0;
 
-        foreach ($entries as $entry) {
-            $item_id = isset($entry['item_id']) ? (int) $entry['item_id'] : 0;
+        foreach ($entries as $index => $entry) {
+            $item_id = isset($entry['id']) ? (int) $entry['id'] : 0;
             if (!$item_id || !isset($by_id[$item_id])) {
-                continue; // AI referenced something outside the selected set — skip, don't guess
+                continue; // AI referenced something outside scope — skip, don't guess
             }
             $original = $by_id[$item_id];
 
-            if (!empty($entry['rewrite']) && is_array($entry['rewrite'])) {
-                $proposal_id = wp_generate_uuid4();
-                $proposal = array(
-                    'proposal_id'     => $proposal_id,
-                    'batch_id'        => $batch_id,
-                    'index'           => $index++,
-                    'action_type'     => 'edit_item',
-                    'item_id'         => $item_id,
-                    'original'        => $original,
-                    'item'            => array(
-                        'title'   => isset($entry['rewrite']['title']) ? $entry['rewrite']['title'] : $original['title'],
-                        'content' => isset($entry['rewrite']['content']) ? $entry['rewrite']['content'] : $original['content'],
-                    ),
-                    'conversation_id' => $conversation_id,
-                    'page_id'         => $page_id,
-                    'created_at'      => current_time('mysql'),
-                );
-                set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
-                $proposals[] = $proposal;
-            }
-
-            foreach ((array) ($entry['subitems'] ?? array()) as $sub) {
-                if (empty($sub['title'])) {
-                    continue;
-                }
-                $sub_type = in_array($sub['item_type'] ?? '', array('task', 'info', 'spec'), true) ? $sub['item_type'] : 'task';
-                $proposal_id = wp_generate_uuid4();
-                $proposal = array(
-                    'proposal_id'     => $proposal_id,
-                    'batch_id'        => $batch_id,
-                    'index'           => $index++,
-                    'action_type'     => 'brainstorm_subitem',
-                    'parent_item_id'  => $item_id,
-                    'item'            => array(
-                        'title'     => $sub['title'],
-                        'content'   => $sub['content'] ?? '',
-                        'item_type' => $sub_type,
-                    ),
-                    'conversation_id' => $conversation_id,
-                    'page_id'         => $page_id,
-                    'created_at'      => current_time('mysql'),
-                );
-                set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
-                $proposals[] = $proposal;
-            }
+            $proposal_id = wp_generate_uuid4();
+            $proposal = array(
+                'proposal_id'     => $proposal_id,
+                'batch_id'        => $batch_id,
+                'index'           => $index,
+                'action_type'     => 'edit_item',
+                'item_id'         => $item_id,
+                'original'        => $original,
+                'item'            => array(
+                    'title'   => isset($entry['title']) ? $entry['title'] : $original['title'],
+                    'content' => isset($entry['content']) ? $entry['content'] : $original['content'],
+                ),
+                'conversation_id' => $conversation_id,
+                'page_id'         => $page_id,
+                'created_at'      => current_time('mysql'),
+            );
+            set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
+            $proposals[] = $proposal;
         }
 
         if (empty($proposals)) {
-            return new WP_Error('no_matching_items', 'Could not match the AI’s response to any selected item');
+            return new WP_Error('no_matching_items', 'Could not match the AI’s response to any item in scope');
         }
 
         set_transient('wcp_batch_' . $batch_id, array(
@@ -1200,11 +1310,11 @@ class WCP_AI_Actions {
 
         $logger = WCP_AI_Logger::instance();
         $logger->log_action(array(
-            'action_type'     => 'brainstorm_items',
+            'action_type'     => 'iterate_items',
             'user_id'         => $user_id,
             'model'           => $response['model'],
-            'prompt'          => $protocol,
-            'input_context'   => json_encode(array('item_ids' => $item_ids)),
+            'prompt'          => $prompt,
+            'input_context'   => json_encode(array('item_ids' => $item_ids, 'page_id' => $page_id)),
             'output_snapshot' => json_encode($entries),
             'context_post_id' => $page_id,
             'accepted_items'  => array(),
@@ -1212,7 +1322,7 @@ class WCP_AI_Actions {
         ));
 
         return array(
-            'outcome'   => 'brainstorm_items',
+            'outcome'   => 'iterate_items',
             'proposals' => $proposals,
             'batch_id'  => $batch_id,
             'metadata'  => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null),
@@ -1220,14 +1330,13 @@ class WCP_AI_Actions {
     }
 
     /**
-     * Brainstorm Mode B: reviews every existing item in scope (a whole page,
-     * for now — heading scope is a documented follow-on) against the page
-     * mission and proposes both new items filling gaps and rewrites of
-     * existing items that could be improved — unlike Mode A, this is not
-     * limited to a user-selected subset.
+     * Spot gaps: reviews the existing items in scope against the page
+     * mission and proposes ONLY new items filling genuine gaps — never
+     * touches/rewrites existing items. Reuses the existing plain-new-item
+     * proposal shape (same as generate_items()).
      * AI guardrail: everything is a proposal — nothing is written here.
      */
-    public function brainstorm_gaps($page_id, $protocol = '', $context_mode = 'page', $selected_pages = array(), $conversation_id = null) {
+    public function spot_gaps($page_id, $prompt = '', $context_mode = 'page', $selected_pages = array(), $conversation_id = null) {
         $user_id = get_current_user_id();
         if (!$user_id) {
             return new WP_Error('auth_error', 'User not authenticated');
@@ -1236,17 +1345,13 @@ class WCP_AI_Actions {
         $context_builder = WCP_Context_Builder::instance();
         $context_data = $context_builder->build_context_by_mode($page_id, $context_mode, array(
             'selected_pages' => $selected_pages,
-            'query'          => $protocol,
+            'query'          => $prompt,
             'include_items'  => true,
-            'item_limit'     => 40,
+            'item_limit'     => 200,
         ));
 
-        $candidate_items = $context_data['items'] ?? array();
-
-        $by_id = array();
         $items_listing = '';
-        foreach ($candidate_items as $it) {
-            $by_id[(int) $it['id']] = $it;
+        foreach ($context_data['items'] ?? array() as $it) {
             $content = wp_strip_all_tags($it['content'] ?? '');
             if (strlen($content) > 500) {
                 $content = substr($content, 0, 500) . '…';
@@ -1257,20 +1362,18 @@ class WCP_AI_Actions {
         $mission_context = WCP_Mission_Loader::instance()->get_mission_context($page_id);
         $mission_text = trim(($mission_context['global'] ?? '') . "\n" . ($mission_context['page'] ?? ''));
 
-        $sys = "You are reviewing an existing set of items on a page against its stated goal, looking for gaps. "
-             . "Below is the page's mission/goal (if any) and the full list of items already present, each with its "
-             . "ID. Propose two things: (a) NEW top-level items that fill genuine gaps — things the mission implies "
-             . "but that nothing in the existing list already covers (don't propose anything that duplicates or "
-             . "near-duplicates an existing item); and (b) rewrites of any EXISTING items (by ID) that are vague, "
-             . "incomplete, or could clearly be improved — only include items that genuinely need it, not every "
-             . "item. Return ONLY a JSON object: {\"new_items\": [{\"title\": \"...\", \"content\": \"...\", "
-             . "\"item_type\": \"task|info|learning|spec\"}], \"rewrites\": [{\"item_id\": <id, must match one from "
-             . "the list>, \"title\": \"...\", \"content\": \"...\"}]}. Content may use Markdown (bullet lists with "
-             . "-, **bold**, headings with #) where it improves clarity.";
-        if (trim($protocol) !== '') {
-            $sys .= " The user has also prescribed the following format/protocol to follow: " . trim($protocol);
+        $sys = "You are reviewing an existing set of items against its stated goal, looking for gaps. Below is the "
+             . "mission/goal (if any) and the full list of items already present, each with its ID. Propose ONLY "
+             . "NEW top-level items that fill genuine gaps — things the mission/instruction implies but that "
+             . "nothing in the existing list already covers. Do not propose anything that duplicates or "
+             . "near-duplicates an existing item. Do NOT propose changes to any existing item — new items only. "
+             . "Return ONLY a JSON array: [{\"title\": \"...\", \"content\": \"...\", \"item_type\": "
+             . "\"task|info|learning|spec\"}, ...]. Content may use Markdown (bullet lists with -, **bold**, "
+             . "headings with #) where it improves clarity.";
+        if (trim($prompt) !== '') {
+            $sys .= " The user has also given this specific instruction — follow it: " . trim($prompt);
         }
-        $usr = "Page mission/goal:\n" . ($mission_text !== '' ? $mission_text : '(none set)')
+        $usr = "Mission/goal:\n" . ($mission_text !== '' ? $mission_text : '(none set)')
              . "\n\nExisting items:\n" . ($items_listing !== '' ? $items_listing : '(none yet)');
 
         $conversation_history = array();
@@ -1291,13 +1394,13 @@ class WCP_AI_Actions {
 
         if ($conversation_id) {
             $conversations_manager = WCP_Conversations_Manager::instance();
-            $conversations_manager->add_message($conversation_id, 'user', '[Brainstorm gaps] ' . $protocol);
+            $conversations_manager->add_message($conversation_id, 'user', '[Spot gaps] ' . $prompt);
         }
 
         if (($response['stop_reason'] ?? null) === 'max_tokens') {
             return new WP_Error(
                 'response_truncated',
-                'The AI response was cut off before it finished (too many items on this page). Try again — this is usually transient — or narrow the page down first.'
+                'The AI response was cut off before it finished. Try again — this is usually transient — or narrow the page down first.'
             );
         }
 
@@ -1305,18 +1408,15 @@ class WCP_AI_Actions {
         if (is_wp_error($parsed)) {
             return $parsed;
         }
-        $new_items = isset($parsed['new_items']) && is_array($parsed['new_items']) ? $parsed['new_items'] : array();
-        $rewrites  = isset($parsed['rewrites']) && is_array($parsed['rewrites']) ? $parsed['rewrites'] : array();
-
-        if (empty($new_items) && empty($rewrites)) {
-            return new WP_Error('invalid_response', 'AI did not propose any gaps or improvements');
+        $new_items = is_array($parsed) ? $parsed : array();
+        if (empty($new_items)) {
+            return new WP_Error('invalid_response', 'AI did not propose any gaps');
         }
 
         $proposals = array();
         $batch_id  = wp_generate_uuid4();
-        $index     = 0;
 
-        foreach ($new_items as $item) {
+        foreach ($new_items as $index => $item) {
             if (empty($item['title']) || !isset($item['content'])) {
                 continue;
             }
@@ -1324,35 +1424,9 @@ class WCP_AI_Actions {
             $proposal = array(
                 'proposal_id'     => $proposal_id,
                 'batch_id'        => $batch_id,
-                'index'           => $index++,
+                'index'           => $index,
                 'action_type'     => 'generate-multiple',
                 'item'            => $item,
-                'conversation_id' => $conversation_id,
-                'page_id'         => $page_id,
-                'created_at'      => current_time('mysql'),
-            );
-            set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
-            $proposals[] = $proposal;
-        }
-
-        foreach ($rewrites as $edit) {
-            $item_id = isset($edit['item_id']) ? (int) $edit['item_id'] : 0;
-            if (!$item_id || !isset($by_id[$item_id])) {
-                continue; // AI referenced something outside the candidate set — skip, don't guess
-            }
-            $original = $by_id[$item_id];
-            $proposal_id = wp_generate_uuid4();
-            $proposal = array(
-                'proposal_id'     => $proposal_id,
-                'batch_id'        => $batch_id,
-                'index'           => $index++,
-                'action_type'     => 'edit_item',
-                'item_id'         => $item_id,
-                'original'        => array('title' => $original['title'], 'content' => $original['content']),
-                'item'            => array(
-                    'title'   => isset($edit['title']) ? $edit['title'] : $original['title'],
-                    'content' => isset($edit['content']) ? $edit['content'] : $original['content'],
-                ),
                 'conversation_id' => $conversation_id,
                 'page_id'         => $page_id,
                 'created_at'      => current_time('mysql'),
@@ -1373,19 +1447,19 @@ class WCP_AI_Actions {
 
         $logger = WCP_AI_Logger::instance();
         $logger->log_action(array(
-            'action_type'     => 'brainstorm_gaps',
+            'action_type'     => 'spot_gaps',
             'user_id'         => $user_id,
             'model'           => $response['model'],
-            'prompt'          => $protocol,
+            'prompt'          => $prompt,
             'input_context'   => json_encode(array('context_mode' => $context_mode, 'page_id' => $page_id)),
-            'output_snapshot' => json_encode($parsed),
+            'output_snapshot' => json_encode($new_items),
             'context_post_id' => $page_id,
             'accepted_items'  => array(),
             'dismissed_items' => array(),
         ));
 
         return array(
-            'outcome'   => 'brainstorm_gaps',
+            'outcome'   => 'spot_gaps',
             'proposals' => $proposals,
             'batch_id'  => $batch_id,
             'metadata'  => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null),
@@ -1413,7 +1487,7 @@ class WCP_AI_Actions {
         $context_builder = WCP_Context_Builder::instance();
         $context_data    = $context_builder->build_hierarchical_context( $page_id, array(
             'include_items' => true,
-            'item_limit'    => 25,
+            'item_limit'    => 200,
         ) );
         // Ancestor page titles/hierarchy are already covered by the snapshot above,
         // but ancestor CONTENT isn't — and neither is the current page's own content,
@@ -1455,6 +1529,31 @@ class WCP_AI_Actions {
             return $parsed;
         }
 
+        return $this->build_structure_proposal($parsed, $page_id, $valid_heading_terms, $conversation_id, array(
+            'action_type'         => 'generate_structure',
+            'prompt'              => $prompt,
+            'model'               => $response['model'],
+            'raw_content'         => $response['content'],
+            'conversation_message' => 'Proposed a structure update for your review',
+        ));
+    }
+
+    /**
+     * Shared by generate_structure() and split_markdown_document(): turns
+     * parsed AI JSON ({headings:[{ref,title}], items:[{title,content,
+     * item_type,target}]}) into proposal transients + the plan tree shape
+     * the existing structure-proposal review UI (showStructureProposal() in
+     * ai-widget.js, accept_structure() in class-rest-api.php) already
+     * consumes unchanged.
+     *
+     * @param array  $parsed              Parsed AI JSON — {headings, items}
+     * @param int    $page_id
+     * @param array  $valid_heading_terms Existing wcp_context term ids items may target as "existing"
+     * @param string|null $conversation_id
+     * @param array  $log_context         {action_type, prompt, model, raw_content, conversation_message}
+     * @return array|WP_Error
+     */
+    private function build_structure_proposal($parsed, $page_id, $valid_heading_terms, $conversation_id, $log_context) {
         $headings_in = (isset($parsed['headings']) && is_array($parsed['headings'])) ? $parsed['headings'] : array();
         $items_in    = (isset($parsed['items']) && is_array($parsed['items']))       ? $parsed['items']    : array();
         if (empty($headings_in) && empty($items_in)) {
@@ -1533,15 +1632,20 @@ class WCP_AI_Actions {
         set_transient('wcp_batch_' . $batch_id, array('page_id' => $page_id, 'conversation_id' => $conversation_id), HOUR_IN_SECONDS);
 
         if ($conversation_id) {
-            WCP_Conversations_Manager::instance()->add_message($conversation_id, 'assistant', 'Proposed a structure update for your review', array('batch_id' => $batch_id));
+            WCP_Conversations_Manager::instance()->add_message(
+                $conversation_id, 'assistant',
+                $log_context['conversation_message'] ?? 'Proposed a structure update for your review',
+                array('batch_id' => $batch_id)
+            );
         }
 
         $logger = WCP_AI_Logger::instance();
-        $logger->log_action(array(
-            'action_type' => 'generate_structure', 'user_id' => $user_id, 'model' => $response['model'],
-            'prompt' => $prompt, 'input_context' => json_encode(array('page_id' => $page_id)),
-            'output_snapshot' => $response['content'], 'context_post_id' => $page_id,
-            'accepted_items' => array(), 'dismissed_items' => array(),
+        $logger->log_action($log_context['action_type'], array(
+            'model'           => $log_context['model'],
+            'prompt'          => $log_context['prompt'],
+            'input_context'   => array('page_id' => $page_id),
+            'output'          => $log_context['raw_content'],
+            'context_post_id' => $page_id,
         ));
 
         return array(
@@ -1552,8 +1656,83 @@ class WCP_AI_Actions {
                 'existing_groups' => array_values($existing_groups),
                 'page_items'      => $page_items,
             ),
-            'metadata' => array('model' => $response['model']),
+            'metadata' => array('model' => $log_context['model']),
         );
+    }
+
+    /**
+     * Splits an uploaded markdown document into a proposed Heading/Item
+     * structure on the current page — markdown headings become headings,
+     * paragraphs/bullets under them become items. Reuses the exact same
+     * proposal shape and review/accept UI as generate_structure().
+     * AI guardrail: everything is a proposal — nothing is written here.
+     */
+    public function split_markdown_document($markdown_content, $page_id, $instructions = '', $conversation_id = null) {
+        set_time_limit(120);
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new WP_Error('auth_error', 'User not authenticated');
+        }
+        if (trim($markdown_content) === '') {
+            return new WP_Error('empty_document', 'The uploaded document is empty');
+        }
+
+        $max_chars = 15000; // matches editor_expand_draft()'s truncation convention
+        if (strlen($markdown_content) > $max_chars) {
+            $original_length = strlen($markdown_content);
+            $markdown_content = mb_substr($markdown_content, 0, $max_chars);
+            $markdown_content .= "\n\n[...CONTENT TRUNCATED FOR PROCESSING - Original: " . number_format($original_length) . " chars, Truncated to: " . number_format($max_chars) . " chars...]";
+        }
+
+        $page_term_id = $this->page_context_term_id($page_id);
+        list($snapshot, $valid_heading_terms) = $this->build_structure_snapshot($page_id, $page_term_id);
+
+        $prompt_builder = WCP_Prompt_Builder::instance();
+        $system_prompt  = $prompt_builder->build_system_prompt('split-markdown', $page_id);
+        $user_message   = ( trim($instructions) !== '' ? "Instructions: " . trim($instructions) . "\n\n" : '' )
+            . "CURRENT PAGE STRUCTURE (use these ids for existing headings):\n" . $snapshot
+            . "\n\nDocument to split:\n\n" . $markdown_content;
+
+        $conversation_history = array();
+        if ($conversation_id) {
+            $cm = WCP_Conversations_Manager::instance();
+            foreach ($cm->get_messages($conversation_id, 10) as $msg) {
+                $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
+            }
+        }
+
+        $ai_client = WCP_AI_Client::instance();
+        $response  = $ai_client->request_with_conversation($system_prompt, $user_message, $conversation_history, 4096, 90);
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        if (($response['stop_reason'] ?? null) === 'max_tokens') {
+            return new WP_Error(
+                'response_truncated',
+                'The AI response was cut off before it finished. Try a smaller document.'
+            );
+        }
+
+        if ($conversation_id) {
+            WCP_Conversations_Manager::instance()->add_message($conversation_id, 'user', 'Imported document (' . strlen($markdown_content) . ' chars)');
+        }
+
+        $parsed = $this->parse_json_response($response['content']);
+        if (is_wp_error($parsed)) {
+            if ($conversation_id) {
+                WCP_Conversations_Manager::instance()->add_message($conversation_id, 'system', 'Failed to parse AI response: ' . $parsed->get_error_message());
+            }
+            return $parsed;
+        }
+
+        return $this->build_structure_proposal($parsed, $page_id, $valid_heading_terms, $conversation_id, array(
+            'action_type'          => 'split_markdown_document',
+            'prompt'               => $instructions,
+            'model'                => $response['model'],
+            'raw_content'          => $response['content'],
+            'conversation_message' => 'Proposed a document import for your review',
+        ));
     }
 
     private function page_context_term_id($page_id) {
@@ -1775,8 +1954,6 @@ class WCP_AI_Actions {
         $auth_target_id = null;
         if ($proposal_action_type === 'edit_item') {
             $auth_target_id = (int) ($proposal['item_id'] ?? 0);
-        } elseif ($proposal_action_type === 'brainstorm_subitem') {
-            $auth_target_id = (int) ($proposal['parent_item_id'] ?? 0);
         } elseif ($proposal_action_type !== 'extract_memories') {
             $auth_target_id = (int) $page_id;
         }
@@ -1839,6 +2016,7 @@ class WCP_AI_Actions {
                 'post_content' => '',
                 'post_status'  => 'publish',
                 'post_author'  => $user_id,
+                'menu_order'   => WCP_Post_Types::next_heading_menu_order('page', $page_id),
             ));
 
             if (is_wp_error($heading_id)) {
@@ -1928,57 +2106,6 @@ class WCP_AI_Actions {
                 'updated_posts' => array($item_id),
                 'message'       => 'Item updated successfully',
                 'debug'         => array('item_id' => $item_id),
-            );
-        }
-
-        // Handle Brainstorm sub-item proposals — creates a real post_parent
-        // child of an existing item, typed task/info/spec, inheriting the
-        // parent's wcp_context (mirrors create_item()'s inheritance behavior).
-        if (isset($proposal['action_type']) && $proposal['action_type'] === 'brainstorm_subitem') {
-            $parent_item_id = (int) ($proposal['parent_item_id'] ?? 0);
-            $new = isset($proposal['item']) ? $proposal['item'] : array();
-
-            if (!$parent_item_id || get_post_type($parent_item_id) !== 'post') {
-                return new WP_Error('invalid_proposal', 'Sub-item proposal refers to a missing parent item');
-            }
-            if (empty($new['title'])) {
-                return new WP_Error('invalid_proposal', 'Sub-item proposal is missing a title');
-            }
-
-            $sub_id = wp_insert_post(array(
-                'post_type'    => 'post',
-                'post_title'   => sanitize_text_field($new['title']),
-                'post_content' => wp_kses_post($new['content'] ?? ''),
-                'post_status'  => 'publish',
-                'post_author'  => $user_id,
-                'post_parent'  => $parent_item_id,
-            ));
-
-            if (is_wp_error($sub_id)) {
-                return $sub_id;
-            }
-
-            WCP_Post_Types::mark_creator($sub_id, 'copilot');
-
-            $parent_contexts = wp_get_post_terms($parent_item_id, 'wcp_context', array('fields' => 'ids'));
-            if (!is_wp_error($parent_contexts) && !empty($parent_contexts)) {
-                wp_set_post_terms($sub_id, $parent_contexts, 'wcp_context');
-            }
-
-            $sub_type = in_array($new['item_type'] ?? '', array('task', 'info', 'spec'), true) ? $new['item_type'] : 'task';
-            wp_set_post_terms($sub_id, array($sub_type), 'item_type');
-            if ($sub_type === 'task') {
-                wp_set_post_terms($sub_id, array('to-do'), 'task_status');
-            } elseif ($sub_type === 'spec') {
-                wp_set_post_terms($sub_id, array('draft'), 'spec_status');
-            }
-
-            delete_transient('wcp_proposal_' . $proposal_id);
-
-            return array(
-                'created_posts' => array($sub_id),
-                'message'       => 'Sub-item created successfully',
-                'debug'         => array('item_id' => $sub_id, 'parent_item_id' => $parent_item_id),
             );
         }
 
@@ -2271,7 +2398,8 @@ class WCP_AI_Actions {
             $system_prompt,
             $user_message,
             array(), // No conversation history
-            1000     // Max tokens for summary
+            1000,    // Max tokens for summary
+            90
         );
 
         if (is_wp_error($response)) {
@@ -2338,7 +2466,7 @@ class WCP_AI_Actions {
         $item_char_limit = 50000;
         $context_data    = $context_builder->build_hierarchical_context( $page_id, array(
             'include_items' => true,
-            'item_limit'    => 25,
+            'item_limit'    => 200,
             'limits'        => array(
                 'max_chars_per_item'      => $item_char_limit,
                 'max_chars_page_summary'  => 8000,
@@ -2448,7 +2576,7 @@ class WCP_AI_Actions {
             'selected_pages' => $selected_pages,
             'query' => $prompt,
             'include_items' => true,
-            'item_limit'    => 25,
+            'item_limit'    => 200,
         ) );
 
         $prompt_builder = WCP_Prompt_Builder::instance();
@@ -2493,7 +2621,7 @@ class WCP_AI_Actions {
             'selected_pages' => $selected_pages,
             'query' => $prompt,
             'include_items' => true,
-            'item_limit'    => 25,
+            'item_limit'    => 200,
         ) );
 
         $prompt_builder = WCP_Prompt_Builder::instance();
@@ -2655,7 +2783,7 @@ class WCP_AI_Actions {
         }
 
         $ai_client = WCP_AI_Client::instance();
-        $response  = $ai_client->request_with_conversation( $system_prompt, $user_message, $conversation_history, 4096 );
+        $response  = $ai_client->request_with_conversation( $system_prompt, $user_message, $conversation_history, 4096, 90 );
         if ( is_wp_error( $response ) ) return $response;
 
         if ( $conversation_id ) {
@@ -2694,7 +2822,7 @@ class WCP_AI_Actions {
         }
 
         $ai_client = WCP_AI_Client::instance();
-        $response  = $ai_client->request_with_conversation( $system_prompt, $user_message, $conversation_history, 4096 );
+        $response  = $ai_client->request_with_conversation( $system_prompt, $user_message, $conversation_history, 4096, 90 );
         if ( is_wp_error( $response ) ) return $response;
 
         if ( $conversation_id ) {
@@ -2788,7 +2916,7 @@ class WCP_AI_Actions {
         $user_message .= "Please onboard onto this page.";
 
         $ai_client = WCP_AI_Client::instance();
-        $response  = $ai_client->request_with_conversation( $system_prompt, $user_message, array(), 800, 30 );
+        $response  = $ai_client->request_with_conversation( $system_prompt, $user_message, array(), 800, 90 );
 
         if ( is_wp_error( $response ) ) {
             return $response;

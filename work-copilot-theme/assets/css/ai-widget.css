@@ -28,6 +28,14 @@ body.admin-bar .wcp-ai-widget {
     height: calc(100vh - 32px);
 }
 
+/* Expanded state — widget takes the full width right up to the left
+   sidebar (which is fixed-position and unaffected by this), while the
+   main content column (headings/items) is hidden by the
+   body.wcp-ai-panel-expanded rule in theme.css/workspace-ui.css. */
+.wcp-ai-widget.expanded {
+    width: calc(100vw - 280px);
+}
+
 /* Embedded mode — rendered inline inside the homepage "Chat" tab panel
    instead of floating over the page. Overrides the fixed-position/
    minimize-to-bubble styling above. */
@@ -142,12 +150,19 @@ body.admin-bar .wcp-ai-widget.minimized {
     color: #333;
 }
 
+.wcp-ai-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .wcp-ai-header-actions {
     display: flex;
     gap: 5px;
 }
 
-.wcp-ai-header-actions button {
+.wcp-ai-header-actions button,
+.wcp-ai-expand {
     background: none;
     border: none;
     cursor: pointer;
@@ -156,14 +171,21 @@ body.admin-bar .wcp-ai-widget.minimized {
     transition: color 0.2s ease;
 }
 
-.wcp-ai-header-actions button:hover {
+.wcp-ai-header-actions button:hover,
+.wcp-ai-expand:hover {
     color: #0073aa;
 }
 
-.wcp-ai-header-actions .dashicons {
+.wcp-ai-header-actions .dashicons,
+.wcp-ai-expand .dashicons {
     font-size: 20px;
     width: 20px;
     height: 20px;
+}
+
+/* Nothing to expand into full-screen when embedded in a tab */
+.wcp-ai-widget--embedded .wcp-ai-expand {
+    display: none;
 }
 
 /* Context indicator */

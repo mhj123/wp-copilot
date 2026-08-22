@@ -359,15 +359,19 @@ function wcp_theme_enqueue_ai_widget() {
         return;
     }
 
-    // Version for cache busting - update with each change
-    $widget_version = '2.6.0';
+    // filemtime()-versioned so edits always bust the browser cache without
+    // needing a manual version bump (same fix applied to theme.css/theme.js —
+    // a stale hardcoded version here previously meant JS edits silently never
+    // reached the browser until a hard refresh).
+    $widget_css_path = get_template_directory() . '/assets/css/ai-widget.css';
+    $widget_js_path  = get_template_directory() . '/assets/js/ai-widget.js';
 
     // Enqueue widget CSS
     wp_enqueue_style(
         'wcp-ai-widget',
         get_template_directory_uri() . '/assets/css/ai-widget.css',
         array(),
-        $widget_version
+        file_exists($widget_css_path) ? filemtime($widget_css_path) : false
     );
 
     // Markdown renderer is registered unconditionally in wcp_theme_scripts()
@@ -378,7 +382,7 @@ function wcp_theme_enqueue_ai_widget() {
         'wcp-ai-widget',
         get_template_directory_uri() . '/assets/js/ai-widget.js',
         array('jquery', 'marked'),
-        $widget_version,
+        file_exists($widget_js_path) ? filemtime($widget_js_path) : false,
         true
     );
 }

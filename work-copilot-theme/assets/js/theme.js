@@ -1125,7 +1125,8 @@ jQuery(document).ready(function($) {
     // item-level AI panel's "Freeform" reveal).
     var wcpPageAiPlaceholders = {
         generate_structure: 'Describe the headings and items to generate…',
-        brainstorm_gaps: 'Optional: prescribe a format (e.g. BDD/Gherkin) or paste an exemplar item’s content — leave blank to skip.'
+        iterate_items: 'Describe how every item should be rewritten — any format, structure, tone, or example you want applied…',
+        spot_gaps: 'Optional: describe what a complete set should cover, e.g. "This is an SEO plan — suggest missing headings and items" — leave blank to let the AI infer from the page mission.'
     };
 
     $(document).on('click', '.wcp-page-ai-chip', function() {
@@ -1162,12 +1163,14 @@ jQuery(document).ready(function($) {
         var prompt  = $form.find('.wcp-page-ai-prompt-input').val().trim();
         var pageId  = $panel.data('page-id');
         if (!action) { return; }
-        // brainstorm_gaps' textarea is an optional protocol, not a required
-        // instruction — execute_action() still requires a non-empty prompt,
-        // so send a placeholder rather than blocking submission.
+        // spot_gaps' textarea is an optional instruction — execute_action()
+        // still requires a non-empty prompt, so send a placeholder rather
+        // than blocking submission. iterate_items' instruction is required
+        // (it IS the transformation to apply), so an empty prompt there
+        // just aborts the submit like every other action.
         if (!prompt) {
-            if (action === 'brainstorm_gaps') {
-                prompt = '(no protocol specified)';
+            if (action === 'spot_gaps') {
+                prompt = '(no instruction specified)';
             } else {
                 return;
             }
@@ -1193,7 +1196,7 @@ jQuery(document).ready(function($) {
                 var result = response.result || {};
                 if (result.outcome === 'create_structure') {
                     wcpRenderPageStructureProposal($result, result.batch_id, result.plan || {});
-                } else if (result.outcome === 'brainstorm_gaps' && result.proposals && result.proposals.length) {
+                } else if ((result.outcome === 'spot_gaps' || result.outcome === 'iterate_items') && result.proposals && result.proposals.length) {
                     $result.hide().empty();
                     wcpRenderBrainstormAfter($('.wcp-brainstorm-after'), $('.wcp-items-section'), result.batch_id, result.proposals);
                 } else {
@@ -1256,37 +1259,25 @@ jQuery(document).ready(function($) {
         $result.attr('data-batch-id', batchId).show().html(html);
     }
 
-    // Render the Brainstorm "after" column: a mix of edit_item (rewrite),
-    // brainstorm_subitem, and generate-multiple (new/gap item) proposals —
-    // both Brainstorm modes share this renderer since they emit the same
-    // proposal shapes. Sub-items are grouped under their parent's rewrite
-    // row when the AI also proposed one; otherwise grouped under their own
-    // small header. Activates the 2-col split view on .wcp-items-section.
+    // Render the "after" column: a mix of edit_item (rewrite, from Iterate)
+    // and generate-multiple (new item, from Spot gaps) proposals — each
+    // action only ever emits one of these two shapes, but the renderer
+    // handles both generically. Activates the 2-col split view on
+    // .wcp-items-section.
     function wcpRenderBrainstormAfter($after, $section, batchId, proposals) {
         var esc = function(s) { return $('<span>').text(s == null ? '' : s).html(); };
 
-        var row = function(proposalId, badge, typeLabel, titleHtml, extraClass) {
-            return '<label class="wcp-struct-row' + (extraClass ? ' ' + extraClass : '') + '">'
+        var row = function(proposalId, badge, typeLabel, titleHtml) {
+            return '<label class="wcp-struct-row">'
                 + '<input type="checkbox" class="wcp-brainstorm-proposal-cb" data-proposal-id="' + esc(proposalId) + '" checked> '
                 + (badge ? '<span class="wcp-struct-badge">' + esc(badge) + '</span> ' : '')
                 + (typeLabel ? '<span class="wcp-struct-type">' + esc(typeLabel) + '</span> ' : '')
                 + titleHtml + '</label>';
         };
 
-        var subitemsByParent = {};
-        proposals.forEach(function(p) {
-            if (p.action_type === 'brainstorm_subitem') {
-                var pid = p.parent_item_id;
-                (subitemsByParent[pid] = subitemsByParent[pid] || []).push(p);
-            }
-        });
-
-        var renderedParents = {};
         var html = '<div class="wcp-brainstorm-after-inner"><h3 class="wcp-brainstorm-after-title">Proposed changes</h3>';
 
         proposals.forEach(function(p) {
-            if (p.action_type === 'brainstorm_subitem') { return; } // rendered via parent grouping below
-
             if (p.action_type === 'edit_item') {
                 var orig = p.original || {};
                 var next = p.item || {};
@@ -1294,32 +1285,12 @@ jQuery(document).ready(function($) {
                     ? '<s>' + esc(orig.title) + '</s> → <strong>' + esc(next.title) + '</strong>'
                     : esc(next.title);
 
-                html += '<div class="wcp-struct-group">';
-                html += row(p.proposal_id, 'rewrite', '', titleHtml);
-                if (subitemsByParent[p.item_id]) {
-                    subitemsByParent[p.item_id].forEach(function(sp) {
-                        var it = sp.item || {};
-                        html += row(sp.proposal_id, '', it.item_type, esc(it.title), 'wcp-struct-child');
-                    });
-                    renderedParents[p.item_id] = true;
-                }
-                html += '</div>';
+                html += '<div class="wcp-struct-group">' + row(p.proposal_id, 'rewrite', '', titleHtml) + '</div>';
             } else {
-                // generate-multiple: a new top-level (gap) item, no parent.
+                // generate-multiple: a new top-level (gap) item.
                 var it = p.item || {};
                 html += '<div class="wcp-struct-group">' + row(p.proposal_id, '+ new', it.item_type, esc(it.title)) + '</div>';
             }
-        });
-
-        // Sub-item groups whose parent item got no rewrite proposal.
-        Object.keys(subitemsByParent).forEach(function(pid) {
-            if (renderedParents[pid]) { return; }
-            var groupHtml = '<div class="wcp-struct-group"><div class="wcp-struct-grouplabel">new sub-items</div>';
-            subitemsByParent[pid].forEach(function(sp) {
-                var it = sp.item || {};
-                groupHtml += row(sp.proposal_id, '', it.item_type, esc(it.title), 'wcp-struct-child');
-            });
-            html += groupHtml + '</div>';
         });
 
         html += '<div class="wcp-struct-actions">'
@@ -1435,38 +1406,39 @@ jQuery(document).ready(function($) {
         $('#wcp-selection-count').text(n + ' item' + (n !== 1 ? 's' : '') + ' selected');
         $('#wcp-goal-from-selected-btn').prop('disabled', n === 0);
         $('#wcp-delete-selected-btn').prop('disabled', n === 0);
-        $('#wcp-brainstorm-selected-btn').prop('disabled', n === 0);
+        $('#wcp-iterate-selected-btn').prop('disabled', n === 0);
     });
 
-    // Brainstorm Mode A — rewrite + sub-item proposals for the selected items,
+    // Iterate — apply a transformation instruction to every selected item,
     // reviewed in the before/after split view (see wcpRenderBrainstormAfter).
-    $(document).on('click', '#wcp-brainstorm-selected-btn', function() {
+    $(document).on('click', '#wcp-iterate-selected-btn', function() {
         var $btn    = $(this);
         var itemIds = $('.wcp-item-select-cb:checked').map(function() { return $(this).data('item-id'); }).get();
         if (!itemIds.length) { return; }
-        var pageId   = $('#wcp-selection-bar').data('page-id');
-        var protocol = prompt('Optional: prescribe a format (e.g. BDD/Gherkin) or paste an exemplar item’s content. Leave blank to skip.') || '';
+        var pageId = $('#wcp-selection-bar').data('page-id');
+        var instruction = prompt('Describe how each selected item should be rewritten:') || '';
+        if (instruction.trim() === '') { return; }
 
-        $btn.prop('disabled', true).text('Brainstorming…');
+        $btn.prop('disabled', true).text('Iterating…');
 
         $.ajax({
             url: wcpThemeData.restUrl + '/ai/actions/execute',
             method: 'POST',
             data: {
-                action_type: 'brainstorm_items',
+                action_type: 'iterate_items',
                 item_ids: itemIds,
-                prompt: protocol.trim() !== '' ? protocol : '(no protocol specified)',
+                prompt: instruction,
                 page_id: pageId
             },
             beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
             success: function(response) {
-                $btn.prop('disabled', false).text('Brainstorm selected');
+                $btn.prop('disabled', false).text('Iterate selected');
                 if (!response.success) {
-                    alert(response.message || 'Brainstorm failed.');
+                    alert(response.message || 'Iterate failed.');
                     return;
                 }
                 var result = response.result || {};
-                if (result.outcome === 'brainstorm_items' && result.proposals && result.proposals.length) {
+                if (result.outcome === 'iterate_items' && result.proposals && result.proposals.length) {
                     wcpRenderBrainstormAfter($('.wcp-brainstorm-after'), $('.wcp-items-section'), result.batch_id, result.proposals);
                     $('#wcp-selection-cancel-btn').trigger('click');
                 } else {
@@ -1474,7 +1446,7 @@ jQuery(document).ready(function($) {
                 }
             },
             error: function(xhr) {
-                $btn.prop('disabled', false).text('Brainstorm selected');
+                $btn.prop('disabled', false).text('Iterate selected');
                 alert('Connection error: ' + xhr.statusText);
             }
         });
