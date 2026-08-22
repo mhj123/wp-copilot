@@ -319,6 +319,15 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // Markdown document import — proposes a Heading/Item structure split
+        // from an uploaded .md file. Not part of the generic execute_action()
+        // switch: takes document content, not a typed prompt.
+        register_rest_route($namespace, '/ai/documents/split-markdown', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'split_markdown_document'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // Page notes
         register_rest_route($namespace, '/pages/(?P<page_id>\d+)/notes', array(
             'methods'             => 'POST',
@@ -1314,6 +1323,10 @@ class WCP_REST_API {
                 $result = $ai_actions->chat_qa($prompt, $page_id, $context_mode, $selected_pages, $conversation_id);
                 break;
 
+            case 'web_search':
+                $result = $ai_actions->web_search($prompt, $page_id, $conversation_id);
+                break;
+
             case 'generate':
             case 'generate-single':
             case 'generate_items':
@@ -1339,13 +1352,13 @@ class WCP_REST_API {
                 $result = $ai_actions->edit_items($prompt, $page_id, $context_mode, $selected_pages, $conversation_id);
                 break;
 
-            case 'brainstorm_items':
+            case 'iterate_items':
                 $item_ids = array_map('intval', (array) ($request->get_param('item_ids') ?: array()));
-                $result = $ai_actions->brainstorm_items($item_ids, $prompt, $page_id, $conversation_id);
+                $result = $ai_actions->iterate_items($item_ids, $prompt, $page_id, $context_mode, $selected_pages, $conversation_id);
                 break;
 
-            case 'brainstorm_gaps':
-                $result = $ai_actions->brainstorm_gaps($page_id, $prompt, $context_mode, $selected_pages, $conversation_id);
+            case 'spot_gaps':
+                $result = $ai_actions->spot_gaps($page_id, $prompt, $context_mode, $selected_pages, $conversation_id);
                 break;
 
             case 'taxonomy_outline':
@@ -1523,9 +1536,13 @@ class WCP_REST_API {
             }
         }
 
-        // 1. New headings first → ref => term_id.
+        // 1. New headings first → ref => term_id. Append at the bottom of the
+        // page's existing headings (the "document" paradigm — new content
+        // goes after what's already there), incrementing locally rather than
+        // re-querying per heading since they're all siblings under the same page.
         $ref_term         = array();
         $created_headings = 0;
+        $next_menu_order  = WCP_Post_Types::next_heading_menu_order('page', $page_id);
         foreach ($heading_ids as $pid) {
             $prop = get_transient('wcp_proposal_' . $pid);
             if (!$prop || ($prop['action_type'] ?? '') !== 'structure_heading') {
@@ -1534,6 +1551,7 @@ class WCP_REST_API {
             $hid = wp_insert_post(array(
                 'post_type' => 'wcp_heading', 'post_title' => $prop['title'], 'post_content' => '',
                 'post_status' => 'publish', 'post_author' => get_current_user_id(),
+                'menu_order' => $next_menu_order++,
             ));
             if (is_wp_error($hid)) {
                 continue;
@@ -1979,12 +1997,13 @@ class WCP_REST_API {
             return $auth;
         }
 
-        // Create heading
+        // Create heading — appended after existing siblings (document paradigm)
         $heading_id = wp_insert_post(array(
             'post_type' => 'wcp_heading',
             'post_title' => $title,
             'post_content' => $content,
             'post_status' => 'publish',
+            'menu_order' => WCP_Post_Types::next_heading_menu_order($parent_type, $parent_id),
         ));
 
         if (is_wp_error($heading_id)) {
@@ -2656,13 +2675,14 @@ class WCP_REST_API {
             return $auth;
         }
 
-        // Create the goal heading
+        // Create the goal heading — appended after existing siblings (document paradigm)
         $heading_id = wp_insert_post( array(
             'post_type'    => 'wcp_heading',
             'post_title'   => $title,
             'post_content' => $description,
             'post_status'  => 'publish',
             'post_author'  => get_current_user_id(),
+            'menu_order'   => WCP_Post_Types::next_heading_menu_order( $parent_type, $parent_id ),
         ) );
 
         if ( is_wp_error( $heading_id ) ) {
@@ -3028,6 +3048,31 @@ class WCP_REST_API {
         set_transient( $cache_key, $result, 6 * HOUR_IN_SECONDS );
 
         return rest_ensure_response( $result );
+    }
+
+    public function split_markdown_document( $request ) {
+        $markdown_content = $request->get_param('markdown_content');
+        $page_id          = (int) $request->get_param('page_id');
+        $instructions     = sanitize_textarea_field( (string) $request->get_param('instructions') );
+        $conversation_id  = $request->get_param('conversation_id');
+
+        if ( empty( $markdown_content ) || ! $page_id ) {
+            return new WP_Error('invalid_params', 'markdown_content and page_id are required', array('status' => 400));
+        }
+
+        $auth = WCP_REST_Auth::require_object( $page_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
+
+        $ai_actions = WCP_AI_Actions::instance();
+        $result = $ai_actions->split_markdown_document( $markdown_content, $page_id, $instructions, $conversation_id );
+
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+
+        return rest_ensure_response( array_merge( array('success' => true), $result ) );
     }
 
     public function import_calendar( $request ) {

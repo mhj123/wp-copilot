@@ -40,7 +40,7 @@ class WCP_Context_Builder {
     public function build_hierarchical_context($page_id, $options = array()) {
         $defaults = array(
             'include_items' => false,
-            'item_limit' => 20,
+            'item_limit' => 200,
             'use_rag' => false,
             'query' => '',
             'rag_limit' => 10,
@@ -130,7 +130,7 @@ class WCP_Context_Builder {
             'selected_pages' => array(),
             'query' => '',
             'include_items' => true,
-            'item_limit' => 20,
+            'item_limit' => 200,
             'limits' => array(
                 'max_chars_per_item' => 50000,
                 'max_chars_page_summary' => 8000
@@ -376,7 +376,7 @@ class WCP_Context_Builder {
      * @param int $limit Maximum items to return
      * @return array Array of item data
      */
-    private function get_page_items($page_id, $limit = 20) {
+    private function get_page_items($page_id, $limit = 200) {
         // Find context term for this page
         $terms = get_terms(array(
             'taxonomy' => 'wcp_context',
@@ -574,21 +574,41 @@ class WCP_Context_Builder {
                 $level = isset($page['level']) ? $page['level'] : 0;
                 $indent = str_repeat('  ', $level);
 
-                $prompt .= "{$indent}Page: {$page['title']}\n";
+                // level 0 is always the actual page being discussed (across
+                // every context mode); level > 0 is an ancestor walked up for
+                // structural awareness only ("this page sits under X") — its
+                // BODY content is deliberately never included. An ancestor's
+                // full prose previously risked dominating a level-0 page whose
+                // own content lives in Headings/Items rather than its native
+                // page body (often empty) — the AI would default to
+                // summarising the richer-looking ancestor instead of the page
+                // actually being asked about. Title-only keeps the hierarchy
+                // signal without that risk.
+                if ($level === 0) {
+                    $prompt .= "{$indent}CURRENT PAGE (this is the page being discussed): {$page['title']}\n";
 
-                if (!empty($page['content'])) {
-                    $content = wp_strip_all_tags($page['content']);
-                    $original_length = strlen($content);
-                    $truncated = false;
-                    if ($original_length > $limits['max_chars_page_summary']) {
-                        $content = $this->truncate_content($content, $limits['max_chars_page_summary']);
-                        $truncated = true;
+                    if (!empty($page['content'])) {
+                        $content = wp_strip_all_tags($page['content']);
+                        $original_length = strlen($content);
+                        $truncated = false;
+                        if ($original_length > $limits['max_chars_page_summary']) {
+                            $content = $this->truncate_content($content, $limits['max_chars_page_summary']);
+                            $truncated = true;
+                        }
+                        $prompt .= "{$indent}Content: {$content}";
+                        if ($truncated) {
+                            $prompt .= " [truncated from {$original_length} chars]";
+                        }
+                        $prompt .= "\n";
+                    } else {
+                        // Common and expected: this plugin's real content model is
+                        // Headings/Items, not the native page body — an empty
+                        // page body does not mean the page is empty.
+                        $prompt .= "{$indent}Content: (this page has no content of its own in its page body — its real content is in the heading outline and items below/in Recent Items)\n";
                     }
-                    $prompt .= "{$indent}Content: {$content}";
-                    if ($truncated) {
-                        $prompt .= " [truncated from {$original_length} chars]";
-                    }
-                    $prompt .= "\n";
+                } else {
+                    // Ancestor — title only, structural context, never its content.
+                    $prompt .= "{$indent}Parent page (structural context only — NOT the page being discussed, and its content is intentionally omitted): {$page['title']}\n";
                 }
 
                 // Add heading outline for this page if it's depth 0 (current page)

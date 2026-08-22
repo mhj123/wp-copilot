@@ -158,6 +158,28 @@ class WCP_Settings {
             'wcp_embeddings_section'
         );
 
+        // Web search (Exa) settings
+        register_setting('wcp_settings', 'wcp_exa_api_key', array(
+            'type' => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+            'default' => '',
+        ));
+
+        add_settings_section(
+            'wcp_web_search_section',
+            __('Web Search Configuration', 'work-copilot'),
+            array($this, 'render_web_search_section'),
+            'work-copilot-settings'
+        );
+
+        add_settings_field(
+            'wcp_exa_api_key',
+            __('Exa API Key', 'work-copilot'),
+            array($this, 'render_exa_api_key_field'),
+            'work-copilot-settings',
+            'wcp_web_search_section'
+        );
+
         // Raindrop settings
         register_setting('wcp_settings', 'wcp_raindrop_api_key', array(
             'type'              => 'string',
@@ -535,6 +557,24 @@ class WCP_Settings {
         <p class="description">
             <?php _e('Get your API key from', 'work-copilot'); ?> <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a><br>
             <?php _e('Used for generating embeddings (text-embedding-3-small model). Very affordable (~$0.02 per 1M tokens).', 'work-copilot'); ?>
+        </p>
+        <?php
+    }
+
+    public function render_web_search_section() {
+        ?>
+        <p><?php _e('Configure the AI assistant\'s "Web search" action, powered by Exa.', 'work-copilot'); ?></p>
+        <p><?php _e('When you enable it, the AI can search the live web and bring back findings you can review and save as items — nothing is saved automatically.', 'work-copilot'); ?></p>
+        <?php
+    }
+
+    public function render_exa_api_key_field() {
+        $api_key = get_option('wcp_exa_api_key', '');
+        ?>
+        <input type="password" name="wcp_exa_api_key" value="<?php echo esc_attr($api_key); ?>" class="regular-text" placeholder="...">
+        <p class="description">
+            <?php _e('Get your API key from', 'work-copilot'); ?> <a href="https://dashboard.exa.ai/api-keys" target="_blank">dashboard.exa.ai</a><br>
+            <?php _e('Used only when you use the AI assistant\'s "Web search" action.', 'work-copilot'); ?>
         </p>
         <?php
     }
