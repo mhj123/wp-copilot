@@ -328,13 +328,15 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // PDF upload POC — extracts text server-side, asks AI for a summary,
+        // PDF upload POC — sends the PDF to Claude as a native document block,
         // then returns a normal ItemPost proposal for review/acceptance.
-        register_rest_route($namespace, '/ai/documents/summarize-pdf', array(
-            'methods'             => 'POST',
-            'callback'            => array($this, 'summarize_pdf_document'),
-            'permission_callback' => array($this, 'check_permission'),
-        ));
+        if (wcp_feature('pdf_summary')) {
+            register_rest_route($namespace, '/ai/documents/summarize-pdf', array(
+                'methods'             => 'POST',
+                'callback'            => array($this, 'summarize_pdf_document'),
+                'permission_callback' => array($this, 'check_permission'),
+            ));
+        }
 
         // Page notes
         register_rest_route($namespace, '/pages/(?P<page_id>\d+)/notes', array(
@@ -3084,6 +3086,10 @@ class WCP_REST_API {
     }
 
     public function summarize_pdf_document( $request ) {
+        if ( ! wcp_feature('pdf_summary') ) {
+            return new WP_Error('feature_disabled', 'PDF summary import is disabled', array('status' => 404));
+        }
+
         $page_id         = (int) $request->get_param('page_id');
         $conversation_id = $request->get_param('conversation_id');
         $model           = sanitize_text_field( (string) $request->get_param('model') );
@@ -3136,85 +3142,31 @@ class WCP_REST_API {
             'post_status'    => 'inherit',
         ), $upload['file'], $page_id);
 
-        if ( ! is_wp_error($attachment_id) ) {
-            wp_update_attachment_metadata($attachment_id, wp_generate_attachment_metadata($attachment_id, $upload['file']));
+        if ( is_wp_error($attachment_id) ) {
+            if ( ! empty($upload['file']) && file_exists($upload['file']) ) {
+                wp_delete_file($upload['file']);
+            }
+            return $attachment_id;
         }
 
-        $text = $this->extract_pdf_text($upload['file']);
-        if ( is_wp_error($text) ) {
-            return $text;
-        }
-
-        $text = trim($text);
-        if ( $text === '' ) {
-            return new WP_Error('empty_pdf_text', 'No readable text could be extracted from this PDF', array('status' => 422));
-        }
+        wp_update_attachment_metadata($attachment_id, wp_generate_attachment_metadata($attachment_id, $upload['file']));
 
         WCP_AI_Client::instance()->set_overrides($model, $thinking_budget);
-        $result = WCP_AI_Actions::instance()->summarize_pdf_document($text, $page_id, array(
+        $result = WCP_AI_Actions::instance()->summarize_pdf_document($attachment_id, $page_id, array(
             'filename'       => $filename,
-            'attachment_id'  => is_wp_error($attachment_id) ? 0 : (int) $attachment_id,
+            'attachment_id'  => (int) $attachment_id,
             'attachment_url' => isset($upload['url']) ? esc_url_raw($upload['url']) : '',
             'file_size'      => isset($file['size']) ? (int) $file['size'] : 0,
-            'char_count'     => strlen($text),
+            'char_count'     => 0,
         ), $conversation_id);
+        WCP_AI_Client::instance()->set_overrides(null);
 
         if ( is_wp_error($result) ) {
+            wp_delete_attachment((int) $attachment_id, true);
             return $result;
         }
 
         return rest_ensure_response( array_merge( array('success' => true), $result ) );
-    }
-
-    private function extract_pdf_text( $path ) {
-        if ( ! is_readable($path) ) {
-            return new WP_Error('pdf_not_readable', 'Uploaded PDF could not be read', array('status' => 500));
-        }
-
-        // Keep PDF extraction plugin-portable: do not depend on Poppler/pdftotext
-        // or any other server-level binary. This lightweight parser is imperfect,
-        // but it can ship with the plugin and keeps installation host-agnostic.
-        // If it cannot recover readable text, fail with a clear error instead of
-        // fabricating content.
-        $raw = file_get_contents($path);
-        if ( is_string($raw) && $raw !== '' ) {
-            $chunks = array();
-            if ( preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $raw, $streams) ) {
-                foreach ( $streams[1] as $stream ) {
-                    $decoded = @gzuncompress($stream);
-                    if ( $decoded === false ) {
-                        $decoded = @gzdecode($stream);
-                    }
-                    $candidate = $decoded !== false ? $decoded : $stream;
-                    if ( preg_match_all('/\((?:\\.|[^\\)])*\)\s*Tj|\[(.*?)\]\s*TJ/s', $candidate, $text_ops) ) {
-                        foreach ( $text_ops[0] as $op ) {
-                            if ( preg_match_all('/\((?:\\.|[^\\)])*\)/s', $op, $strings) ) {
-                                foreach ( $strings[0] as $pdf_string ) {
-                                    $chunks[] = stripcslashes(substr($pdf_string, 1, -1));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            $fallback_text = $this->normalise_extracted_pdf_text(implode("\n", $chunks));
-            if ( trim($fallback_text) !== '' ) {
-                return $fallback_text;
-            }
-        }
-
-        return new WP_Error(
-            'pdf_extract_unavailable',
-            'Could not extract readable text from this PDF. Try a text-based PDF; scanned/image-only PDFs are not supported yet.',
-            array('status' => 422)
-        );
-    }
-
-    private function normalise_extracted_pdf_text( $text ) {
-        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', (string) $text);
-        $text = preg_replace('/[ \t]+/', ' ', $text);
-        $text = preg_replace('/\n{3,}/', "\n\n", $text);
-        return trim($text);
     }
 
     public function import_calendar( $request ) {

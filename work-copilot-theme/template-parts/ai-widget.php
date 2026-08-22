@@ -130,7 +130,8 @@ if (empty($saved_prompts)) {
             <button type="button" class="wcp-ai-action-chip" data-action="web_search"><?php _e('Web search', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="generate_structure"><?php _e('Generate structure', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="import_document"><?php _e('Import document', 'work-copilot'); ?></button>
-            <input type="file" id="wcp-ai-document-upload" accept=".md,.pdf,text/markdown,application/pdf" style="display:none;">
+            <?php $wcp_pdf_summary_enabled = function_exists('wcp_feature') && wcp_feature('pdf_summary'); ?>
+            <input type="file" id="wcp-ai-document-upload" accept="<?php echo esc_attr($wcp_pdf_summary_enabled ? '.md,.pdf,text/markdown,application/pdf' : '.md,text/markdown'); ?>" style="display:none;">
             <button type="button" class="wcp-ai-action-chip" data-action="generate_pages"><?php _e('Create sub-pages', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="create_goal"><?php _e('Create goal', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="rewrite_content"><?php _e('Edit page', 'work-copilot'); ?></button>
@@ -243,6 +244,7 @@ if (empty($saved_prompts)) {
         restUrl: <?php echo wp_json_encode(rest_url('work-copilot/v1')); ?>,
         delegationRestUrl: <?php echo wp_json_encode(rest_url('wcp-delegation/v1')); ?>,
         delegationEnabled: <?php echo (class_exists('WCPD_Delegation_Manager') && get_option('wcpd_enabled') === '1') ? 'true' : 'false'; ?>,
+        pdfSummaryEnabled: <?php echo (function_exists('wcp_feature') && wcp_feature('pdf_summary')) ? 'true' : 'false'; ?>,
         nonce: <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>
     };
 </script>

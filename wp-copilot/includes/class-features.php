@@ -119,6 +119,11 @@ class WCP_Features {
                 'description' => __('Template system for page structure. Phases 2 and 3 are unbuilt.', 'work-copilot'),
                 'default'     => false,
             ),
+            'pdf_summary' => array(
+                'label'       => __('PDF summary import', 'work-copilot'),
+                'description' => __('Upload a PDF and ask Claude to propose a reviewed summary ItemPost.', 'work-copilot'),
+                'default'     => false,
+            ),
             'page_scheduler' => array(
                 'label'       => __('Page scheduler', 'work-copilot'),
                 'description' => __('Cron-created pages, and the upcoming-scheduled-pages card on the homepage. Unattended creation needs reconciling with the human-in-the-loop guarantee before this ships.', 'work-copilot'),
