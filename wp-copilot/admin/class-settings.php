@@ -526,24 +526,30 @@ class WCP_Settings {
     }
 
     public function render_researcher_section() {
-        echo '<p>' . __('Provision a shared research Library scaffold using native pages and the existing page-template system. Disabling Researcher mode deletes nothing; it only turns off the feature flag future research actions will check.', 'work-copilot') . '</p>';
+        echo '<p>' . __('Provision shared research scaffolds using native pages and the existing page-template system: Library for paper pages, Research for project pages. Disabling Researcher mode deletes nothing; it only turns off the feature flag future research actions will check.', 'work-copilot') . '</p>';
     }
 
     public function render_researcher_mode_field() {
-        $enabled    = get_option(WCP_Researcher_Mode::OPTION_ACTIVE, false);
-        $library_id = WCP_Researcher_Mode::instance()->get_library_page_id();
+        $enabled          = get_option(WCP_Researcher_Mode::OPTION_ACTIVE, false);
+        $library_id       = WCP_Researcher_Mode::instance()->get_library_page_id();
+        $research_root_id = WCP_Researcher_Mode::instance()->get_research_root_page_id();
         ?>
         <label>
             <input type="hidden" name="<?php echo esc_attr(WCP_Researcher_Mode::OPTION_ACTIVE); ?>" value="0">
             <input type="checkbox" name="<?php echo esc_attr(WCP_Researcher_Mode::OPTION_ACTIVE); ?>" value="1" <?php checked($enabled, true); ?>>
-            <?php _e('Enable Researcher mode and provision the Library scaffold', 'work-copilot'); ?>
+            <?php _e('Enable Researcher mode and provision the Library/Research scaffolds', 'work-copilot'); ?>
         </label>
         <p class="description">
-            <?php _e('On enable, Work Copilot creates or adopts a native “Library” page and stores a page template with the evidence headings: Summary, Findings, Relevance to project, Notes. Re-enabling is idempotent.', 'work-copilot'); ?>
+            <?php _e('On enable, Work Copilot creates or adopts native “Library” and “Research” pages. Library carries the paper template; Research carries the project template: Context, Objectives, Hypotheses, Findings, Gaps. Re-enabling is idempotent.', 'work-copilot'); ?>
         </p>
         <?php if ($library_id) : ?>
             <p class="description">
                 <?php printf(__('Current Library page ID: %d', 'work-copilot'), absint($library_id)); ?>
+            </p>
+        <?php endif; ?>
+        <?php if ($research_root_id) : ?>
+            <p class="description">
+                <?php printf(__('Current Research page ID: %d', 'work-copilot'), absint($research_root_id)); ?>
             </p>
         <?php endif; ?>
         <?php
