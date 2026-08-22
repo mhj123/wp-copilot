@@ -559,6 +559,9 @@ class WCP_Settings {
         $enabled = rest_sanitize_boolean($value);
 
         if ($enabled) {
+            // WordPress may invoke sanitize callbacks more than once during a
+            // settings save; enable() must remain idempotent and adopt existing
+            // scaffolds rather than creating duplicates.
             $result = WCP_Researcher_Mode::instance()->enable();
             if (is_wp_error($result)) {
                 add_settings_error(
