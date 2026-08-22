@@ -328,6 +328,14 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // PDF upload POC — extracts text server-side, asks AI for a summary,
+        // then returns a normal ItemPost proposal for review/acceptance.
+        register_rest_route($namespace, '/ai/documents/summarize-pdf', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'summarize_pdf_document'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // Page notes
         register_rest_route($namespace, '/pages/(?P<page_id>\d+)/notes', array(
             'methods'             => 'POST',
@@ -3073,6 +3081,147 @@ class WCP_REST_API {
         }
 
         return rest_ensure_response( array_merge( array('success' => true), $result ) );
+    }
+
+    public function summarize_pdf_document( $request ) {
+        $page_id         = (int) $request->get_param('page_id');
+        $conversation_id = $request->get_param('conversation_id');
+        $model           = sanitize_text_field( (string) $request->get_param('model') );
+        $thinking_budget = (int) $request->get_param('thinking_budget');
+
+        if ( ! $page_id ) {
+            return new WP_Error('invalid_params', 'page_id is required', array('status' => 400));
+        }
+
+        $auth = WCP_REST_Auth::require_object( $page_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
+
+        $files = $request->get_file_params();
+        if ( empty( $files['pdf'] ) || empty( $files['pdf']['tmp_name'] ) ) {
+            return new WP_Error('missing_file', 'Upload a PDF file', array('status' => 400));
+        }
+
+        $file     = $files['pdf'];
+        $filename = isset($file['name']) ? sanitize_file_name($file['name']) : 'document.pdf';
+        $mime     = isset($file['type']) ? $file['type'] : '';
+        $ext      = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        if ( $ext !== 'pdf' && $mime !== 'application/pdf' ) {
+            return new WP_Error('invalid_file_type', 'Only PDF files are supported', array('status' => 400));
+        }
+
+        $max_bytes = 10 * 1024 * 1024;
+        if ( ! empty($file['size']) && (int) $file['size'] > $max_bytes ) {
+            return new WP_Error('file_too_large', 'PDF must be 10 MB or smaller for this POC', array('status' => 413));
+        }
+
+        if ( ! function_exists('wp_handle_upload') ) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+        }
+        if ( ! function_exists('wp_insert_attachment') ) {
+            require_once ABSPATH . 'wp-admin/includes/media.php';
+            require_once ABSPATH . 'wp-admin/includes/image.php';
+        }
+
+        $upload = wp_handle_upload($file, array('test_form' => false, 'mimes' => array('pdf' => 'application/pdf')));
+        if ( isset($upload['error']) ) {
+            return new WP_Error('upload_failed', $upload['error'], array('status' => 500));
+        }
+
+        $attachment_id = wp_insert_attachment(array(
+            'post_mime_type' => 'application/pdf',
+            'post_title'     => preg_replace('/\.pdf$/i', '', $filename),
+            'post_content'   => '',
+            'post_status'    => 'inherit',
+        ), $upload['file'], $page_id);
+
+        if ( ! is_wp_error($attachment_id) ) {
+            wp_update_attachment_metadata($attachment_id, wp_generate_attachment_metadata($attachment_id, $upload['file']));
+        }
+
+        $text = $this->extract_pdf_text($upload['file']);
+        if ( is_wp_error($text) ) {
+            return $text;
+        }
+
+        $text = trim($text);
+        if ( $text === '' ) {
+            return new WP_Error('empty_pdf_text', 'No readable text could be extracted from this PDF', array('status' => 422));
+        }
+
+        WCP_AI_Client::instance()->set_overrides($model, $thinking_budget);
+        $result = WCP_AI_Actions::instance()->summarize_pdf_document($text, $page_id, array(
+            'filename'       => $filename,
+            'attachment_id'  => is_wp_error($attachment_id) ? 0 : (int) $attachment_id,
+            'attachment_url' => isset($upload['url']) ? esc_url_raw($upload['url']) : '',
+            'file_size'      => isset($file['size']) ? (int) $file['size'] : 0,
+            'char_count'     => strlen($text),
+        ), $conversation_id);
+
+        if ( is_wp_error($result) ) {
+            return $result;
+        }
+
+        return rest_ensure_response( array_merge( array('success' => true), $result ) );
+    }
+
+    private function extract_pdf_text( $path ) {
+        if ( ! is_readable($path) ) {
+            return new WP_Error('pdf_not_readable', 'Uploaded PDF could not be read', array('status' => 500));
+        }
+
+        $pdftotext = trim((string) shell_exec('command -v pdftotext 2>/dev/null'));
+        if ( $pdftotext !== '' ) {
+            $cmd = escapeshellcmd($pdftotext) . ' -layout -enc UTF-8 ' . escapeshellarg($path) . ' - 2>/dev/null';
+            $out = shell_exec($cmd);
+            if ( is_string($out) && trim($out) !== '' ) {
+                return $this->normalise_extracted_pdf_text($out);
+            }
+        }
+
+        // Last-resort fallback for simple text PDFs when server utilities are
+        // unavailable. This is intentionally conservative: if it cannot recover
+        // readable text, fail with a clear error instead of fabricating content.
+        $raw = file_get_contents($path);
+        if ( is_string($raw) && $raw !== '' ) {
+            $chunks = array();
+            if ( preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $raw, $streams) ) {
+                foreach ( $streams[1] as $stream ) {
+                    $decoded = @gzuncompress($stream);
+                    if ( $decoded === false ) {
+                        $decoded = @gzdecode($stream);
+                    }
+                    $candidate = $decoded !== false ? $decoded : $stream;
+                    if ( preg_match_all('/\((?:\\.|[^\\)])*\)\s*Tj|\[(.*?)\]\s*TJ/s', $candidate, $text_ops) ) {
+                        foreach ( $text_ops[0] as $op ) {
+                            if ( preg_match_all('/\((?:\\.|[^\\)])*\)/s', $op, $strings) ) {
+                                foreach ( $strings[0] as $pdf_string ) {
+                                    $chunks[] = stripcslashes(substr($pdf_string, 1, -1));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            $fallback_text = $this->normalise_extracted_pdf_text(implode("\n", $chunks));
+            if ( trim($fallback_text) !== '' ) {
+                return $fallback_text;
+            }
+        }
+
+        return new WP_Error(
+            'pdf_extract_unavailable',
+            'Could not extract text from this PDF. Install pdftotext on the server or upload a text-based PDF.',
+            array('status' => 422)
+        );
+    }
+
+    private function normalise_extracted_pdf_text( $text ) {
+        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', (string) $text);
+        $text = preg_replace('/[ \t]+/', ' ', $text);
+        $text = preg_replace('/\n{3,}/', "\n\n", $text);
+        return trim($text);
     }
 
     public function import_calendar( $request ) {

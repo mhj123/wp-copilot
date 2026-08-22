@@ -130,7 +130,7 @@ if (empty($saved_prompts)) {
             <button type="button" class="wcp-ai-action-chip" data-action="web_search"><?php _e('Web search', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="generate_structure"><?php _e('Generate structure', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="import_document"><?php _e('Import document', 'work-copilot'); ?></button>
-            <input type="file" id="wcp-ai-document-upload" accept=".md,text/markdown" style="display:none;">
+            <input type="file" id="wcp-ai-document-upload" accept=".md,.pdf,text/markdown,application/pdf" style="display:none;">
             <button type="button" class="wcp-ai-action-chip" data-action="generate_pages"><?php _e('Create sub-pages', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="create_goal"><?php _e('Create goal', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="rewrite_content"><?php _e('Edit page', 'work-copilot'); ?></button>

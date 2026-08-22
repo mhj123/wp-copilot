@@ -1661,6 +1661,115 @@ class WCP_AI_Actions {
     }
 
     /**
+     * Summarise extracted PDF text into a single normal ItemPost proposal.
+     * AI guardrail: no post is written here; acceptance still goes through
+     * execute_proposal(), which creates a regular post and therefore enters
+     * the existing embeddings/RAG pipeline via save_post.
+     */
+    public function summarize_pdf_document($pdf_text, $page_id, $source = array(), $conversation_id = null) {
+        set_time_limit(120);
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new WP_Error('auth_error', 'User not authenticated');
+        }
+        $pdf_text = trim((string) $pdf_text);
+        if ($pdf_text === '') {
+            return new WP_Error('empty_document', 'The uploaded PDF has no extractable text');
+        }
+
+        $original_chars = strlen($pdf_text);
+        $max_chars = 30000;
+        $truncated = false;
+        if ($original_chars > $max_chars) {
+            $pdf_text = mb_substr($pdf_text, 0, $max_chars);
+            $pdf_text .= "\n\n[...PDF TEXT TRUNCATED FOR SUMMARY - Original: " . number_format($original_chars) . " chars, Truncated to: " . number_format($max_chars) . " chars...]";
+            $truncated = true;
+        }
+
+        $filename = sanitize_text_field($source['filename'] ?? 'Uploaded PDF');
+        $system_prompt = "You summarise uploaded PDFs for a personal work knowledge base. Return ONLY valid JSON with keys title and content. The title must be concise. The content should be a faithful, useful summary in Markdown-style plain text with: 1) short overview, 2) key points, 3) relevant actions or decisions if present. Do not invent facts.";
+        $user_message = "PDF filename: {$filename}\n\nExtracted PDF text:\n\n" . $pdf_text;
+
+        $response = WCP_AI_Client::instance()->request_with_conversation($system_prompt, $user_message, array(), 2048, 90);
+        if (is_wp_error($response)) {
+            return $response;
+        }
+        if (($response['stop_reason'] ?? null) === 'max_tokens') {
+            return new WP_Error('response_truncated', 'The AI response was cut off before it finished. Try a smaller PDF.');
+        }
+
+        $parsed = $this->parse_json_response($response['content']);
+        if (is_wp_error($parsed)) {
+            return $parsed;
+        }
+        if (empty($parsed['title']) || empty($parsed['content'])) {
+            return new WP_Error('invalid_summary', 'AI did not return a title and content for the PDF summary');
+        }
+
+        $proposal_id = wp_generate_uuid4();
+        $batch_id = wp_generate_uuid4();
+        $content = trim($parsed['content']);
+        $content .= "\n\nSource: PDF upload — " . $filename;
+        if (!empty($source['attachment_url'])) {
+            $content .= "\nAttachment: " . esc_url_raw($source['attachment_url']);
+        }
+        if ($truncated) {
+            $content .= "\nNote: Summary used the first " . number_format($max_chars) . " extracted characters.";
+        }
+
+        $proposal = array(
+            'proposal_id'     => $proposal_id,
+            'batch_id'        => $batch_id,
+            'index'           => 0,
+            'action_type'     => 'summarize_pdf_document',
+            'item'            => array(
+                'title'     => sanitize_text_field($parsed['title']),
+                'content'   => $content,
+                'item_type' => 'info',
+            ),
+            'source'          => array(
+                'type'           => 'pdf_upload',
+                'filename'       => $filename,
+                'attachment_id'  => (int) ($source['attachment_id'] ?? 0),
+                'attachment_url' => esc_url_raw($source['attachment_url'] ?? ''),
+                'file_size'      => (int) ($source['file_size'] ?? 0),
+                'char_count'     => (int) ($source['char_count'] ?? $original_chars),
+                'truncated'      => $truncated,
+            ),
+            'conversation_id' => $conversation_id,
+            'page_id'         => $page_id,
+            'created_at'      => current_time('mysql'),
+        );
+
+        set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
+        set_transient('wcp_batch_' . $batch_id, array(
+            'proposal_ids'    => array($proposal_id),
+            'page_id'         => $page_id,
+            'conversation_id' => $conversation_id,
+        ), HOUR_IN_SECONDS);
+
+        if ($conversation_id) {
+            WCP_Conversations_Manager::instance()->add_message($conversation_id, 'user', 'Uploaded PDF: ' . $filename);
+            WCP_Conversations_Manager::instance()->add_message($conversation_id, 'assistant', 'Proposed a PDF summary item for your review', array('batch_id' => $batch_id));
+        }
+
+        WCP_AI_Logger::instance()->log_action('summarize_pdf_document', array(
+            'model'           => $response['model'],
+            'prompt'          => $filename,
+            'input_context'   => array('page_id' => $page_id, 'source' => $proposal['source']),
+            'output'          => $parsed,
+            'context_post_id' => $page_id,
+        ));
+
+        return array(
+            'outcome'   => 'create_items',
+            'proposals' => array($proposal),
+            'batch_id'  => $batch_id,
+            'metadata'  => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null, 'source' => $proposal['source']),
+        );
+    }
+
+    /**
      * Splits an uploaded markdown document into a proposed Heading/Item
      * structure on the current page — markdown headings become headings,
      * paragraphs/bullets under them become items. Reuses the exact same
@@ -2139,6 +2248,17 @@ class WCP_AI_Actions {
                 // Set item type if provided
                 if (!empty($item['item_type'])) {
                     wp_set_post_terms($post_id, array($item['item_type']), 'item_type');
+                }
+
+                // Preserve source/provenance metadata for accepted AI proposals
+                // (e.g. uploaded PDF summaries) without changing the ItemPost model.
+                if (!empty($proposal['source']) && is_array($proposal['source'])) {
+                    update_post_meta($post_id, '_wcp_source_type', sanitize_key($proposal['source']['type'] ?? ''));
+                    update_post_meta($post_id, '_wcp_source_filename', sanitize_text_field($proposal['source']['filename'] ?? ''));
+                    update_post_meta($post_id, '_wcp_source_attachment_id', (int) ($proposal['source']['attachment_id'] ?? 0));
+                    update_post_meta($post_id, '_wcp_source_attachment_url', esc_url_raw($proposal['source']['attachment_url'] ?? ''));
+                    update_post_meta($post_id, '_wcp_source_char_count', (int) ($proposal['source']['char_count'] ?? 0));
+                    update_post_meta($post_id, '_wcp_source_truncated', !empty($proposal['source']['truncated']) ? '1' : '0');
                 }
 
                 $created_posts[] = $post_id;
