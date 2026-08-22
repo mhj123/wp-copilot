@@ -186,6 +186,9 @@ class WCP_Researcher_Mode {
     }
 
     private function find_root_page_id($title) {
+        // Deliberately non-destructive: if the site already has a top-level
+        // page titled/slugged "Library" or "Research", Researcher Mode adopts
+        // that page and stamps the template there rather than creating another.
         $pages = get_posts(array(
             'post_type'              => 'page',
             'post_status'            => array('publish', 'draft', 'private'),

@@ -355,9 +355,11 @@ class WCP_AI_Actions {
         $matches = array();
         foreach ($atoms as $atom) {
             $haystack = strtolower($atom['title'] . ' ' . $atom['content'] . ' ' . $atom['type'] . ' ' . implode(' ', $atom['tags']));
-            $is_reference = strtolower($atom['type']) === 'reference';
             $matches_query = ($needle === '' || strpos($haystack, $needle) !== false);
-            if (($is_reference || $matches_query) && $matches_query) {
+            // This is a query-backed view: include only atoms that actually match
+            // the user's filter across title/content/type/tags. It deliberately
+            // does not fabricate or auto-include unrelated references.
+            if ($matches_query) {
                 $matches[] = $atom;
             }
         }
@@ -413,7 +415,7 @@ class WCP_AI_Actions {
         return array('outcome' => 'chat', 'message' => $response['content'], 'metadata' => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null));
     }
 
-    private function research_create_item_proposals($items, $page_id, $conversation_id, $action_type) {
+    private function research_create_item_proposals($items, $page_id, $conversation_id, $action_type, $target_heading = '') {
         $proposals = array();
         $batch_id = wp_generate_uuid4();
         foreach ($items as $index => $item) {
@@ -429,6 +431,9 @@ class WCP_AI_Actions {
                 'page_id' => $page_id,
                 'created_at' => current_time('mysql'),
             );
+            if ($target_heading !== '') {
+                $proposal['target_heading'] = sanitize_text_field($target_heading);
+            }
             set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
             $proposals[] = $proposal;
         }
@@ -436,7 +441,7 @@ class WCP_AI_Actions {
         return array($proposals, $batch_id);
     }
 
-    private function research_generate_candidate_atoms($prompt, $page_id, $conversation_id, $action_type, $target_type) {
+    private function research_generate_candidate_atoms($prompt, $page_id, $conversation_id, $action_type, $target_type, $target_heading = '') {
         $guard = $this->require_researcher_mode($page_id);
         if (is_wp_error($guard)) { return $guard; }
 
@@ -460,7 +465,7 @@ class WCP_AI_Actions {
             );
         }
 
-        list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, $action_type);
+        list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, $action_type, $target_heading);
 
         WCP_AI_Logger::instance()->log_action(array(
             'action_type' => $action_type,
@@ -483,12 +488,12 @@ class WCP_AI_Actions {
 
     public function research_suggest_topics($prompt, $page_id, $conversation_id = null) {
         $prompt = trim($prompt) ?: 'Suggest useful sub-topics or sub-questions for this research space.';
-        return $this->research_generate_candidate_atoms($prompt, $page_id, $conversation_id, 'research_suggest_topics', 'question');
+        return $this->research_generate_candidate_atoms($prompt, $page_id, $conversation_id, 'research_suggest_topics', 'question', 'Objectives');
     }
 
     public function research_identify_gaps($prompt, $page_id, $conversation_id = null) {
         $prompt = trim($prompt) ?: 'Identify lightweight coverage gaps in this research space based on item types, tags, and accepted atoms.';
-        return $this->research_generate_candidate_atoms($prompt, $page_id, $conversation_id, 'research_identify_gaps', 'gap');
+        return $this->research_generate_candidate_atoms($prompt, $page_id, $conversation_id, 'research_identify_gaps', 'gap', 'Gaps');
     }
 
     public function research_find_references($query, $page_id, $conversation_id = null) {
@@ -2432,11 +2437,11 @@ class WCP_AI_Actions {
             $context_term_id = $terms[0]->term_id;
         }
 
-        // Research Build 0 + Build 1 seam: PDF summaries should attach to the
-        // paper page's templated Summary heading, not the paper page context,
-        // when that heading exists. If the heading is absent, keep the old
-        // page-context fallback so non-research pages still work gracefully.
-        if (($proposal['action_type'] ?? '') === 'summarize_pdf_document' && !empty($proposal['target_heading'])) {
+        // Soft heading routing: proposals may name a preferred child heading
+        // (for example PDF summaries -> Summary, suggest-topics -> Objectives,
+        // gaps -> Gaps). Reuse the same resolver for all action types and keep
+        // the page-context fallback so pages without that heading still work.
+        if (!empty($proposal['target_heading'])) {
             $target_heading_id = $this->find_child_heading_by_title($page_id, $proposal['target_heading']);
             if ($target_heading_id) {
                 $target_heading_term_id = $this->heading_context_term_id($target_heading_id);
