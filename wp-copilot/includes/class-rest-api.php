@@ -3171,18 +3171,11 @@ class WCP_REST_API {
             return new WP_Error('pdf_not_readable', 'Uploaded PDF could not be read', array('status' => 500));
         }
 
-        $pdftotext = trim((string) shell_exec('command -v pdftotext 2>/dev/null'));
-        if ( $pdftotext !== '' ) {
-            $cmd = escapeshellcmd($pdftotext) . ' -layout -enc UTF-8 ' . escapeshellarg($path) . ' - 2>/dev/null';
-            $out = shell_exec($cmd);
-            if ( is_string($out) && trim($out) !== '' ) {
-                return $this->normalise_extracted_pdf_text($out);
-            }
-        }
-
-        // Last-resort fallback for simple text PDFs when server utilities are
-        // unavailable. This is intentionally conservative: if it cannot recover
-        // readable text, fail with a clear error instead of fabricating content.
+        // Keep PDF extraction plugin-portable: do not depend on Poppler/pdftotext
+        // or any other server-level binary. This lightweight parser is imperfect,
+        // but it can ship with the plugin and keeps installation host-agnostic.
+        // If it cannot recover readable text, fail with a clear error instead of
+        // fabricating content.
         $raw = file_get_contents($path);
         if ( is_string($raw) && $raw !== '' ) {
             $chunks = array();
@@ -3212,7 +3205,7 @@ class WCP_REST_API {
 
         return new WP_Error(
             'pdf_extract_unavailable',
-            'Could not extract text from this PDF. Install pdftotext on the server or upload a text-based PDF.',
+            'Could not extract readable text from this PDF. Try a text-based PDF; scanned/image-only PDFs are not supported yet.',
             array('status' => 422)
         );
     }
