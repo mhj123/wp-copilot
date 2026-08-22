@@ -95,7 +95,7 @@ class WCP_Page_Template_Manager {
 
         // Create wcp_heading posts and their checklist items for each section heading
         if ( ! empty( $template['headings'] ) ) {
-            foreach ( $template['headings'] as $heading ) {
+            foreach ( $template['headings'] as $index => $heading ) {
                 $title = sanitize_text_field( $heading['title'] ?? '' );
                 if ( empty( $title ) ) continue;
 
@@ -105,6 +105,7 @@ class WCP_Page_Template_Manager {
                     'post_content' => sanitize_textarea_field( $heading['placeholder'] ?? '' ),
                     'post_status'  => 'publish',
                     'post_author'  => get_current_user_id() ?: 1,
+                    'menu_order'   => isset( $heading['menu_order'] ) ? (int) $heading['menu_order'] : ( $index * 10 ),
                 ) );
 
                 if ( is_wp_error( $heading_id ) ) {
@@ -113,7 +114,11 @@ class WCP_Page_Template_Manager {
 
                 update_post_meta( $heading_id, '_wcp_parent_type', 'page' );
                 update_post_meta( $heading_id, '_wcp_parent_id', $child_page_id );
-                // Taxonomy sync fires automatically via save_post hook in class-taxonomy-sync.php
+                // The save_post hook fires before parent meta exists, so sync
+                // again now that the heading can be placed under the child page.
+                if ( class_exists( 'WCP_Taxonomy_Sync' ) ) {
+                    WCP_Taxonomy_Sync::instance()->sync_heading_to_taxonomy( $heading_id, get_post( $heading_id ), true );
+                }
 
                 // Create checklist items under this heading if the template defines any
                 if ( ! empty( $heading['items'] ) && is_array( $heading['items'] ) ) {
