@@ -225,6 +225,321 @@ class WCP_AI_Actions {
     }
 
     /**
+     * Research chip guard: Build 0 owns the feature flag. Chips must not infer
+     * researcher mode from page title/template shape.
+     */
+    private function require_researcher_mode($page_id) {
+        $enabled = class_exists('WCP_Researcher_Mode')
+            ? (bool) get_option(WCP_Researcher_Mode::OPTION_ACTIVE, false)
+            : (bool) get_option('wcp_researcher_mode_active', false);
+
+        if (!$enabled) {
+            return new WP_Error('researcher_mode_off', 'Researcher mode is off. Enable Researcher mode before using research chips.', array('status' => 403));
+        }
+
+        if ($page_id <= 0) {
+            return new WP_Error('missing_page', 'Research chips must be invoked from a research-space page.', array('status' => 400));
+        }
+
+        $auth = WCP_REST_Auth::require_object($page_id, 'edit_post');
+        if (is_wp_error($auth)) {
+            return $auth;
+        }
+
+        return true;
+    }
+
+    /** Return the invoking page's wcp_context term plus descendants. */
+    private function research_context_term_ids($page_id) {
+        $root = $this->page_context_term_id($page_id);
+        if (!$root) {
+            return array();
+        }
+
+        $ids = array($root);
+        $queue = array($root);
+        while (!empty($queue)) {
+            $parent = array_shift($queue);
+            $children = get_terms(array(
+                'taxonomy'   => 'wcp_context',
+                'hide_empty' => false,
+                'parent'     => $parent,
+                'fields'     => 'ids',
+            ));
+            if (is_wp_error($children) || empty($children)) {
+                continue;
+            }
+            foreach ($children as $child_id) {
+                $child_id = (int) $child_id;
+                if (!in_array($child_id, $ids, true)) {
+                    $ids[] = $child_id;
+                    $queue[] = $child_id;
+                }
+            }
+        }
+
+        return $ids;
+    }
+
+    /** Load accepted atoms/summaries only; deliberately never loads PDF full text. */
+    private function research_space_atoms($page_id, $limit = 200) {
+        $context_ids = $this->research_context_term_ids($page_id);
+        if (empty($context_ids)) {
+            return array();
+        }
+
+        $posts = get_posts(array(
+            'post_type'      => 'post',
+            'post_status'    => 'publish',
+            'posts_per_page' => $limit,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+            'tax_query'      => array(array(
+                'taxonomy' => 'wcp_context',
+                'field'    => 'term_id',
+                'terms'    => $context_ids,
+                'operator' => 'IN',
+            )),
+        ));
+
+        $atoms = array();
+        foreach ($posts as $post) {
+            $item_types = wp_get_post_terms($post->ID, 'item_type', array('fields' => 'names'));
+            $tags       = wp_get_post_terms($post->ID, 'post_tag', array('fields' => 'names'));
+            $contexts   = wp_get_post_terms($post->ID, 'wcp_context', array('fields' => 'names'));
+            $atoms[] = array(
+                'id'       => $post->ID,
+                'title'    => get_the_title($post),
+                'content'  => mb_substr(wp_strip_all_tags($post->post_content), 0, 700),
+                'type'     => (!is_wp_error($item_types) && !empty($item_types)) ? $item_types[0] : '',
+                'tags'     => is_wp_error($tags) ? array() : $tags,
+                'contexts' => is_wp_error($contexts) ? array() : $contexts,
+                'url'      => get_permalink($post),
+            );
+        }
+
+        return $atoms;
+    }
+
+    private function research_atoms_text($atoms) {
+        if (empty($atoms)) {
+            return '(no accepted atoms or summaries yet)';
+        }
+
+        $lines = array();
+        foreach ($atoms as $atom) {
+            $type = $atom['type'] ? " [{$atom['type']}]" : '';
+            $tags = !empty($atom['tags']) ? ' #' . implode(' #', $atom['tags']) : '';
+            $lines[] = "- {$atom['title']}{$type}{$tags}: {$atom['content']}";
+        }
+        return implode("\n", $lines);
+    }
+
+    private function research_conversation_history($conversation_id) {
+        $history = array();
+        if ($conversation_id) {
+            $cm = WCP_Conversations_Manager::instance();
+            foreach ($cm->get_messages($conversation_id, 10) as $msg) {
+                $history[] = array('role' => $msg['role'], 'content' => $msg['content']);
+            }
+        }
+        return $history;
+    }
+
+    public function research_list_references($query, $page_id) {
+        $guard = $this->require_researcher_mode($page_id);
+        if (is_wp_error($guard)) { return $guard; }
+
+        $atoms = $this->research_space_atoms($page_id);
+        $needle = strtolower(trim($query));
+        $matches = array();
+        foreach ($atoms as $atom) {
+            $haystack = strtolower($atom['title'] . ' ' . $atom['content'] . ' ' . $atom['type'] . ' ' . implode(' ', $atom['tags']));
+            $is_reference = strtolower($atom['type']) === 'reference';
+            $matches_query = ($needle === '' || strpos($haystack, $needle) !== false);
+            if (($is_reference || $matches_query) && $matches_query) {
+                $matches[] = $atom;
+            }
+        }
+
+        $message = empty($matches)
+            ? 'No matching stored references/atoms found in this research space. This chip only queries saved data; it does not fabricate references.'
+            : "Stored matches in this research space:\n";
+        foreach ($matches as $atom) {
+            $type = $atom['type'] ? " ({$atom['type']})" : '';
+            $tags = !empty($atom['tags']) ? ' — tags: ' . implode(', ', $atom['tags']) : '';
+            $message .= "\n- [{$atom['title']}]({$atom['url']}){$type}{$tags}";
+            if ($atom['content']) {
+                $message .= "\n  " . mb_substr($atom['content'], 0, 220);
+            }
+        }
+
+        return array(
+            'outcome' => 'chat',
+            'message' => $message,
+            'metadata' => array('query_backed' => true, 'match_count' => count($matches)),
+        );
+    }
+
+    public function research_chat_space($prompt, $page_id, $conversation_id = null) {
+        $guard = $this->require_researcher_mode($page_id);
+        if (is_wp_error($guard)) { return $guard; }
+        if (trim($prompt) === '') { return new WP_Error('empty_prompt', 'A question is required'); }
+
+        $atoms = $this->research_space_atoms($page_id);
+        $sys = 'You are a research-space synthesis assistant. Answer only from the compressed representation provided: accepted atoms, summaries, item types, tags, and contexts. Do not use or request full paper text. If the evidence is thin, say so. Do not create or mutate content.';
+        $usr = trim($prompt) . "\n\nAccepted atoms and summaries in this space:\n" . $this->research_atoms_text($atoms);
+        $response = WCP_AI_Client::instance()->request_with_conversation($sys, $usr, $this->research_conversation_history($conversation_id), 2048, 90);
+        if (is_wp_error($response)) { return $response; }
+
+        if ($conversation_id) {
+            $cm = WCP_Conversations_Manager::instance();
+            $cm->add_message($conversation_id, 'user', $prompt);
+            $cm->add_message($conversation_id, 'assistant', $response['content']);
+        }
+
+        WCP_AI_Logger::instance()->log_action(array(
+            'action_type' => 'research_chat_space',
+            'user_id' => get_current_user_id(),
+            'model' => $response['model'],
+            'prompt' => $prompt,
+            'input_context' => json_encode(array('page_id' => $page_id, 'atom_count' => count($atoms), 'full_text_loaded' => false)),
+            'output_snapshot' => $response['content'],
+            'context_post_id' => $page_id,
+            'accepted_items' => array(),
+            'dismissed_items' => array(),
+        ));
+
+        return array('outcome' => 'chat', 'message' => $response['content'], 'metadata' => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null));
+    }
+
+    private function research_create_item_proposals($items, $page_id, $conversation_id, $action_type) {
+        $proposals = array();
+        $batch_id = wp_generate_uuid4();
+        foreach ($items as $index => $item) {
+            if (empty($item['title']) || empty($item['content'])) { continue; }
+            $proposal_id = wp_generate_uuid4();
+            $proposal = array(
+                'proposal_id' => $proposal_id,
+                'batch_id' => $batch_id,
+                'index' => $index,
+                'action_type' => $action_type,
+                'item' => $item,
+                'conversation_id' => $conversation_id,
+                'page_id' => $page_id,
+                'created_at' => current_time('mysql'),
+            );
+            set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
+            $proposals[] = $proposal;
+        }
+        set_transient('wcp_batch_' . $batch_id, array('proposal_ids' => array_column($proposals, 'proposal_id'), 'page_id' => $page_id, 'conversation_id' => $conversation_id), HOUR_IN_SECONDS);
+        return array($proposals, $batch_id);
+    }
+
+    private function research_generate_candidate_atoms($prompt, $page_id, $conversation_id, $action_type, $target_type) {
+        $guard = $this->require_researcher_mode($page_id);
+        if (is_wp_error($guard)) { return $guard; }
+
+        $atoms = $this->research_space_atoms($page_id);
+        $sys = "You propose candidate research atoms for a workspace. Return ONLY a JSON array. Each object must have title, content, item_type, tags. Use item_type '{$target_type}'. Do not mention or create typed links. Do not use full paper text; reason only from the compressed atoms/summaries supplied. These are candidates requiring human acceptance.";
+        $usr = trim($prompt) . "\n\nAccepted atoms/summaries:\n" . $this->research_atoms_text($atoms);
+        $response = WCP_AI_Client::instance()->request_with_conversation($sys, $usr, $this->research_conversation_history($conversation_id), 2048, 90);
+        if (is_wp_error($response)) { return $response; }
+        $parsed = $this->parse_json_response($response['content']);
+        if (is_wp_error($parsed)) { return $parsed; }
+        if (isset($parsed['title'])) { $parsed = array($parsed); }
+
+        $items = array();
+        foreach ((array) $parsed as $candidate) {
+            if (empty($candidate['title']) || empty($candidate['content'])) { continue; }
+            $items[] = array(
+                'title' => sanitize_text_field($candidate['title']),
+                'content' => wp_kses_post($candidate['content'] . "\n\nProvenance: AI-generated research chip ({$action_type}) from accepted atoms/summaries in this space."),
+                'item_type' => sanitize_key($candidate['item_type'] ?? $target_type),
+                'tags' => array_map('sanitize_text_field', (array) ($candidate['tags'] ?? array('research'))),
+            );
+        }
+
+        list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, $action_type);
+
+        WCP_AI_Logger::instance()->log_action(array(
+            'action_type' => $action_type,
+            'user_id' => get_current_user_id(),
+            'model' => $response['model'],
+            'prompt' => $prompt,
+            'input_context' => json_encode(array('page_id' => $page_id, 'atom_count' => count($atoms), 'full_text_loaded' => false, 'typed_links_used' => false)),
+            'output_snapshot' => json_encode($items),
+            'context_post_id' => $page_id,
+            'accepted_items' => array(),
+            'dismissed_items' => array(),
+        ));
+
+        if ($conversation_id) {
+            WCP_Conversations_Manager::instance()->add_message($conversation_id, 'assistant', 'Generated ' . count($proposals) . ' research candidate(s) for review.', array('batch_id' => $batch_id));
+        }
+
+        return array('outcome' => 'create_items', 'proposals' => $proposals, 'batch_id' => $batch_id, 'metadata' => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null));
+    }
+
+    public function research_suggest_topics($prompt, $page_id, $conversation_id = null) {
+        $prompt = trim($prompt) ?: 'Suggest useful sub-topics or sub-questions for this research space.';
+        return $this->research_generate_candidate_atoms($prompt, $page_id, $conversation_id, 'research_suggest_topics', 'question');
+    }
+
+    public function research_identify_gaps($prompt, $page_id, $conversation_id = null) {
+        $prompt = trim($prompt) ?: 'Identify lightweight coverage gaps in this research space based on item types, tags, and accepted atoms.';
+        return $this->research_generate_candidate_atoms($prompt, $page_id, $conversation_id, 'research_identify_gaps', 'gap');
+    }
+
+    public function research_find_references($query, $page_id, $conversation_id = null) {
+        $guard = $this->require_researcher_mode($page_id);
+        if (is_wp_error($guard)) { return $guard; }
+        $query = trim($query);
+        if ($query === '') { return new WP_Error('empty_query', 'A reference search query is required'); }
+
+        $exa_client = WCP_Exa_Client::instance();
+        if (!$exa_client->is_configured()) {
+            return new WP_Error('not_configured', 'Exa API key not configured. Add one in Work Copilot → Settings.');
+        }
+        $findings = $exa_client->search($query, 6);
+        if (is_wp_error($findings)) { return $findings; }
+
+        $items = array();
+        foreach ($findings as $finding) {
+            if (empty($finding['url'])) { continue; }
+            $title = sanitize_text_field($finding['title'] ?: $finding['url']);
+            $url = esc_url_raw($finding['url']);
+            $snippet = wp_kses_post($finding['snippet'] ?? '');
+            $items[] = array(
+                'title' => $title,
+                'content' => "URL: {$url}\n\nSnippet: {$snippet}\n\nProvenance: found via web search (Exa). Query: {$query}. Result URL: {$url}. This is not a formal peer-reviewed citation.",
+                'item_type' => 'reference',
+                'tags' => array('web-search', 'exa'),
+            );
+        }
+
+        list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, 'research_find_references');
+
+        WCP_AI_Logger::instance()->log_action(array(
+            'action_type' => 'research_find_references',
+            'user_id' => get_current_user_id(),
+            'model' => 'exa-web-search',
+            'prompt' => $query,
+            'input_context' => json_encode(array('page_id' => $page_id, 'source' => 'Exa web search', 'full_text_loaded' => false, 'typed_links_used' => false)),
+            'output_snapshot' => json_encode($items),
+            'context_post_id' => $page_id,
+            'accepted_items' => array(),
+            'dismissed_items' => array(),
+        ));
+
+        if ($conversation_id) {
+            WCP_Conversations_Manager::instance()->add_message($conversation_id, 'assistant', 'Found ' . count($proposals) . ' web reference candidate(s) via Exa for review.', array('batch_id' => $batch_id));
+        }
+
+        return array('outcome' => 'create_items', 'proposals' => $proposals, 'batch_id' => $batch_id, 'metadata' => array('source' => 'Exa web search'));
+    }
+
+    /**
      * Web search: runs a live web search via Exa, then has Claude synthesise
      * the raw results into a focused answer before returning to the user.
      * Raw Exa results were tried first (a flat itemized findings list, no
@@ -2295,6 +2610,12 @@ class WCP_AI_Actions {
                     wp_set_post_terms($post_id, array($item['item_type']), 'item_type');
                 }
 
+                // Set tags if provided by proposal-generating actions (research chips,
+                // generic generate flows, etc.). Existing flows that omit tags are unchanged.
+                if (!empty($item['tags']) && is_array($item['tags'])) {
+                    wp_set_post_terms($post_id, array_map('sanitize_text_field', $item['tags']), 'post_tag');
+                }
+
                 // Preserve source/provenance metadata for accepted AI proposals
                 // (e.g. uploaded PDF summaries) without changing the ItemPost model.
                 if (!empty($proposal['source']) && is_array($proposal['source'])) {
@@ -2323,7 +2644,10 @@ class WCP_AI_Actions {
         $table = $wpdb->prefix . 'wcp_ai_actions';
 
         // Find recent action for this proposal (within last hour)
-        $action_type_search = 'generate_items';
+        $action_type_search = $proposal_action_type;
+        if (empty($action_type_search) || in_array($proposal_action_type, array('generate-multiple', 'summarize_pdf_document'), true)) {
+            $action_type_search = 'generate_items';
+        }
 
         $action = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM $table
