@@ -285,8 +285,8 @@
                 this.saveSuggestedMission();
             });
 
-            // Markdown document import — fires once a file is chosen via the
-            // hidden input the "Import document" chip triggers.
+            // Document import — Markdown is split into structure; PDF is summarized into
+            // a normal ItemPost proposal after server-side text extraction.
             $(document).on('change', '#wcp-ai-document-upload', (e) => {
                 this.importDocument(e.target.files[0]);
                 $(e.target).val(''); // allow re-selecting the same file next time
@@ -1025,7 +1025,43 @@
         importDocument: function(file) {
             if (!file) { return; }
 
-            this.appendMessage('user', 'Imported document: ' + file.name);
+            const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+            this.appendMessage('user', (isPdf ? 'Uploaded PDF: ' : 'Imported document: ') + file.name);
+
+            if (isPdf) {
+                this.showLoading(true, 'Uploading PDF, extracting text, and drafting a summary item...');
+                const data = new FormData();
+                data.append('pdf', file);
+                data.append('page_id', wcpAiWidgetData.pageId);
+                data.append('conversation_id', this.conversationId || '');
+                data.append('model', this.selectedModel);
+                data.append('thinking_budget', this.thinkingBudget);
+
+                $.ajax({
+                    url: wcpAiWidgetData.restUrl + '/ai/documents/summarize-pdf',
+                    method: 'POST',
+                    beforeSend: (xhr) => { xhr.setRequestHeader('X-WP-Nonce', wcpAiWidgetData.nonce); },
+                    data: data,
+                    processData: false,
+                    contentType: false,
+                    success: (response) => {
+                        this.showLoading(false);
+                        this.currentAction = 'chat';
+                        if (response.success) {
+                            this.handleActionResult(response);
+                        } else {
+                            this.showError(response.message || 'Could not summarise PDF');
+                        }
+                    },
+                    error: (xhr) => {
+                        this.showLoading(false);
+                        const msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : xhr.statusText;
+                        this.showError('PDF import failed: ' + msg);
+                    }
+                });
+                return;
+            }
+
             this.showLoading(true, 'Reading your document and splitting it into headings and items...');
 
             const reader = new FileReader();
