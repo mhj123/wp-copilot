@@ -1728,6 +1728,11 @@ class WCP_AI_Actions {
                 'char_count'     => 0,
                 'truncated'      => false,
             ),
+            // Build 0 contract: PDF summaries live under the paper page's
+            // "Summary" heading when that heading exists. execute_proposal()
+            // resolves this at acceptance time and falls back to the page
+            // context if the heading is absent.
+            'target_heading'  => 'Summary',
             'conversation_id' => $conversation_id,
             'page_id'         => $page_id,
             'created_at'      => current_time('mysql'),
@@ -1851,6 +1856,33 @@ class WCP_AI_Actions {
         $terms = get_terms(array('taxonomy' => 'wcp_context', 'hide_empty' => false, 'number' => 1,
             'meta_query' => array(array('key' => 'wcp_ref_type', 'value' => 'wcp_heading'), array('key' => 'wcp_ref_id', 'value' => $heading_id, 'type' => 'NUMERIC'))));
         return (!is_wp_error($terms) && !empty($terms)) ? (int) $terms[0]->term_id : 0;
+    }
+
+    private function find_child_heading_by_title($page_id, $heading_title) {
+        $heading_title = sanitize_text_field($heading_title);
+        if (!$page_id || $heading_title === '') {
+            return 0;
+        }
+
+        $headings = get_posts(array(
+            'post_type'      => 'wcp_heading',
+            'post_status'    => 'publish',
+            'posts_per_page' => -1,
+            'orderby'        => 'menu_order',
+            'order'          => 'ASC',
+            'meta_query'     => array(
+                array('key' => '_wcp_parent_type', 'value' => 'page'),
+                array('key' => '_wcp_parent_id', 'value' => (int) $page_id),
+            ),
+        ));
+
+        foreach ($headings as $heading) {
+            if (strcasecmp($heading->post_title, $heading_title) === 0) {
+                return (int) $heading->ID;
+            }
+        }
+
+        return 0;
     }
 
     private function item_titles_for_term($term_id, $limit = 30) {
@@ -2083,6 +2115,22 @@ class WCP_AI_Actions {
         $context_term_id = null;
         if (!empty($terms) && !is_wp_error($terms)) {
             $context_term_id = $terms[0]->term_id;
+        }
+
+        // Research Build 0 + Build 1 seam: PDF summaries should attach to the
+        // paper page's templated Summary heading, not the paper page context,
+        // when that heading exists. If the heading is absent, keep the old
+        // page-context fallback so non-research pages still work gracefully.
+        if (($proposal['action_type'] ?? '') === 'summarize_pdf_document' && !empty($proposal['target_heading'])) {
+            $target_heading_id = $this->find_child_heading_by_title($page_id, $proposal['target_heading']);
+            if ($target_heading_id) {
+                $target_heading_term_id = $this->heading_context_term_id($target_heading_id);
+                if ($target_heading_term_id) {
+                    $context_term_id = $target_heading_term_id;
+                    $debug_info['target_heading_id'] = $target_heading_id;
+                    $debug_info['target_heading'] = $proposal['target_heading'];
+                }
+            }
         }
 
         // Check if this is a memory proposal
