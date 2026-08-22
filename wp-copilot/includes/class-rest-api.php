@@ -1333,6 +1333,26 @@ class WCP_REST_API {
                 $result = $ai_actions->chat_qa($prompt, $page_id, $context_mode, $selected_pages, $conversation_id);
                 break;
 
+            case 'research_chat_space':
+                $result = $ai_actions->research_chat_space($prompt, $page_id, $conversation_id);
+                break;
+
+            case 'research_list_references':
+                $result = $ai_actions->research_list_references($prompt, $page_id);
+                break;
+
+            case 'research_suggest_topics':
+                $result = $ai_actions->research_suggest_topics($prompt, $page_id, $conversation_id);
+                break;
+
+            case 'research_identify_gaps':
+                $result = $ai_actions->research_identify_gaps($prompt, $page_id, $conversation_id);
+                break;
+
+            case 'research_find_references':
+                $result = $ai_actions->research_find_references($prompt, $page_id, $conversation_id);
+                break;
+
             case 'web_search':
                 $result = $ai_actions->web_search($prompt, $page_id, $conversation_id);
                 break;

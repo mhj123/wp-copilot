@@ -27,6 +27,11 @@ if ($embedded) {
     }
 }
 
+// Research chips are surfaced only through Build 0's researcher-mode flag.
+$researcher_mode_enabled = class_exists('WCP_Researcher_Mode')
+    ? (bool) get_option(WCP_Researcher_Mode::OPTION_ACTIVE, false)
+    : (bool) get_option('wcp_researcher_mode_active', false);
+
 // Get saved prompts
 $saved_prompts = get_option('wcp_saved_prompts', array());
 if (empty($saved_prompts)) {
@@ -139,6 +144,13 @@ if (empty($saved_prompts)) {
             <button type="button" class="wcp-ai-action-chip" data-action="edit_items"><?php _e('Edit items', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="fetch_posts"><?php _e('Fetch posts', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="fetch_structure"><?php _e('Fetch structure', 'work-copilot'); ?></button>
+            <?php if ($researcher_mode_enabled) : ?>
+            <button type="button" class="wcp-ai-action-chip" data-action="research_list_references"><?php _e('List refs/claims', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip" data-action="research_chat_space"><?php _e('Chat to space', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip wcp-ai-action-chip--canned" data-action="research_suggest_topics" data-prompt="Suggest useful sub-topics or sub-questions for this research space."><?php _e('Suggest topics', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip wcp-ai-action-chip--canned" data-action="research_identify_gaps" data-prompt="Identify lightweight coverage gaps in this research space based on accepted atoms, summaries, tags, and item types."><?php _e('Identify gaps', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip" data-action="research_find_references"><?php _e('Find references', 'work-copilot'); ?></button>
+            <?php endif; ?>
             <?php if (class_exists('WCPD_Delegation_Manager') && get_option('wcpd_enabled') === '1') : ?>
             <button type="button" class="wcp-ai-action-chip" data-action="agent_review"><?php _e('Agent review', 'work-copilot'); ?></button>
             <?php endif; ?>
