@@ -441,12 +441,12 @@ class WCP_AI_Actions {
         return array($proposals, $batch_id);
     }
 
-    private function research_generate_candidate_atoms($prompt, $page_id, $conversation_id, $action_type, $target_type, $target_heading = '') {
+    private function research_generate_candidate_atoms($prompt, $page_id, $conversation_id, $action_type, $target_heading = '') {
         $guard = $this->require_researcher_mode($page_id);
         if (is_wp_error($guard)) { return $guard; }
 
         $atoms = $this->research_space_atoms($page_id);
-        $sys = "You propose candidate research atoms for a workspace. Return ONLY a JSON array. Each object must have title, content, item_type, tags. Use item_type '{$target_type}'. Do not mention or create typed links. Do not use full paper text; reason only from the compressed atoms/summaries supplied. These are candidates requiring human acceptance.";
+        $sys = "You propose candidate research atoms for a workspace. Return ONLY a JSON array. Each object must have title, content, and tags. Do not invent item_type values; accepted research-chip atoms are stored as item_type 'info' and their research role is carried by heading placement/tags. Do not mention or create typed links. Do not use full paper text; reason only from the compressed atoms/summaries supplied. These are candidates requiring human acceptance.";
         $usr = trim($prompt) . "\n\nAccepted atoms/summaries:\n" . $this->research_atoms_text($atoms);
         $response = WCP_AI_Client::instance()->request_with_conversation($sys, $usr, $this->research_conversation_history($conversation_id), 2048, 90);
         if (is_wp_error($response)) { return $response; }
@@ -460,7 +460,7 @@ class WCP_AI_Actions {
             $items[] = array(
                 'title' => sanitize_text_field($candidate['title']),
                 'content' => wp_kses_post($candidate['content'] . "\n\nProvenance: AI-generated research chip ({$action_type}) from accepted atoms/summaries in this space."),
-                'item_type' => sanitize_key($candidate['item_type'] ?? $target_type),
+                'item_type' => 'info',
                 'tags' => array_map('sanitize_text_field', (array) ($candidate['tags'] ?? array('research'))),
             );
         }
@@ -488,12 +488,12 @@ class WCP_AI_Actions {
 
     public function research_suggest_topics($prompt, $page_id, $conversation_id = null) {
         $prompt = trim($prompt) ?: 'Suggest useful sub-topics or sub-questions for this research space.';
-        return $this->research_generate_candidate_atoms($prompt, $page_id, $conversation_id, 'research_suggest_topics', 'question', 'Objectives');
+        return $this->research_generate_candidate_atoms($prompt, $page_id, $conversation_id, 'research_suggest_topics', 'Objectives');
     }
 
     public function research_identify_gaps($prompt, $page_id, $conversation_id = null) {
         $prompt = trim($prompt) ?: 'Identify lightweight coverage gaps in this research space based on item types, tags, and accepted atoms.';
-        return $this->research_generate_candidate_atoms($prompt, $page_id, $conversation_id, 'research_identify_gaps', 'gap', 'Gaps');
+        return $this->research_generate_candidate_atoms($prompt, $page_id, $conversation_id, 'research_identify_gaps', 'Gaps');
     }
 
     public function research_find_references($query, $page_id, $conversation_id = null) {
@@ -518,7 +518,7 @@ class WCP_AI_Actions {
             $items[] = array(
                 'title' => $title,
                 'content' => "URL: {$url}\n\nSnippet: {$snippet}\n\nProvenance: found via web search (Exa). Query: {$query}. Result URL: {$url}. This is not a formal peer-reviewed citation.",
-                'item_type' => 'reference',
+                'item_type' => 'info',
                 'tags' => array('web-search', 'exa'),
             );
         }
