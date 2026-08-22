@@ -350,6 +350,70 @@ class WCP_AI_Client {
     }
 
     /**
+     * Make a request to Claude with an attached PDF document block.
+     *
+     * GUARDRAIL: callers must not log the request body; it contains base64 PDF
+     * bytes. Audit logs should record only attachment id/filename metadata.
+     *
+     * @param string $system_prompt System prompt
+     * @param string $user_message User instruction text
+     * @param int $attachment_id WordPress attachment ID for an application/pdf file
+     * @param int $max_tokens Maximum tokens for response
+     * @param int $timeout Request timeout in seconds
+     * @return array|WP_Error Response with content, model, usage, and stop_reason
+     */
+    public function request_with_document($system_prompt, $user_message, $attachment_id, $max_tokens = 2048, $timeout = 90) {
+        if (!$this->is_configured()) {
+            return new WP_Error('not_configured', 'AI API key not configured');
+        }
+
+        $attachment_id = (int) $attachment_id;
+        $file = get_attached_file($attachment_id);
+        if (!$file || !file_exists($file) || !is_readable($file)) {
+            return new WP_Error('file_missing', 'Attached PDF file not found');
+        }
+        if (get_post_mime_type($attachment_id) !== 'application/pdf') {
+            return new WP_Error('bad_type', 'Only PDF documents can be sent to the model directly');
+        }
+
+        $bytes = file_get_contents($file);
+        if (!is_string($bytes) || $bytes === '') {
+            return new WP_Error('empty_document', 'Attached PDF file is empty or unreadable');
+        }
+
+        $effective_model = $this->_override_model ?: $this->model;
+        $messages = array(array(
+            'role'    => 'user',
+            'content' => array(
+                array(
+                    'type'   => 'document',
+                    'source' => array(
+                        'type'       => 'base64',
+                        'media_type' => 'application/pdf',
+                        'data'       => base64_encode($bytes),
+                    ),
+                ),
+                array('type' => 'text', 'text' => $user_message),
+            ),
+        ));
+
+        $response = $this->request($messages, $max_tokens, $system_prompt, $timeout);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $content = isset($response['content'][0]['text']) ? $response['content'][0]['text'] : '';
+
+        return array(
+            'content' => $content,
+            'model' => $effective_model,
+            'usage' => isset($response['usage']) ? $response['usage'] : null,
+            'stop_reason' => isset($response['stop_reason']) ? $response['stop_reason'] : null,
+        );
+    }
+
+    /**
      * Test API connection
      */
     public function test_connection() {

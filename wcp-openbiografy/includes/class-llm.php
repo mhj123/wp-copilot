@@ -2,10 +2,8 @@
 /**
  * Strict-JSON LLM gateway — the single choke point for every AI call.
  *
- * Text calls are delegated to Work Copilot core's WCP_AI_Client (shared key,
- * shared model allowlist). PDF calls build the Anthropic request directly
- * because WCP_AI_Client only supports string message content, not document
- * content blocks.
+ * Text and PDF calls are delegated to Work Copilot core's WCP_AI_Client
+ * (shared key, shared model allowlist, shared Anthropic request path).
  *
  * GUARDRAIL: this class returns parsed proposals to callers and writes
  * nothing except the mandatory audit row in Work Copilot's wp_wcp_ai_actions
@@ -53,7 +51,25 @@ class WCPO_LLM {
         $attachment_id   = isset($opts['attachment_id']) ? (int) $opts['attachment_id'] : 0;
 
         if ($attachment_id) {
-            $result = self::request_with_document($system, $user, $attachment_id, $model, $max_tokens, $timeout);
+            $file = get_attached_file($attachment_id);
+            if (!$file || !file_exists($file)) {
+                return new WP_Error('file_missing', __('Attached file not found.', 'wcp-openbiografy'));
+            }
+            if (get_post_mime_type($attachment_id) !== 'application/pdf') {
+                return new WP_Error('bad_type', __('Only PDF documents can be sent to the model directly.', 'wcp-openbiografy'));
+            }
+            $max_bytes = (float) wcpo_get_setting('max_pdf_mb') * 1024 * 1024;
+            if ($max_bytes > 0 && filesize($file) > $max_bytes) {
+                return new WP_Error('too_large', sprintf(__('PDF exceeds the %s MB limit.', 'wcp-openbiografy'), wcpo_get_setting('max_pdf_mb')));
+            }
+
+            $client = WCP_AI_Client::instance();
+            if (!$client->is_configured()) {
+                return new WP_Error('not_configured', __('Anthropic API key not configured in Work Copilot settings.', 'wcp-openbiografy'));
+            }
+            $client->set_overrides($model);
+            $result = $client->request_with_document($system, $user, $attachment_id, $max_tokens, $timeout);
+            $client->set_overrides(null); // don't leak the override into other plugins' calls
             // The audit row records the attachment reference, never the base64 payload.
             $input_snapshot = array(
                 'user'          => $user,
@@ -133,77 +149,6 @@ class WCPO_LLM {
         ));
 
         return array('data' => $data, 'action_id' => $action_id, 'model' => $model);
-    }
-
-    /**
-     * Direct Anthropic call with a base64 PDF document block. WCP_AI_Client
-     * cannot send content blocks, so this is the one place that bypasses it —
-     * same key, same allowlisted models, same audit logging in call().
-     *
-     * @return array|WP_Error { content, usage }
-     */
-    private static function request_with_document($system, $user, $attachment_id, $model, $max_tokens, $timeout) {
-        $api_key = get_option('wcp_anthropic_api_key', '');
-        if (!$api_key) {
-            return new WP_Error('not_configured', __('Anthropic API key not configured in Work Copilot settings.', 'wcp-openbiografy'));
-        }
-
-        $file = get_attached_file($attachment_id);
-        if (!$file || !file_exists($file)) {
-            return new WP_Error('file_missing', __('Attached file not found.', 'wcp-openbiografy'));
-        }
-        if (get_post_mime_type($attachment_id) !== 'application/pdf') {
-            return new WP_Error('bad_type', __('Only PDF documents can be sent to the model directly.', 'wcp-openbiografy'));
-        }
-        $max_bytes = (float) wcpo_get_setting('max_pdf_mb') * 1024 * 1024;
-        if (filesize($file) > $max_bytes) {
-            return new WP_Error('too_large', sprintf(__('PDF exceeds the %s MB limit.', 'wcp-openbiografy'), wcpo_get_setting('max_pdf_mb')));
-        }
-
-        $body = array(
-            'model'      => $model,
-            'max_tokens' => $max_tokens,
-            'system'     => $system,
-            'messages'   => array(array(
-                'role'    => 'user',
-                'content' => array(
-                    array(
-                        'type'   => 'document',
-                        'source' => array(
-                            'type'       => 'base64',
-                            'media_type' => 'application/pdf',
-                            'data'       => base64_encode(file_get_contents($file)),
-                        ),
-                    ),
-                    array('type' => 'text', 'text' => $user),
-                ),
-            )),
-        );
-
-        $response = wp_remote_post(self::API_URL, array(
-            'headers' => array(
-                'Content-Type'      => 'application/json',
-                'x-api-key'         => $api_key,
-                'anthropic-version' => '2023-06-01',
-            ),
-            'body'    => wp_json_encode($body),
-            'timeout' => $timeout,
-        ));
-
-        if (is_wp_error($response)) {
-            return $response;
-        }
-        $code = wp_remote_retrieve_response_code($response);
-        $data = json_decode(wp_remote_retrieve_body($response), true);
-        if ($code !== 200) {
-            $msg = isset($data['error']['message']) ? $data['error']['message'] : 'Unknown API error';
-            return new WP_Error('api_error', $msg, array('status' => $code));
-        }
-
-        return array(
-            'content' => isset($data['content'][0]['text']) ? $data['content'][0]['text'] : '',
-            'usage'   => isset($data['usage']) ? $data['usage'] : null,
-        );
     }
 
     /**

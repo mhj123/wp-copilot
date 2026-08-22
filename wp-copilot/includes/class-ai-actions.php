@@ -1661,36 +1661,31 @@ class WCP_AI_Actions {
     }
 
     /**
-     * Summarise extracted PDF text into a single normal ItemPost proposal.
+     * Summarise an uploaded PDF into a single normal ItemPost proposal.
      * AI guardrail: no post is written here; acceptance still goes through
      * execute_proposal(), which creates a regular post and therefore enters
      * the existing embeddings/RAG pipeline via save_post.
+     *
+     * The PDF is sent to Claude as a native document block via WCP_AI_Client;
+     * do not extract or log base64/PDF contents locally.
      */
-    public function summarize_pdf_document($pdf_text, $page_id, $source = array(), $conversation_id = null) {
+    public function summarize_pdf_document($attachment_id, $page_id, $source = array(), $conversation_id = null) {
         set_time_limit(120);
         $user_id = get_current_user_id();
         if (!$user_id) {
             return new WP_Error('auth_error', 'User not authenticated');
         }
-        $pdf_text = trim((string) $pdf_text);
-        if ($pdf_text === '') {
-            return new WP_Error('empty_document', 'The uploaded PDF has no extractable text');
-        }
 
-        $original_chars = strlen($pdf_text);
-        $max_chars = 30000;
-        $truncated = false;
-        if ($original_chars > $max_chars) {
-            $pdf_text = mb_substr($pdf_text, 0, $max_chars);
-            $pdf_text .= "\n\n[...PDF TEXT TRUNCATED FOR SUMMARY - Original: " . number_format($original_chars) . " chars, Truncated to: " . number_format($max_chars) . " chars...]";
-            $truncated = true;
+        $attachment_id = (int) $attachment_id;
+        if (!$attachment_id) {
+            return new WP_Error('missing_attachment', 'A PDF attachment is required');
         }
 
         $filename = sanitize_text_field($source['filename'] ?? 'Uploaded PDF');
         $system_prompt = "You summarise uploaded PDFs for a personal work knowledge base. Return ONLY valid JSON with keys title and content. The title must be concise. The content should be a faithful, useful summary in Markdown-style plain text with: 1) short overview, 2) key points, 3) relevant actions or decisions if present. Do not invent facts.";
-        $user_message = "PDF filename: {$filename}\n\nExtracted PDF text:\n\n" . $pdf_text;
+        $user_message = "PDF filename: {$filename}\n\nRead the attached PDF directly and produce the requested JSON summary.";
 
-        $response = WCP_AI_Client::instance()->request_with_conversation($system_prompt, $user_message, array(), 2048, 90);
+        $response = WCP_AI_Client::instance()->request_with_document($system_prompt, $user_message, $attachment_id, 2048, 90);
         if (is_wp_error($response)) {
             return $response;
         }
@@ -1713,9 +1708,6 @@ class WCP_AI_Actions {
         if (!empty($source['attachment_url'])) {
             $content .= "\nAttachment: " . esc_url_raw($source['attachment_url']);
         }
-        if ($truncated) {
-            $content .= "\nNote: Summary used the first " . number_format($max_chars) . " extracted characters.";
-        }
 
         $proposal = array(
             'proposal_id'     => $proposal_id,
@@ -1730,11 +1722,11 @@ class WCP_AI_Actions {
             'source'          => array(
                 'type'           => 'pdf_upload',
                 'filename'       => $filename,
-                'attachment_id'  => (int) ($source['attachment_id'] ?? 0),
+                'attachment_id'  => $attachment_id,
                 'attachment_url' => esc_url_raw($source['attachment_url'] ?? ''),
                 'file_size'      => (int) ($source['file_size'] ?? 0),
-                'char_count'     => (int) ($source['char_count'] ?? $original_chars),
-                'truncated'      => $truncated,
+                'char_count'     => 0,
+                'truncated'      => false,
             ),
             'conversation_id' => $conversation_id,
             'page_id'         => $page_id,
@@ -1756,7 +1748,11 @@ class WCP_AI_Actions {
         WCP_AI_Logger::instance()->log_action('summarize_pdf_document', array(
             'model'           => $response['model'],
             'prompt'          => $filename,
-            'input_context'   => array('page_id' => $page_id, 'source' => $proposal['source']),
+            'input_context'   => array(
+                'page_id' => $page_id,
+                'source'  => $proposal['source'],
+                // Trust guardrail: attachment metadata only; never log base64/document bytes.
+            ),
             'output'          => $parsed,
             'context_post_id' => $page_id,
         ));
@@ -1768,6 +1764,7 @@ class WCP_AI_Actions {
             'metadata'  => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null, 'source' => $proposal['source']),
         );
     }
+
 
     /**
      * Splits an uploaded markdown document into a proposed Heading/Item

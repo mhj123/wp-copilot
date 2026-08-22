@@ -1015,12 +1015,10 @@
         },
 
         /**
-         * Import a markdown document — reads the file client-side (same
-         * pattern the .ics calendar import already uses), POSTs its raw text
-         * to a dedicated endpoint (not /ai/actions/execute — this needs file
-         * content, not a typed prompt), then reuses handleActionResult()
-         * unchanged since the response is the same outcome:'create_structure'
-         * shape generate_structure() already returns.
+         * Import a document — markdown is read client-side and split into
+         * headings/items; PDFs are uploaded to the REST API and sent to Claude
+         * as native document blocks for a reviewed summary proposal. Both paths
+         * reuse handleActionResult() for the returned proposal payload.
          */
         importDocument: function(file) {
             if (!file) { return; }
@@ -1029,7 +1027,11 @@
             this.appendMessage('user', (isPdf ? 'Uploaded PDF: ' : 'Imported document: ') + file.name);
 
             if (isPdf) {
-                this.showLoading(true, 'Uploading PDF, extracting text, and drafting a summary item...');
+                if (!wcpAiWidgetData.pdfSummaryEnabled) {
+                    this.showError('PDF summary import is disabled on this install.');
+                    return;
+                }
+                this.showLoading(true, 'Uploading PDF and asking Claude to draft a summary item...');
                 const data = new FormData();
                 data.append('pdf', file);
                 data.append('page_id', wcpAiWidgetData.pageId);
