@@ -63,6 +63,7 @@ class Work_Copilot {
         require_once WCP_PLUGIN_DIR . 'includes/class-prompt-builder.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-ai-actions.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-section-manager.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-researcher-mode.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-raindrop-importer.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-csv-exporter.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-csv-importer.php';
