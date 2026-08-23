@@ -27,6 +27,11 @@ if ($embedded) {
     }
 }
 
+// Research chips are surfaced only through Build 0's researcher-mode flag.
+$researcher_mode_enabled = class_exists('WCP_Researcher_Mode')
+    ? (bool) get_option(WCP_Researcher_Mode::OPTION_ACTIVE, false)
+    : (bool) get_option('wcp_researcher_mode_active', false);
+
 // Get saved prompts
 $saved_prompts = get_option('wcp_saved_prompts', array());
 if (empty($saved_prompts)) {
@@ -130,7 +135,8 @@ if (empty($saved_prompts)) {
             <button type="button" class="wcp-ai-action-chip" data-action="web_search"><?php _e('Web search', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="generate_structure"><?php _e('Generate structure', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="import_document"><?php _e('Import document', 'work-copilot'); ?></button>
-            <input type="file" id="wcp-ai-document-upload" accept=".md,text/markdown" style="display:none;">
+            <?php $wcp_pdf_summary_enabled = function_exists('wcp_feature') && wcp_feature('pdf_summary'); ?>
+            <input type="file" id="wcp-ai-document-upload" accept="<?php echo esc_attr($wcp_pdf_summary_enabled ? '.md,.pdf,text/markdown,application/pdf' : '.md,text/markdown'); ?>" style="display:none;">
             <button type="button" class="wcp-ai-action-chip" data-action="generate_pages"><?php _e('Create sub-pages', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="create_goal"><?php _e('Create goal', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="rewrite_content"><?php _e('Edit page', 'work-copilot'); ?></button>
@@ -138,6 +144,13 @@ if (empty($saved_prompts)) {
             <button type="button" class="wcp-ai-action-chip" data-action="edit_items"><?php _e('Edit items', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="fetch_posts"><?php _e('Fetch posts', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="fetch_structure"><?php _e('Fetch structure', 'work-copilot'); ?></button>
+            <?php if ($researcher_mode_enabled) : ?>
+            <button type="button" class="wcp-ai-action-chip" data-action="research_list_references"><?php _e('List refs/claims', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip" data-action="research_chat_space"><?php _e('Chat to space', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip wcp-ai-action-chip--canned" data-action="research_suggest_topics" data-prompt="Suggest useful sub-topics or sub-questions for this research space."><?php _e('Suggest topics', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip wcp-ai-action-chip--canned" data-action="research_identify_gaps" data-prompt="Identify lightweight coverage gaps in this research space based on accepted atoms, summaries, tags, and item types."><?php _e('Identify gaps', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip" data-action="research_find_references"><?php _e('Find references', 'work-copilot'); ?></button>
+            <?php endif; ?>
             <?php if (class_exists('WCPD_Delegation_Manager') && get_option('wcpd_enabled') === '1') : ?>
             <button type="button" class="wcp-ai-action-chip" data-action="agent_review"><?php _e('Agent review', 'work-copilot'); ?></button>
             <?php endif; ?>
@@ -243,6 +256,7 @@ if (empty($saved_prompts)) {
         restUrl: <?php echo wp_json_encode(rest_url('work-copilot/v1')); ?>,
         delegationRestUrl: <?php echo wp_json_encode(rest_url('wcp-delegation/v1')); ?>,
         delegationEnabled: <?php echo (class_exists('WCPD_Delegation_Manager') && get_option('wcpd_enabled') === '1') ? 'true' : 'false'; ?>,
+        pdfSummaryEnabled: <?php echo (function_exists('wcp_feature') && wcp_feature('pdf_summary')) ? 'true' : 'false'; ?>,
         nonce: <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>
     };
 </script>

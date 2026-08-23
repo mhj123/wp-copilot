@@ -328,6 +328,16 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // PDF upload POC — sends the PDF to Claude as a native document block,
+        // then returns a normal ItemPost proposal for review/acceptance.
+        if (wcp_feature('pdf_summary')) {
+            register_rest_route($namespace, '/ai/documents/summarize-pdf', array(
+                'methods'             => 'POST',
+                'callback'            => array($this, 'summarize_pdf_document'),
+                'permission_callback' => array($this, 'check_permission'),
+            ));
+        }
+
         // Page notes
         register_rest_route($namespace, '/pages/(?P<page_id>\d+)/notes', array(
             'methods'             => 'POST',
@@ -1321,6 +1331,26 @@ class WCP_REST_API {
             case 'chat':
             case 'chat_qa':
                 $result = $ai_actions->chat_qa($prompt, $page_id, $context_mode, $selected_pages, $conversation_id);
+                break;
+
+            case 'research_chat_space':
+                $result = $ai_actions->research_chat_space($prompt, $page_id, $conversation_id);
+                break;
+
+            case 'research_list_references':
+                $result = $ai_actions->research_list_references($prompt, $page_id);
+                break;
+
+            case 'research_suggest_topics':
+                $result = $ai_actions->research_suggest_topics($prompt, $page_id, $conversation_id);
+                break;
+
+            case 'research_identify_gaps':
+                $result = $ai_actions->research_identify_gaps($prompt, $page_id, $conversation_id);
+                break;
+
+            case 'research_find_references':
+                $result = $ai_actions->research_find_references($prompt, $page_id, $conversation_id);
                 break;
 
             case 'web_search':
@@ -3069,6 +3099,90 @@ class WCP_REST_API {
         $result = $ai_actions->split_markdown_document( $markdown_content, $page_id, $instructions, $conversation_id );
 
         if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+
+        return rest_ensure_response( array_merge( array('success' => true), $result ) );
+    }
+
+    public function summarize_pdf_document( $request ) {
+        if ( ! wcp_feature('pdf_summary') ) {
+            return new WP_Error('feature_disabled', 'PDF summary import is disabled', array('status' => 404));
+        }
+
+        $page_id         = (int) $request->get_param('page_id');
+        $conversation_id = $request->get_param('conversation_id');
+        $model           = sanitize_text_field( (string) $request->get_param('model') );
+        $thinking_budget = (int) $request->get_param('thinking_budget');
+
+        if ( ! $page_id ) {
+            return new WP_Error('invalid_params', 'page_id is required', array('status' => 400));
+        }
+
+        $auth = WCP_REST_Auth::require_object( $page_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
+
+        $files = $request->get_file_params();
+        if ( empty( $files['pdf'] ) || empty( $files['pdf']['tmp_name'] ) ) {
+            return new WP_Error('missing_file', 'Upload a PDF file', array('status' => 400));
+        }
+
+        $file     = $files['pdf'];
+        $filename = isset($file['name']) ? sanitize_file_name($file['name']) : 'document.pdf';
+        $mime     = isset($file['type']) ? $file['type'] : '';
+        $ext      = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        if ( $ext !== 'pdf' && $mime !== 'application/pdf' ) {
+            return new WP_Error('invalid_file_type', 'Only PDF files are supported', array('status' => 400));
+        }
+
+        $max_bytes = 10 * 1024 * 1024;
+        if ( ! empty($file['size']) && (int) $file['size'] > $max_bytes ) {
+            return new WP_Error('file_too_large', 'PDF must be 10 MB or smaller for this POC', array('status' => 413));
+        }
+
+        if ( ! function_exists('wp_handle_upload') ) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+        }
+        if ( ! function_exists('wp_insert_attachment') ) {
+            require_once ABSPATH . 'wp-admin/includes/media.php';
+            require_once ABSPATH . 'wp-admin/includes/image.php';
+        }
+
+        $upload = wp_handle_upload($file, array('test_form' => false, 'mimes' => array('pdf' => 'application/pdf')));
+        if ( isset($upload['error']) ) {
+            return new WP_Error('upload_failed', $upload['error'], array('status' => 500));
+        }
+
+        $attachment_id = wp_insert_attachment(array(
+            'post_mime_type' => 'application/pdf',
+            'post_title'     => preg_replace('/\.pdf$/i', '', $filename),
+            'post_content'   => '',
+            'post_status'    => 'inherit',
+        ), $upload['file'], $page_id);
+
+        if ( is_wp_error($attachment_id) ) {
+            if ( ! empty($upload['file']) && file_exists($upload['file']) ) {
+                wp_delete_file($upload['file']);
+            }
+            return $attachment_id;
+        }
+
+        wp_update_attachment_metadata($attachment_id, wp_generate_attachment_metadata($attachment_id, $upload['file']));
+
+        WCP_AI_Client::instance()->set_overrides($model, $thinking_budget);
+        $result = WCP_AI_Actions::instance()->summarize_pdf_document($attachment_id, $page_id, array(
+            'filename'       => $filename,
+            'attachment_id'  => (int) $attachment_id,
+            'attachment_url' => isset($upload['url']) ? esc_url_raw($upload['url']) : '',
+            'file_size'      => isset($file['size']) ? (int) $file['size'] : 0,
+            'char_count'     => 0,
+        ), $conversation_id);
+        WCP_AI_Client::instance()->set_overrides(null);
+
+        if ( is_wp_error($result) ) {
+            wp_delete_attachment((int) $attachment_id, true);
             return $result;
         }
 

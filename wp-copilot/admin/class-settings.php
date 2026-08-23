@@ -74,6 +74,12 @@ class WCP_Settings {
             'default' => '',
         ));
 
+        register_setting('wcp_settings', WCP_Researcher_Mode::OPTION_ACTIVE, array(
+            'type'              => 'boolean',
+            'sanitize_callback' => array($this, 'sanitize_researcher_mode'),
+            'default'           => false,
+        ));
+
         // Embeddings/RAG Settings
         register_setting('wcp_settings', 'wcp_openai_api_key', array(
             'type' => 'string',
@@ -132,6 +138,21 @@ class WCP_Settings {
             array($this, 'render_global_mission_field'),
             'work-copilot-settings',
             'wcp_ai_section'
+        );
+
+        add_settings_section(
+            'wcp_researcher_section',
+            __('Researcher Mode', 'work-copilot'),
+            array($this, 'render_researcher_section'),
+            'work-copilot-settings'
+        );
+
+        add_settings_field(
+            WCP_Researcher_Mode::OPTION_ACTIVE,
+            __('Researcher mode', 'work-copilot'),
+            array($this, 'render_researcher_mode_field'),
+            'work-copilot-settings',
+            'wcp_researcher_section'
         );
 
         // Embeddings section
@@ -502,6 +523,70 @@ class WCP_Settings {
             ?>
         </p>
         <?php
+    }
+
+    public function render_researcher_section() {
+        echo '<p>' . __('Provision shared research scaffolds using native pages and the existing page-template system: Library for paper pages, Research for project pages. Disabling Researcher mode deletes nothing; it only turns off the feature flag future research actions will check.', 'work-copilot') . '</p>';
+    }
+
+    public function render_researcher_mode_field() {
+        $enabled          = get_option(WCP_Researcher_Mode::OPTION_ACTIVE, false);
+        $library_id       = WCP_Researcher_Mode::instance()->get_library_page_id();
+        $research_root_id = WCP_Researcher_Mode::instance()->get_research_root_page_id();
+        ?>
+        <label>
+            <input type="hidden" name="<?php echo esc_attr(WCP_Researcher_Mode::OPTION_ACTIVE); ?>" value="0">
+            <input type="checkbox" name="<?php echo esc_attr(WCP_Researcher_Mode::OPTION_ACTIVE); ?>" value="1" <?php checked($enabled, true); ?>>
+            <?php _e('Enable Researcher mode and provision the Library/Research scaffolds', 'work-copilot'); ?>
+        </label>
+        <p class="description">
+            <?php _e('On enable, Work Copilot creates or adopts native “Library” and “Research” pages. Library carries the paper template; Research carries the project template: Context, Objectives, Hypotheses, Findings, Gaps. Re-enabling is idempotent.', 'work-copilot'); ?>
+        </p>
+        <?php if ($library_id) : ?>
+            <p class="description">
+                <?php printf(__('Current Library page ID: %d', 'work-copilot'), absint($library_id)); ?>
+            </p>
+        <?php endif; ?>
+        <?php if ($research_root_id) : ?>
+            <p class="description">
+                <?php printf(__('Current Research page ID: %d', 'work-copilot'), absint($research_root_id)); ?>
+            </p>
+        <?php endif; ?>
+        <?php
+    }
+
+    public function sanitize_researcher_mode($value) {
+        $enabled = rest_sanitize_boolean($value);
+
+        if ($enabled) {
+            // WordPress may invoke sanitize callbacks more than once during a
+            // settings save; enable() must remain idempotent and adopt existing
+            // scaffolds rather than creating duplicates.
+            $result = WCP_Researcher_Mode::instance()->enable();
+            if (is_wp_error($result)) {
+                add_settings_error(
+                    WCP_Researcher_Mode::OPTION_ACTIVE,
+                    'wcp_researcher_mode_provision_failed',
+                    $result->get_error_message(),
+                    'error'
+                );
+                return false;
+            }
+            return true;
+        }
+
+        $result = WCP_Researcher_Mode::instance()->disable();
+        if (is_wp_error($result)) {
+            add_settings_error(
+                WCP_Researcher_Mode::OPTION_ACTIVE,
+                'wcp_researcher_mode_disable_failed',
+                $result->get_error_message(),
+                'error'
+            );
+            return (bool) get_option(WCP_Researcher_Mode::OPTION_ACTIVE, false);
+        }
+
+        return false;
     }
 
     public function render_embeddings_section() {
