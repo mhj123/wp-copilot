@@ -1345,8 +1345,12 @@ class WCP_REST_API {
                 $result = $ai_actions->research_identify_gaps($prompt, $page_id, $conversation_id);
                 break;
 
+            case 'derive_reference_query':
+                $result = $ai_actions->research_derive_reference_query($prompt, $page_id);
+                break;
+
             case 'research_find_references':
-                $result = $ai_actions->research_find_references($prompt, $page_id, $conversation_id);
+                $result = $ai_actions->research_find_references($prompt, $page_id, $conversation_id, $request->get_param('query'));
                 break;
 
             case 'web_search':
@@ -2944,13 +2948,23 @@ class WCP_REST_API {
                     'subtopics' => $subtopics,
                 ));
 
+            case 'find_references_query_preview':
+                if ( ! class_exists('WCP_Researcher_Mode') || ! WCP_Researcher_Mode::is_active() ) {
+                    return new WP_Error( 'researcher_mode_off', 'Researcher mode is off. Enable it in Settings first.', array('status' => 403) );
+                }
+                $friq_result = WCP_AI_Actions::instance()->find_references_for_item_query_preview( $item_id, (int) $request->get_param('page_id') );
+                if ( is_wp_error( $friq_result ) ) {
+                    return $friq_result;
+                }
+                return rest_ensure_response( array_merge( array('success' => true), $friq_result ) );
+
             case 'find_references_for_item':
                 if ( ! class_exists('WCP_Researcher_Mode') || ! WCP_Researcher_Mode::is_active() ) {
                     return new WP_Error( 'researcher_mode_off', 'Researcher mode is off. Enable it in Settings first.', array('status' => 403) );
                 }
                 $page_id_param = (int) $request->get_param('page_id');
                 $conversation_id_param = $request->get_param('conversation_id');
-                $fri_result = WCP_AI_Actions::instance()->find_references_for_item( $item_id, $page_id_param, $conversation_id_param );
+                $fri_result = WCP_AI_Actions::instance()->find_references_for_item( $item_id, $page_id_param, $conversation_id_param, $request->get_param('query') );
                 if ( is_wp_error( $fri_result ) ) {
                     return $fri_result;
                 }

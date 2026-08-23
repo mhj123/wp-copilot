@@ -546,19 +546,45 @@ class WCP_AI_Actions {
         return $this->research_generate_candidate_atoms($prompt, $page_id, $conversation_id, 'research_identify_gaps', 'Gaps');
     }
 
-    public function research_find_references($instruction, $page_id, $conversation_id = null) {
+    /**
+     * Derive-only: turns a typed instruction into the Exa search query
+     * research_find_references() would use, without actually searching —
+     * lets the caller show the query for review/editing before it's issued.
+     */
+    public function research_derive_reference_query($instruction, $page_id) {
         $guard = $this->require_researcher_mode($page_id);
         if (is_wp_error($guard)) { return $guard; }
         $instruction = trim($instruction);
         if ($instruction === '') { return new WP_Error('empty_query', 'A reference search query is required'); }
+
+        $atoms = $this->research_space_atoms($page_id);
+        $query = $this->research_derive_search_query($instruction, $page_id, $atoms);
+        return array('query' => $query);
+    }
+
+    /**
+     * @param string|null $query_override If given (e.g. the user edited the
+     *   derived query before confirming), used verbatim instead of deriving
+     *   a fresh one from $instruction.
+     */
+    public function research_find_references($instruction, $page_id, $conversation_id = null, $query_override = null) {
+        $guard = $this->require_researcher_mode($page_id);
+        if (is_wp_error($guard)) { return $guard; }
+        $instruction = trim($instruction);
+        $query_override = trim((string) $query_override);
+        if ($instruction === '' && $query_override === '') { return new WP_Error('empty_query', 'A reference search query is required'); }
 
         $exa_client = WCP_Exa_Client::instance();
         if (!$exa_client->is_configured()) {
             return new WP_Error('not_configured', 'Exa API key not configured. Add one in Work Copilot → Settings.');
         }
 
-        $atoms = $this->research_space_atoms($page_id);
-        $query = $this->research_derive_search_query($instruction, $page_id, $atoms);
+        if ($query_override !== '') {
+            $query = $query_override;
+        } else {
+            $atoms = $this->research_space_atoms($page_id);
+            $query = $this->research_derive_search_query($instruction, $page_id, $atoms);
+        }
 
         $findings = $exa_client->search($query, 6);
         if (is_wp_error($findings)) { return $findings; }
@@ -708,7 +734,7 @@ class WCP_AI_Actions {
      *   association, so this must come from the viewing context, not be
      *   inferred from the item.
      */
-    public function find_references_for_item($item_id, $page_id, $conversation_id = null) {
+    private function guard_find_references_for_item($item_id, $page_id) {
         if (!class_exists('WCP_Researcher_Mode') || !WCP_Researcher_Mode::is_active()) {
             return new WP_Error('researcher_mode_off', 'Researcher mode is off. Enable it in Settings first.', array('status' => 403));
         }
@@ -729,15 +755,47 @@ class WCP_AI_Actions {
         if (!$page_id) {
             return new WP_Error('missing_page', 'A page context is required', array('status' => 400));
         }
+        return $item;
+    }
+
+    /**
+     * Derive-only counterpart to find_references_for_item(): computes the
+     * Exa query from the item's own title/content without searching, so the
+     * caller can show it for review/editing first.
+     */
+    public function find_references_for_item_query_preview($item_id, $page_id) {
+        $item = $this->guard_find_references_for_item($item_id, $page_id);
+        if (is_wp_error($item)) { return $item; }
+
+        $instruction = $item->post_title . ($item->post_content ? "\n" . wp_strip_all_tags($item->post_content) : '');
+        $atoms = $this->research_space_atoms($page_id);
+        $query = $this->research_derive_search_query($instruction, $page_id, $atoms);
+        return array('query' => $query);
+    }
+
+    /**
+     * @param string|null $query_override If given (e.g. the user edited the
+     *   derived query before confirming), used verbatim instead of deriving
+     *   a fresh one from the item's own title/content.
+     */
+    public function find_references_for_item($item_id, $page_id, $conversation_id = null, $query_override = null) {
+        $item = $this->guard_find_references_for_item($item_id, $page_id);
+        if (is_wp_error($item)) { return $item; }
+        $item_id = (int) $item_id;
 
         $exa_client = WCP_Exa_Client::instance();
         if (!$exa_client->is_configured()) {
             return new WP_Error('not_configured', 'Exa API key not configured. Add one in Work Copilot → Settings.');
         }
 
-        $instruction = $item->post_title . ($item->post_content ? "\n" . wp_strip_all_tags($item->post_content) : '');
-        $atoms = $this->research_space_atoms($page_id);
-        $query = $this->research_derive_search_query($instruction, $page_id, $atoms);
+        $query_override = trim((string) $query_override);
+        if ($query_override !== '') {
+            $query = $query_override;
+        } else {
+            $instruction = $item->post_title . ($item->post_content ? "\n" . wp_strip_all_tags($item->post_content) : '');
+            $atoms = $this->research_space_atoms($page_id);
+            $query = $this->research_derive_search_query($instruction, $page_id, $atoms);
+        }
 
         $findings = $exa_client->search($query, 6);
         if (is_wp_error($findings)) { return $findings; }
