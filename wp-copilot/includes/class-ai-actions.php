@@ -481,7 +481,22 @@ class WCP_AI_Actions {
         $sys = "You propose candidate research atoms for a workspace. Do not invent item_type values; accepted research-chip atoms are stored as item_type 'info' and their research role is carried by heading placement/tags. Do not mention or create typed links. Do not use full paper text; reason only from the compressed atoms/summaries supplied. These are candidates requiring human acceptance.\n\n"
              . "Return ONLY a valid JSON array. No text before or after — no headings, no commentary, no markdown fences. Format:\n"
              . '[{"title":"Subtopic title","content":"1-2 sentences","tags":["tag1"]}]';
-        $usr = trim($prompt) . "\n\nAccepted atoms/summaries:\n" . $this->research_atoms_text($atoms);
+
+        // research_space_atoms() only covers items — without the page's own
+        // body, framing content that lives there (e.g. Researcher Mode's
+        // Description/Objectives/Context sections) is invisible here, same
+        // gap onboard() had.
+        $usr = trim($prompt);
+        $page = get_post($page_id);
+        $page_body = $page ? trim(wp_strip_all_tags($page->post_content)) : '';
+        if ($page_body !== '') {
+            $truncated = mb_strlen($page_body) > 8000;
+            if ($truncated) {
+                $page_body = mb_substr($page_body, 0, 8000);
+            }
+            $usr .= "\n\nPage content:\n{$page_body}" . ($truncated ? ' [truncated]' : '');
+        }
+        $usr .= "\n\nAccepted atoms/summaries:\n" . $this->research_atoms_text($atoms);
         $response = WCP_AI_Client::instance()->request_with_conversation($sys, $usr, $this->research_conversation_history($conversation_id), 2048, 90);
         if (is_wp_error($response)) { return $response; }
         $parsed = $this->parse_json_response($response['content']);
