@@ -595,10 +595,24 @@ class WCP_AI_Actions {
      */
     private function research_findings_to_items($findings, $query) {
         $items = array();
+        $seen_urls = array();
+        $seen_titles = array();
         foreach ($findings as $finding) {
             if (empty($finding['url'])) { continue; }
             $title = sanitize_text_field($finding['title'] ?: $finding['url']);
             $url = esc_url_raw($finding['url']);
+
+            // Exa occasionally returns the same source twice (identical URL,
+            // or the same title via a near-duplicate URL) — dedupe within
+            // this batch rather than presenting visible duplicates.
+            $url_key = strtolower(untrailingslashit($url));
+            $title_key = strtolower(trim($title));
+            if (isset($seen_urls[$url_key]) || isset($seen_titles[$title_key])) {
+                continue;
+            }
+            $seen_urls[$url_key] = true;
+            $seen_titles[$title_key] = true;
+
             $snippet = wp_kses_post($finding['snippet'] ?? '');
             $items[] = array(
                 'title' => $title,
