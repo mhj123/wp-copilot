@@ -198,8 +198,13 @@ $_delegation_labels = array(
                 <button type="button" class="wcp-item-ai-chip" data-action="to_goal">Convert to goal</button>
                 <?php if (function_exists('wcp_researcher_mode_enabled') && wcp_researcher_mode_enabled()) : ?>
                 <button type="button" class="wcp-item-ai-chip" data-action="suggest_subtopics">Suggest subtopics</button>
-                <?php if ($_row_page_id) : ?>
-                <button type="button" class="wcp-item-ai-chip" data-action="find_references_for_item">Find references</button>
+                <?php if (!$item->post_parent) : ?>
+                    <?php if ($_row_page_id) : ?>
+                    <button type="button" class="wcp-item-ai-chip" data-action="find_references_for_item">Find references</button>
+                    <button type="button" class="wcp-item-ai-chip" data-action="convert_to_heading">Convert to heading</button>
+                    <?php endif; ?>
+                <?php else : ?>
+                    <button type="button" class="wcp-item-ai-chip" data-action="convert_to_item">Convert to item</button>
                 <?php endif; ?>
                 <?php endif; ?>
                 <?php if ($_delegation_active && get_option('wcpd_enabled') === '1') : ?>

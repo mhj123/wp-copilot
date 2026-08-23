@@ -441,7 +441,7 @@ class WCP_AI_Actions {
         return array('outcome' => 'chat', 'message' => $response['content'], 'metadata' => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null));
     }
 
-    private function research_create_item_proposals($items, $page_id, $conversation_id, $action_type, $target_heading = '') {
+    private function research_create_item_proposals($items, $page_id, $conversation_id, $action_type, $target_heading = '', $parent_item_id = 0) {
         $proposals = array();
         $batch_id = wp_generate_uuid4();
         foreach ($items as $index => $item) {
@@ -459,6 +459,12 @@ class WCP_AI_Actions {
             );
             if ($target_heading !== '') {
                 $proposal['target_heading'] = sanitize_text_field($target_heading);
+            }
+            if ($parent_item_id) {
+                // Reference items nest as real subitems of the item that
+                // triggered the search — not filed under a heading. Takes
+                // priority over target_heading if both were somehow set.
+                $proposal['parent_item_id'] = (int) $parent_item_id;
             }
             set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
             $proposals[] = $proposal;
@@ -609,6 +615,13 @@ class WCP_AI_Actions {
         if (!$item || $item->post_type !== 'post') {
             return new WP_Error('not_found', 'Item not found', array('status' => 404));
         }
+        if ($item->post_parent) {
+            // References become subitems of the target — a subitem searching
+            // for references would nest a third level deep. Only top-level
+            // items can be searched directly; use "Convert to item" first
+            // if this genuinely needs its own references.
+            return new WP_Error('is_subitem', 'Find references is only available on top-level items, not subitems.', array('status' => 400));
+        }
         $auth = WCP_REST_Auth::require_object($item_id, 'edit_post');
         if (is_wp_error($auth)) { return $auth; }
         if (!$page_id) {
@@ -629,7 +642,7 @@ class WCP_AI_Actions {
 
         $items = $this->research_findings_to_items($findings, $query);
 
-        list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, 'find_references_for_item', $item->post_title);
+        list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, 'find_references_for_item', '', $item_id);
 
         WCP_AI_Logger::instance()->log_action('find_references_for_item', array(
             'model' => 'exa-web-search',
@@ -646,6 +659,79 @@ class WCP_AI_Actions {
         }
 
         return array('outcome' => 'create_items', 'proposals' => $proposals, 'batch_id' => $batch_id, 'metadata' => array('source' => 'Exa web search', 'query' => $query), 'message' => $summary);
+    }
+
+    /**
+     * Promote a top-level item into a real wcp_heading on the same page —
+     * a genuine conversion, not a sibling: the item post is deleted, its
+     * title/content carry over to the new heading, and any of its own
+     * subitems (post_parent children) become real items filed under that
+     * heading via wcp_context instead of post_parent nesting, since that's
+     * how headings hold items. Not an AI action — a direct, user-invoked
+     * structural mutation, gated on Researcher Mode for consistency with
+     * the rest of this toolkit (it only becomes relevant once Suggest
+     * Subtopics has produced subitems worth formalising).
+     */
+    public function convert_item_to_heading($item_id, $page_id) {
+        if (!class_exists('WCP_Researcher_Mode') || !WCP_Researcher_Mode::is_active()) {
+            return new WP_Error('researcher_mode_off', 'Researcher mode is off. Enable it in Settings first.', array('status' => 403));
+        }
+        $item_id = (int) $item_id;
+        $item = get_post($item_id);
+        if (!$item || $item->post_type !== 'post') {
+            return new WP_Error('not_found', 'Item not found', array('status' => 404));
+        }
+        if ($item->post_parent) {
+            return new WP_Error('is_subitem', 'Only top-level items can be converted to headings.', array('status' => 400));
+        }
+        $auth = WCP_REST_Auth::require_object($item_id, 'edit_post');
+        if (is_wp_error($auth)) { return $auth; }
+        $page_id = (int) $page_id;
+        if (!$page_id) {
+            return new WP_Error('missing_page', 'A page context is required', array('status' => 400));
+        }
+
+        $heading_id = wp_insert_post(array(
+            'post_type'    => 'wcp_heading',
+            'post_title'   => $item->post_title,
+            'post_content' => $item->post_content,
+            'post_status'  => 'publish',
+            'post_author'  => get_current_user_id() ?: $item->post_author,
+            'menu_order'   => WCP_Post_Types::next_heading_menu_order('page', $page_id),
+        ));
+        if (is_wp_error($heading_id)) {
+            return $heading_id;
+        }
+        update_post_meta($heading_id, '_wcp_parent_type', 'page');
+        update_post_meta($heading_id, '_wcp_parent_id', $page_id);
+        // The initial auto-sync (save_post, fired inside wp_insert_post above)
+        // runs before the parent meta above exists, so it doesn't know the
+        // real parent yet — sync again now that it does.
+        WCP_Taxonomy_Sync::instance()->sync_heading_to_taxonomy($heading_id, get_post($heading_id), true);
+        $heading_term_id = $this->heading_context_term_id($heading_id);
+
+        // Cascade: subitems of the original item become real items under
+        // the new heading — un-nest and re-file via wcp_context.
+        $children = get_posts(array(
+            'post_type'      => 'post',
+            'post_status'    => 'publish',
+            'post_parent'    => $item_id,
+            'posts_per_page' => -1,
+        ));
+        foreach ($children as $child) {
+            wp_update_post(array('ID' => $child->ID, 'post_parent' => 0));
+            if ($heading_term_id) {
+                wp_set_post_terms($child->ID, array($heading_term_id), 'wcp_context');
+            }
+        }
+
+        wp_delete_post($item_id, true);
+
+        return array(
+            'success'            => true,
+            'heading_id'         => $heading_id,
+            'converted_children' => count($children),
+        );
     }
 
     /**
@@ -2837,19 +2923,35 @@ class WCP_AI_Actions {
         $debug_info['has_content'] = !empty($item['content']);
 
         if (!empty($item['title']) && !empty($item['content'])) {
-            $post_id = wp_insert_post(array(
+            $parent_item_id = (int) ($proposal['parent_item_id'] ?? 0);
+
+            $insert_args = array(
                 'post_type' => 'post',
                 'post_title' => sanitize_text_field($item['title']),
                 'post_content' => wp_kses_post($item['content']),
                 'post_status' => 'publish',
                 'post_author' => $user_id,
-            ));
+            );
+            if ($parent_item_id) {
+                $insert_args['post_parent'] = $parent_item_id;
+            }
+            $post_id = wp_insert_post($insert_args);
 
             if (!is_wp_error($post_id)) {
                 WCP_Post_Types::mark_creator($post_id, 'copilot');
 
-                // Add to context if term exists
-                if ($context_term_id) {
+                if ($parent_item_id) {
+                    // Nests as a real subitem of the item that produced this
+                    // proposal (e.g. found references) — inherits that
+                    // item's own context rather than the page/target_heading
+                    // resolution above, matching /items/create's existing
+                    // post_parent-inheritance convention.
+                    $parent_context_ids = wp_get_post_terms($parent_item_id, 'wcp_context', array('fields' => 'ids'));
+                    if (!is_wp_error($parent_context_ids) && !empty($parent_context_ids)) {
+                        wp_set_post_terms($post_id, $parent_context_ids, 'wcp_context');
+                    }
+                } elseif ($context_term_id) {
+                    // Add to context if term exists
                     wp_set_post_terms($post_id, array($context_term_id), 'wcp_context');
                 }
 

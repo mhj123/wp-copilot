@@ -2960,6 +2960,14 @@ class WCP_REST_API {
                 }
                 return rest_ensure_response( array_merge( array('success' => true), $fri_result ) );
 
+            case 'convert_to_heading':
+                $cth_page_id = (int) $request->get_param('page_id');
+                $cth_result  = WCP_AI_Actions::instance()->convert_item_to_heading( $item_id, $cth_page_id );
+                if ( is_wp_error( $cth_result ) ) {
+                    return $cth_result;
+                }
+                return rest_ensure_response( $cth_result );
+
             case 'action_plan':
                 $sys = "You are helping the user break down a task into a concrete, ordered action plan. "
                      . "Generate 4–7 numbered steps to achieve the item. "

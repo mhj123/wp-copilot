@@ -1556,6 +1556,46 @@ jQuery(document).ready(function($) {
             return;
         }
 
+        if (action === 'convert_to_item') {
+            // No new backend needed — this is exactly the existing
+            // outdent/un-nest operation (post_parent: 0).
+            if (!confirm('Convert this to a top-level item? It will no longer be nested under its parent.')) {
+                $chip.removeClass('active');
+                return;
+            }
+            updateItem(itemId, { post_parent: 0 }).done(function() {
+                location.reload();
+            });
+            return;
+        }
+
+        if (action === 'convert_to_heading') {
+            if (!confirm('Convert this item into a heading? The item will be replaced by a heading with the same title — this cannot be undone.')) {
+                $chip.removeClass('active');
+                return;
+            }
+            $result.show().html('<em style="color:#aaa;font-size:12px;">Converting…</em>');
+            $.ajax({
+                url: wcpThemeData.restUrl + '/items/' + itemId + '/ai',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ action: 'convert_to_heading', page_id: $panel.data('page-id') }),
+                beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+                success: function(r) {
+                    if (r.success) {
+                        location.reload();
+                    } else {
+                        $result.html('<em style="color:#c0392b;">' + (r.message || 'Could not convert to heading') + '</em>');
+                    }
+                },
+                error: function(xhr) {
+                    var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Connection error';
+                    $result.html('<em style="color:#c0392b;">' + msg + '</em>');
+                }
+            });
+            return;
+        }
+
         if (action === 'delegate') {
             $result.show().html(
                 '<div class="wcp-delegation-form">'
