@@ -3770,6 +3770,20 @@ class WCP_AI_Actions {
         $user_message .= "Global mission:\n" . ( $global_mission ?: '(none set)' ) . "\n\n";
         $mission_status = $has_page_mission ? "SET:\n{$page_mission}" : "NOT SET — you must propose one in `suggested_mission`";
         $user_message .= "Page AI mission: {$mission_status}\n\n";
+
+        // build_structure_snapshot() only covers headings/items, never the
+        // page's own body — without this, pages that carry real prose in
+        // post_content (e.g. Researcher Mode's Description/Objectives/
+        // Context sections) look "empty" to onboard() even when they aren't.
+        $page_body = trim( wp_strip_all_tags( $page->post_content ) );
+        if ( $page_body !== '' ) {
+            $truncated = mb_strlen( $page_body ) > 8000;
+            if ( $truncated ) {
+                $page_body = mb_substr( $page_body, 0, 8000 );
+            }
+            $user_message .= "Page content:\n{$page_body}" . ( $truncated ? ' [truncated]' : '' ) . "\n\n";
+        }
+
         $user_message .= "Current structure:\n{$structure_snapshot}\n\n";
         $user_message .= "Total items on this page: {$item_count}\n\n";
         $user_message .= "Please onboard onto this page.";
