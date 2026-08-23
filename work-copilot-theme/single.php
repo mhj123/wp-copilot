@@ -7,24 +7,20 @@
 get_header();
 ?>
 
-<div class="wcp-single-container">
-    <?php get_sidebar(); ?>
+<div class="wcp-page-content">
 
-    <main class="wcp-single-content">
-        <?php
-        while (have_posts()) :
-            the_post();
+    <?php
+    while (have_posts()) :
+        the_post();
 
-            // Get taxonomies
-            $item_types = wp_get_post_terms(get_the_ID(), 'item_type', array('fields' => 'names'));
-            $priorities = wp_get_post_terms(get_the_ID(), 'priority', array('fields' => 'names'));
-            $contexts = wp_get_post_terms(get_the_ID(), 'wcp_context', array('fields' => 'names'));
-            $tags = wp_get_post_tags(get_the_ID(), array('fields' => 'names'));
-        ?>
+        // Get taxonomies
+        $item_types = wp_get_post_terms(get_the_ID(), 'item_type', array('fields' => 'names'));
+        $priorities = wp_get_post_terms(get_the_ID(), 'priority', array('fields' => 'names'));
+        $contexts = wp_get_post_terms(get_the_ID(), 'wcp_context', array('fields' => 'names'));
+        $tags = wp_get_post_tags(get_the_ID(), array('fields' => 'names'));
 
-        <?php
         // Primary context page (used for "Back to Page" and as the page context
-        // for item-level AI actions such as "Convert to goal").
+        // for item-level AI actions such as "Convert to goal", "Find references").
         $primary_page_id = 0;
         if (!empty($contexts)) {
             $context_terms = wp_get_post_terms(get_the_ID(), 'wcp_context');
@@ -32,138 +28,168 @@ get_header();
                 $primary_page_id = (int) get_term_meta($context_terms[0]->term_id, 'wcp_ref_id', true);
             }
         }
-        ?>
-        <article id="post-<?php the_ID(); ?>" <?php post_class('wcp-single-item wcp-item-row'); ?> data-tags="<?php echo esc_attr(implode(',', $tags)); ?>">
-            <header class="wcp-item-header">
-                <?php
-                // Display breadcrumbs
-                $breadcrumbs = wcp_theme_get_item_breadcrumbs(get_the_ID());
-                if (!empty($breadcrumbs)) {
-                    include(locate_template('template-parts/breadcrumbs.php'));
-                }
-                ?>
+    ?>
+    <article id="post-<?php the_ID(); ?>" <?php post_class('wcp-single-item wcp-item-row'); ?> data-tags="<?php echo esc_attr(implode(',', $tags)); ?>">
+        <header class="wcp-item-header">
+            <?php
+            // Display breadcrumbs
+            $breadcrumbs = wcp_theme_get_item_breadcrumbs(get_the_ID());
+            if (!empty($breadcrumbs)) {
+                include(locate_template('template-parts/breadcrumbs.php'));
+            }
+            ?>
 
-                <h1 class="wcp-item-title"><?php the_title(); ?></h1>
+            <h1 class="wcp-item-title"><?php the_title(); ?></h1>
 
-                <div class="wcp-item-meta">
-                    <?php if (!empty($item_types)) : ?>
-                        <span class="wcp-badge wcp-type-<?php echo esc_attr($item_types[0]); ?>">
-                            <?php echo esc_html($item_types[0]); ?>
-                        </span>
-                    <?php endif; ?>
-
-                    <?php if (!empty($priorities)) : ?>
-                        <span class="wcp-badge wcp-priority-<?php echo esc_attr($priorities[0]); ?>">
-                            <?php echo esc_html($priorities[0]); ?>
-                        </span>
-                    <?php endif; ?>
-
-                    <span class="wcp-item-date">
-                        <?php echo get_the_date(); ?>
+            <div class="wcp-item-meta">
+                <?php if (!empty($item_types)) : ?>
+                    <span class="wcp-badge wcp-type-<?php echo esc_attr($item_types[0]); ?>">
+                        <?php echo esc_html($item_types[0]); ?>
                     </span>
-                </div>
-            </header>
+                <?php endif; ?>
 
-            <?php
-            // Rendered client-side as Markdown (theme.js), not through the_content()'s
-            // wpautop/shortcode pipeline — item content may be AI-generated Markdown
-            // (bullet lists, bold, etc.) and should render as such.
-            $_content_raw = wp_strip_all_tags(get_the_content());
-            ?>
-            <div class="wcp-item-content" data-raw="<?php echo esc_attr($_content_raw); ?>"><?php echo esc_html($_content_raw); ?></div>
+                <?php if (!empty($priorities)) : ?>
+                    <span class="wcp-badge wcp-priority-<?php echo esc_attr($priorities[0]); ?>">
+                        <?php echo esc_html($priorities[0]); ?>
+                    </span>
+                <?php endif; ?>
 
-            <?php
-            // Belongs to: every structural location this item sits in (it may be
-            // assigned to several pages/headings), each as a linked path.
-            $context_paths = wcp_theme_get_item_context_paths(get_the_ID());
-            ?>
-            <?php if (!empty($context_paths) || !empty($tags)) : ?>
-            <section class="wcp-item-taxonomy">
-                <?php if (!empty($context_paths)) : ?>
-                <div class="wcp-item-belongs">
-                    <span class="wcp-section-label"><?php _e('Belongs to', 'work-copilot-theme'); ?></span>
-                    <ul class="wcp-belongs-list">
-                        <?php foreach ($context_paths as $trail) : ?>
-                        <li class="wcp-belongs-path">
-                            <?php foreach ($trail as $i => $crumb) : ?>
-                                <?php if ($i > 0) : ?><span class="wcp-belongs-sep">›</span><?php endif; ?>
-                                <a href="<?php echo esc_url($crumb['url']); ?>"><?php echo esc_html($crumb['title']); ?></a>
-                            <?php endforeach; ?>
-                        </li>
+                <span class="wcp-item-date">
+                    <?php echo get_the_date(); ?>
+                </span>
+            </div>
+        </header>
+
+        <?php
+        // Rendered client-side as Markdown (theme.js), not through the_content()'s
+        // wpautop/shortcode pipeline — item content may be AI-generated Markdown
+        // (bullet lists, bold, etc.) and should render as such.
+        $_content_raw = wp_strip_all_tags(get_the_content());
+        ?>
+        <div class="wcp-item-content" data-raw="<?php echo esc_attr($_content_raw); ?>"><?php echo esc_html($_content_raw); ?></div>
+
+        <?php
+        // Belongs to: every structural location this item sits in (it may be
+        // assigned to several pages/headings), each as a linked path.
+        $context_paths = wcp_theme_get_item_context_paths(get_the_ID());
+        ?>
+        <?php if (!empty($context_paths) || !empty($tags)) : ?>
+        <section class="wcp-item-taxonomy">
+            <?php if (!empty($context_paths)) : ?>
+            <div class="wcp-item-belongs">
+                <span class="wcp-section-label"><?php _e('Belongs to', 'work-copilot-theme'); ?></span>
+                <ul class="wcp-belongs-list">
+                    <?php foreach ($context_paths as $trail) : ?>
+                    <li class="wcp-belongs-path">
+                        <?php foreach ($trail as $i => $crumb) : ?>
+                            <?php if ($i > 0) : ?><span class="wcp-belongs-sep">›</span><?php endif; ?>
+                            <a href="<?php echo esc_url($crumb['url']); ?>"><?php echo esc_html($crumb['title']); ?></a>
                         <?php endforeach; ?>
-                    </ul>
-                </div>
-                <?php endif; ?>
-
-                <?php if (!empty($tags)) : ?>
-                <div class="wcp-item-tags">
-                    <span class="wcp-section-label"><?php _e('Tags', 'work-copilot-theme'); ?></span>
-                    <?php foreach ($tags as $tag) : ?>
-                        <a class="wcp-tag" href="<?php echo esc_url(home_url('/?tag=' . urlencode(sanitize_title($tag)))); ?>"><?php echo esc_html($tag); ?></a>
+                    </li>
                     <?php endforeach; ?>
-                </div>
-                <?php endif; ?>
-            </section>
+                </ul>
+            </div>
             <?php endif; ?>
 
-            <div class="wcp-item-actions">
-                <?php
-                // Get edit link - pass post ID explicitly
-                $edit_link = get_edit_post_link(get_the_ID());
-                $can_edit  = current_user_can('edit_post', get_the_ID());
-
-                if ($edit_link && $can_edit) :
-                ?>
-                    <a href="<?php echo esc_url($edit_link); ?>" class="wcp-btn wcp-btn-secondary">
-                        Edit Item
-                    </a>
-                <?php elseif (is_user_logged_in()) : ?>
-                    <span class="wcp-notice">You don't have permission to edit this item.</span>
-                <?php else : ?>
-                    <a href="<?php echo esc_url(wp_login_url(get_permalink())); ?>" class="wcp-btn wcp-btn-secondary">
-                        Log in to edit
-                    </a>
-                <?php endif; ?>
-
-                <?php
-                // Link back to the primary context page, if any
-                if ($primary_page_id) {
-                    $page_url = get_permalink($primary_page_id);
-                    if ($page_url) {
-                        echo '<a href="' . esc_url($page_url) . '" class="wcp-btn wcp-btn-secondary">Back to Page</a>';
-                    }
-                }
-                ?>
-
-                <?php if ($can_edit) : ?>
-                    <button type="button" class="wcp-btn wcp-btn-secondary wcp-item-ai-btn" data-item-id="<?php the_ID(); ?>">
-                        AI Actions
-                    </button>
-                <?php endif; ?>
+            <?php if (!empty($tags)) : ?>
+            <div class="wcp-item-tags">
+                <span class="wcp-section-label"><?php _e('Tags', 'work-copilot-theme'); ?></span>
+                <?php foreach ($tags as $tag) : ?>
+                    <a class="wcp-tag" href="<?php echo esc_url(home_url('/?tag=' . urlencode(sanitize_title($tag)))); ?>"><?php echo esc_html($tag); ?></a>
+                <?php endforeach; ?>
             </div>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
+
+        <div class="wcp-item-actions">
+            <?php
+            // Get edit link - pass post ID explicitly
+            $edit_link = get_edit_post_link(get_the_ID());
+            $can_edit  = current_user_can('edit_post', get_the_ID());
+
+            if ($edit_link && $can_edit) :
+            ?>
+                <a href="<?php echo esc_url($edit_link); ?>" class="wcp-btn wcp-btn-secondary">
+                    Edit Item
+                </a>
+            <?php elseif (is_user_logged_in()) : ?>
+                <span class="wcp-notice">You don't have permission to edit this item.</span>
+            <?php else : ?>
+                <a href="<?php echo esc_url(wp_login_url(get_permalink())); ?>" class="wcp-btn wcp-btn-secondary">
+                    Log in to edit
+                </a>
+            <?php endif; ?>
+
+            <?php
+            // Link back to the primary context page, if any
+            if ($primary_page_id) {
+                $page_url = get_permalink($primary_page_id);
+                if ($page_url) {
+                    echo '<a href="' . esc_url($page_url) . '" class="wcp-btn wcp-btn-secondary">Back to Page</a>';
+                }
+            }
+            ?>
 
             <?php if ($can_edit) : ?>
-            <input type="hidden" name="page_id" value="<?php echo esc_attr($primary_page_id); ?>">
-            <div class="wcp-item-ai-panel" data-item-id="<?php the_ID(); ?>" style="display:none;">
-                <div class="wcp-item-ai-chips">
-                    <button type="button" class="wcp-item-ai-chip" data-action="action_plan">Action plan</button>
-                    <button type="button" class="wcp-item-ai-chip" data-action="action_plan_from_context">Action plan from context</button>
-                    <button type="button" class="wcp-item-ai-chip" data-action="improve_phrasing">Improve phrasing</button>
-                    <button type="button" class="wcp-item-ai-chip" data-action="freeform">Freeform…</button>
-                    <button type="button" class="wcp-item-ai-chip" data-action="suggest_subtasks">Add subtasks</button>
-                    <button type="button" class="wcp-item-ai-chip" data-action="suggest_contexts">Auto-associate</button>
-                    <button type="button" class="wcp-item-ai-chip" data-action="to_goal">Convert to goal</button>
-                    <?php if (class_exists('WCPD_Delegation_Manager') && get_option('wcpd_enabled') === '1') : ?>
-                    <button type="button" class="wcp-item-ai-chip" data-action="delegate">Delegate</button>
-                    <?php endif; ?>
-                </div>
-                <div class="wcp-item-ai-result" style="display:none;"></div>
-            </div>
+                <button type="button" class="wcp-btn wcp-btn-secondary wcp-item-ai-btn" data-item-id="<?php the_ID(); ?>">
+                    AI Actions
+                </button>
             <?php endif; ?>
-        </article>
+        </div>
 
-        <?php endwhile; ?>
-    </main>
+        <?php if ($can_edit) : ?>
+        <input type="hidden" name="page_id" value="<?php echo esc_attr($primary_page_id); ?>">
+        <div class="wcp-item-ai-panel" data-item-id="<?php echo esc_attr(get_the_ID()); ?>" data-page-id="<?php echo esc_attr($primary_page_id); ?>" style="display:none;">
+            <div class="wcp-item-ai-chips">
+                <button type="button" class="wcp-item-ai-chip" data-action="action_plan">Action plan</button>
+                <button type="button" class="wcp-item-ai-chip" data-action="action_plan_from_context">Action plan from context</button>
+                <button type="button" class="wcp-item-ai-chip" data-action="improve_phrasing">Improve phrasing</button>
+                <button type="button" class="wcp-item-ai-chip" data-action="freeform">Freeform…</button>
+                <button type="button" class="wcp-item-ai-chip" data-action="suggest_subtasks">Add subtasks</button>
+                <button type="button" class="wcp-item-ai-chip" data-action="suggest_contexts">Auto-associate</button>
+                <button type="button" class="wcp-item-ai-chip" data-action="to_goal">Convert to goal</button>
+                <?php if (function_exists('wcp_researcher_mode_enabled') && wcp_researcher_mode_enabled()) : ?>
+                <button type="button" class="wcp-item-ai-chip" data-action="suggest_subtopics">Suggest subtopics</button>
+                <?php if (!$post->post_parent) : ?>
+                    <?php if ($primary_page_id) : ?>
+                    <button type="button" class="wcp-item-ai-chip" data-action="find_references_for_item">Find references</button>
+                    <button type="button" class="wcp-item-ai-chip" data-action="convert_to_heading">Convert to heading</button>
+                    <?php endif; ?>
+                <?php else : ?>
+                    <button type="button" class="wcp-item-ai-chip" data-action="convert_to_item">Convert to item</button>
+                <?php endif; ?>
+                <?php endif; ?>
+                <?php if (class_exists('WCPD_Delegation_Manager') && get_option('wcpd_enabled') === '1') : ?>
+                <button type="button" class="wcp-item-ai-chip" data-action="delegate">Delegate</button>
+                <?php endif; ?>
+            </div>
+            <div class="wcp-item-ai-result" style="display:none;"></div>
+        </div>
+        <?php endif; ?>
+    </article>
+
+    <?php
+    // Subitems: this item's own children, rendered the same way page view
+    // renders items — full row (chips, AI panel, subtasks) via
+    // wcp_theme_render_item_tree(), which also recurses into their own
+    // children in turn.
+    $_subitems = wcp_theme_get_item_children(get_the_ID());
+    ?>
+    <?php if (!empty($_subitems)) : ?>
+    <section class="wcp-items-section">
+        <div class="wcp-items-toolbar">
+            <span class="wcp-section-label">Subitems</span>
+        </div>
+        <div class="wcp-items-list">
+            <?php foreach ($_subitems as $_subitem) :
+                wcp_theme_render_item_tree($_subitem, 0, array(), $primary_page_id);
+            endforeach; ?>
+        </div>
+    </section>
+    <?php endif; ?>
+
+    <?php endwhile; ?>
 </div>
 
 <?php

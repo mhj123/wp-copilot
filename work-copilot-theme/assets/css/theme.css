@@ -2288,26 +2288,18 @@ a.wcp-tree-label:hover {
 }
 
 /* ==========================================================================
-   Single Post Template
+   Single Post Template — card styled to match the page view's
+   .wcp-page-content-box (border instead of shadow, same radius), since this
+   template renders inside the same .wcp-page-content wrapper page.php uses.
    ========================================================================== */
-
-.wcp-single-container {
-    display: flex;
-    min-height: 100vh;
-}
-
-.wcp-single-content {
-    margin-left: 280px;
-    flex: 1;
-    padding: 40px;
-    max-width: 900px;
-}
 
 .wcp-single-item {
     background: #fff;
-    padding: 40px;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    padding: 28px 32px;
+    border: 1px solid var(--wcp-border, #e4e6ec);
+    border-radius: 10px;
+    box-shadow: none;
+    margin-bottom: 18px;
 }
 
 .wcp-item-header {
@@ -2447,6 +2439,14 @@ a.wcp-tag:hover {
     gap: 12px;
 }
 
+/* .wcp-theme-container a { color: var(--wcp-accent) } elsewhere otherwise
+   wins over .wcp-btn-secondary's white text for these two <a class="wcp-btn">
+   links, leaving purple-on-grey — illegible next to the plain <button>
+   "AI Actions" beside it, which isn't a link and so isn't affected. */
+.wcp-item-actions a.wcp-btn {
+    color: #fff;
+}
+
 .wcp-notice {
     color: #666;
     font-size: 14px;
@@ -2454,23 +2454,12 @@ a.wcp-tag:hover {
 }
 
 @media (max-width: 768px) {
-    .wcp-single-content {
-        margin-left: 240px;
-        padding: 20px;
-    }
-
     .wcp-single-item {
-        padding: 25px;
+        padding: 20px;
     }
 
     .wcp-single-item .wcp-item-title {
         font-size: 24px;
-    }
-}
-
-@media (max-width: 640px) {
-    .wcp-single-content {
-        margin-left: 0;
     }
 }
 
@@ -3057,12 +3046,14 @@ a.wcp-tag:hover {
 
 .wcp-item-ai-proposal { margin-bottom: 6px; line-height: 1.5; }
 
-/* Single item page reuses the item-row AI panel markup/JS, but the article
-   itself isn't a listing row — cancel out the flex/grid row styling and
-   keep the [ai] toggle visible without needing a hover. */
+/* Single item page reuses item-row's AI panel markup/JS (theme.js finds the
+   panel via .closest('.wcp-item-row')), but the article itself isn't a
+   listing row — cancel out the flex/grid row styling and restore the card
+   padding .wcp-item-row's own padding: 6px 12px would otherwise override
+   (same specificity as .wcp-single-item alone, but declared later). */
 .wcp-single-item.wcp-item-row {
     display: block;
-    padding: 0;
+    padding: 28px 32px;
     border-bottom: none;
 }
 
