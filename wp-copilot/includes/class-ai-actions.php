@@ -2039,10 +2039,10 @@ class WCP_AI_Actions {
         }
 
         $filename = sanitize_text_field($source['filename'] ?? 'Uploaded PDF');
-        $system_prompt = "You summarise uploaded PDFs for a personal work knowledge base. Return ONLY valid JSON with keys title and content. The title must be concise. The content should be a faithful, useful summary in Markdown-style plain text with: 1) short overview, 2) key points, 3) relevant actions or decisions if present. Do not invent facts.";
+        $system_prompt = "You summarise uploaded PDFs for a personal work knowledge base. Return ONLY valid JSON with keys title and content. The title must be concise. The content should be a faithful, useful summary in Markdown-style plain text with: 1) short overview, 2) key points, 3) relevant actions or decisions if present. Do not invent facts. Keep the summary to roughly 400-700 words — this is a reference pointer to the source document, not a reproduction of it; go for the most load-bearing points rather than exhaustive coverage, even for long or dense source documents.";
         $user_message = "PDF filename: {$filename}\n\nRead the attached PDF directly and produce the requested JSON summary.";
 
-        $response = WCP_AI_Client::instance()->request_with_document($system_prompt, $user_message, $attachment_id, 2048, 90);
+        $response = WCP_AI_Client::instance()->request_with_document($system_prompt, $user_message, $attachment_id, 4096, 120);
         if (is_wp_error($response)) {
             return $response;
         }
