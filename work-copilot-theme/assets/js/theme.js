@@ -1625,11 +1625,16 @@ jQuery(document).ready(function($) {
 
         $result.show().html('<em style="color:#aaa;font-size:12px;">Thinking…</em>');
 
+        var requestPayload = { action: action };
+        if (action === 'find_references_for_item') {
+            requestPayload.page_id = $panel.data('page-id');
+        }
+
         $.ajax({
             url: wcpThemeData.restUrl + '/items/' + itemId + '/ai',
             method: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify({ action: action }),
+            data: JSON.stringify(requestPayload),
             beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
             success: function(r) {
                 if (!r.success) { $result.html('<em style="color:#c0392b;">Error</em>'); return; }
@@ -1671,6 +1676,47 @@ jQuery(document).ready(function($) {
                         + '<ul style="margin:0 0 8px;padding-left:16px;font-size:12px;">' + names + '</ul>'
                         + '<button class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-item-ai-accept-contexts" data-item-id="' + itemId + '" data-ids="' + r.context_ids.join(',') + '">Apply</button>'
                         + ' <button class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
+                    );
+                } else if (action === 'suggest_subtopics') {
+                    // Reuses the exact action_plan markup/classes (wcp-ap-add-step,
+                    // wcp-ap-remove, wcp-ap-accept-items) so those existing handlers
+                    // work unchanged — subtopics only ever become real items, never
+                    // lightweight subtasks, so there's no "Add as subtasks" button.
+                    var html2 = '<ol class="wcp-action-plan-list">';
+                    (r.subtopics || []).forEach(function(topic, i) {
+                        html2 += '<li class="wcp-action-plan-step" data-index="' + i + '">'
+                            + '<div class="wcp-ap-title-row">'
+                            + '<input class="wcp-ap-title" type="text" value="' + $('<span>').text(topic.title).html() + '">'
+                            + '<button type="button" class="wcp-ap-remove wcp-edit-link">×</button>'
+                            + '</div>'
+                            + '<textarea class="wcp-ap-desc">' + $('<span>').text(topic.description || '').html() + '</textarea>'
+                            + '</li>';
+                    });
+                    html2 += '</ol>'
+                        + '<div class="wcp-ap-actions">'
+                        + '<button type="button" class="wcp-ap-add-step wcp-edit-link">+ add subtopic</button>'
+                        + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-ap-accept-items" data-item-id="' + itemId + '">Add selected as items</button>'
+                        + '<button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
+                        + '</div>';
+                    $result.html(html2);
+                } else if (action === 'find_references_for_item') {
+                    var proposals = r.proposals || [];
+                    if (!proposals.length) {
+                        $result.html('<em style="color:#888;font-size:12px;">No references found.</em>');
+                        return;
+                    }
+                    var rows = proposals.map(function(p) {
+                        var it = p.item || {};
+                        return '<li><label>'
+                            + '<input type="checkbox" class="wcp-fri-cb" checked data-proposal-id="' + p.proposal_id + '"> '
+                            + '<strong>' + $('<span>').text(it.title || '').html() + '</strong>'
+                            + '</label></li>';
+                    }).join('');
+                    $result.html(
+                        '<p style="font-size:12px;margin:0 0 6px;color:#555;">' + $('<span>').text(r.message || 'Found references').html() + '</p>'
+                        + '<ul class="wcp-fri-list" style="margin:0 0 8px;padding-left:16px;font-size:12px;list-style:none;">' + rows + '</ul>'
+                        + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-fri-accept" data-batch-id="' + r.batch_id + '">Add selected</button>'
+                        + ' <button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
                     );
                 }
             },
@@ -1767,6 +1813,41 @@ jQuery(document).ready(function($) {
             });
         }
         addNext(0);
+    });
+
+    // Find references for item — accept selected proposals. Same
+    // /ai/proposals/decide contract the AI assistant widget already uses
+    // for this exact create_items proposal shape, just called from the
+    // item panel instead.
+    $(document).on('click', '.wcp-fri-accept', function() {
+        var $btn = $(this);
+        var batchId = $btn.data('batch-id');
+        var selectedIds = $btn.closest('.wcp-item-ai-result').find('.wcp-fri-cb:checked').map(function() {
+            return $(this).data('proposal-id');
+        }).get();
+        if (!selectedIds.length) return;
+
+        $btn.prop('disabled', true).text('Adding…');
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/ai/proposals/decide',
+            method: 'POST',
+            data: { batch_id: batchId, decision: 'accept', selected_proposal_ids: selectedIds },
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(response) {
+                if (response.success) {
+                    $btn.closest('.wcp-item-ai-panel').slideUp(120);
+                    location.reload();
+                } else {
+                    $btn.prop('disabled', false).text('Add selected');
+                    alert(response.message || 'Could not add references.');
+                }
+            },
+            error: function() {
+                $btn.prop('disabled', false).text('Add selected');
+                alert('Connection error.');
+            }
+        });
     });
 
     // Action plan from context — generate plan using selected RAG pages

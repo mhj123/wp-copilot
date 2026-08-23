@@ -2924,6 +2924,36 @@ class WCP_REST_API {
                     'description' => $item->post_title . ( $item->post_content ? "\n" . wp_strip_all_tags($item->post_content) : '' ),
                 ));
 
+            case 'suggest_subtopics':
+                if ( ! class_exists('WCP_Researcher_Mode') || ! WCP_Researcher_Mode::is_active() ) {
+                    return new WP_Error( 'researcher_mode_off', 'Researcher mode is off. Enable it in Settings first.', array('status' => 403) );
+                }
+                $sys  = "Generate 3–6 concrete research subtopics or sub-questions worth investigating for this item. "
+                      . "Each should have:\n"
+                      . "- A short, concise title\n"
+                      . "- 1–2 sentences on why it's worth exploring\n\n"
+                      . "Return ONLY a valid JSON array. No text before or after. Format:\n"
+                      . '[{"title":"Subtopic title","description":"Why this is worth exploring."}]';
+                $resp = $ai_client->request_with_conversation( $sys, $item_text, array(), 1024, 60 );
+                if ( is_wp_error($resp) ) return $resp;
+                $subtopics = json_decode( $resp['content'], true );
+                if ( ! is_array($subtopics) ) {
+                    return new WP_Error('parse_error', 'Could not parse subtopics', array('status' => 500));
+                }
+                return rest_ensure_response(array(
+                    'success'   => true,
+                    'action'    => 'suggest_subtopics',
+                    'subtopics' => $subtopics,
+                ));
+
+            case 'find_references_for_item':
+                if ( ! class_exists('WCP_Researcher_Mode') || ! WCP_Researcher_Mode::is_active() ) {
+                    return new WP_Error( 'researcher_mode_off', 'Researcher mode is off. Enable it in Settings first.', array('status' => 403) );
+                }
+                $page_id_param = (int) $request->get_param('page_id');
+                $conversation_id_param = $request->get_param('conversation_id');
+                return WCP_AI_Actions::instance()->find_references_for_item( $item_id, $page_id_param, $conversation_id_param );
+
             case 'action_plan':
                 $sys = "You are helping the user break down a task into a concrete, ordered action plan. "
                      . "Generate 4–7 numbered steps to achieve the item. "

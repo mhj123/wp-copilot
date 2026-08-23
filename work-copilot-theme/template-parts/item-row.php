@@ -186,7 +186,8 @@ $_delegation_labels = array(
         </ul>
         <?php endif; ?>
         <!-- Per-item AI panel -->
-        <div class="wcp-item-ai-panel" data-item-id="<?php echo esc_attr($item->ID); ?>" style="display:none;">
+        <?php $_row_page_id = isset($page_id) ? (int) $page_id : 0; ?>
+        <div class="wcp-item-ai-panel" data-item-id="<?php echo esc_attr($item->ID); ?>" data-page-id="<?php echo esc_attr($_row_page_id); ?>" style="display:none;">
             <div class="wcp-item-ai-chips">
                 <button type="button" class="wcp-item-ai-chip" data-action="action_plan">Action plan</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="action_plan_from_context">Action plan from context</button>
@@ -195,6 +196,12 @@ $_delegation_labels = array(
                 <button type="button" class="wcp-item-ai-chip" data-action="suggest_subtasks">Add subtasks</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="suggest_contexts">Auto-associate</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="to_goal">Convert to goal</button>
+                <?php if (function_exists('wcp_researcher_mode_enabled') && wcp_researcher_mode_enabled()) : ?>
+                <button type="button" class="wcp-item-ai-chip" data-action="suggest_subtopics">Suggest subtopics</button>
+                <?php if ($_row_page_id) : ?>
+                <button type="button" class="wcp-item-ai-chip" data-action="find_references_for_item">Find references</button>
+                <?php endif; ?>
+                <?php endif; ?>
                 <?php if ($_delegation_active && get_option('wcpd_enabled') === '1') : ?>
                 <button type="button" class="wcp-item-ai-chip" data-action="delegate">Delegate</button>
                 <?php endif; ?>

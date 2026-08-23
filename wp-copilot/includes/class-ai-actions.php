@@ -536,21 +536,7 @@ class WCP_AI_Actions {
         $findings = $exa_client->search($query, 6);
         if (is_wp_error($findings)) { return $findings; }
 
-        $items = array();
-        foreach ($findings as $finding) {
-            if (empty($finding['url'])) { continue; }
-            $title = sanitize_text_field($finding['title'] ?: $finding['url']);
-            $url = esc_url_raw($finding['url']);
-            $snippet = wp_kses_post($finding['snippet'] ?? '');
-            $items[] = array(
-                'title' => $title,
-                'content' => "URL: {$url}\n\nSnippet: {$snippet}\n\nProvenance: found via web search (Exa). Query: {$query}. Result URL: {$url}. This is not a formal peer-reviewed citation.",
-                'item_type' => 'info',
-                'tags' => array('web-search', 'exa'),
-                'url' => $url,
-                'source_type' => 'web_search',
-            );
-        }
+        $items = $this->research_findings_to_items($findings, $query);
 
         list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, 'research_find_references', 'Sources');
 
@@ -568,6 +554,94 @@ class WCP_AI_Actions {
         $summary = 'Searched Exa for: "' . $query . '" — found ' . count($proposals) . ' reference candidate(s) for review.';
         if ($conversation_id) {
             WCP_Conversations_Manager::instance()->add_message($conversation_id, 'user', $instruction);
+            WCP_Conversations_Manager::instance()->add_message($conversation_id, 'assistant', $summary, array('batch_id' => $batch_id));
+        }
+
+        return array('outcome' => 'create_items', 'proposals' => $proposals, 'batch_id' => $batch_id, 'metadata' => array('source' => 'Exa web search', 'query' => $query), 'message' => $summary);
+    }
+
+    /**
+     * Turn raw Exa findings into the item-array shape research_create_item_proposals()
+     * expects. Shared by research_find_references() (page-level) and
+     * find_references_for_item() (item-level) — same findings-to-items
+     * conversion, only the query/grounding that produced $findings differs.
+     */
+    private function research_findings_to_items($findings, $query) {
+        $items = array();
+        foreach ($findings as $finding) {
+            if (empty($finding['url'])) { continue; }
+            $title = sanitize_text_field($finding['title'] ?: $finding['url']);
+            $url = esc_url_raw($finding['url']);
+            $snippet = wp_kses_post($finding['snippet'] ?? '');
+            $items[] = array(
+                'title' => $title,
+                'content' => "URL: {$url}\n\nSnippet: {$snippet}\n\nProvenance: found via web search (Exa). Query: {$query}. Result URL: {$url}. This is not a formal peer-reviewed citation.",
+                'item_type' => 'info',
+                'tags' => array('web-search', 'exa'),
+                'url' => $url,
+                'source_type' => 'web_search',
+            );
+        }
+        return $items;
+    }
+
+    /**
+     * Item-level counterpart to research_find_references(): finds references
+     * grounded in a SPECIFIC item's own title/content rather than a typed
+     * instruction, and files them under a heading named after that item
+     * (a sibling heading, not a conversion of the item) instead of "Sources".
+     * The heading is only actually created when the resulting proposal is
+     * accepted (find_or_create_heading() runs inside execute_proposal()'s
+     * target_heading resolution) — nothing is created here, preserving the
+     * human-in-the-loop guarantee even for the heading itself.
+     *
+     * @param int $page_id The page the user was viewing when they triggered
+     *   this — an item can appear on multiple pages via multi-context
+     *   association, so this must come from the viewing context, not be
+     *   inferred from the item.
+     */
+    public function find_references_for_item($item_id, $page_id, $conversation_id = null) {
+        if (!class_exists('WCP_Researcher_Mode') || !WCP_Researcher_Mode::is_active()) {
+            return new WP_Error('researcher_mode_off', 'Researcher mode is off. Enable it in Settings first.', array('status' => 403));
+        }
+        $item_id = (int) $item_id;
+        $item = get_post($item_id);
+        if (!$item || $item->post_type !== 'post') {
+            return new WP_Error('not_found', 'Item not found', array('status' => 404));
+        }
+        $auth = WCP_REST_Auth::require_object($item_id, 'edit_post');
+        if (is_wp_error($auth)) { return $auth; }
+        if (!$page_id) {
+            return new WP_Error('missing_page', 'A page context is required', array('status' => 400));
+        }
+
+        $exa_client = WCP_Exa_Client::instance();
+        if (!$exa_client->is_configured()) {
+            return new WP_Error('not_configured', 'Exa API key not configured. Add one in Work Copilot → Settings.');
+        }
+
+        $instruction = $item->post_title . ($item->post_content ? "\n" . wp_strip_all_tags($item->post_content) : '');
+        $atoms = $this->research_space_atoms($page_id);
+        $query = $this->research_derive_search_query($instruction, $page_id, $atoms);
+
+        $findings = $exa_client->search($query, 6);
+        if (is_wp_error($findings)) { return $findings; }
+
+        $items = $this->research_findings_to_items($findings, $query);
+
+        list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, 'find_references_for_item', $item->post_title);
+
+        WCP_AI_Logger::instance()->log_action('find_references_for_item', array(
+            'model' => 'exa-web-search',
+            'prompt' => $item->post_title,
+            'input_context' => array('page_id' => $page_id, 'item_id' => $item_id, 'source' => 'Exa web search', 'derived_query' => $query),
+            'output' => $items,
+            'context_post_id' => $page_id,
+        ));
+
+        $summary = 'Searched Exa for: "' . $query . '" — found ' . count($proposals) . ' reference candidate(s) for "' . $item->post_title . '".';
+        if ($conversation_id) {
+            WCP_Conversations_Manager::instance()->add_message($conversation_id, 'user', 'Find references for: ' . $item->post_title);
             WCP_Conversations_Manager::instance()->add_message($conversation_id, 'assistant', $summary, array('batch_id' => $batch_id));
         }
 
