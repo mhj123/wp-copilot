@@ -477,7 +477,7 @@ function wcp_theme_get_item_children( $item_id ) {
 // Render an item row and recursively render its children beneath it.
 // $filter_context_ids: context term IDs that are already implied by the
 // current page/heading and should be hidden from the context pill display.
-function wcp_theme_render_item_tree( $item, $depth = 0, $filter_context_ids = array() ) {
+function wcp_theme_render_item_tree( $item, $depth = 0, $filter_context_ids = array(), $page_id = 0 ) {
     $item_types    = wp_get_post_terms( $item->ID, 'item_type',   array( 'fields' => 'names' ) );
     $priorities    = wp_get_post_terms( $item->ID, 'priority',    array( 'fields' => 'names' ) );
     $task_statuses = wp_get_post_terms( $item->ID, 'task_status', array( 'fields' => 'slugs' ) );
@@ -499,7 +499,7 @@ function wcp_theme_render_item_tree( $item, $depth = 0, $filter_context_ids = ar
     if ( ! empty( $children ) ) {
         echo '<div class="wcp-subitems-list" data-parent-id="' . esc_attr( $item->ID ) . '">';
         foreach ( $children as $child ) {
-            wcp_theme_render_item_tree( $child, $depth + 1, $filter_context_ids );
+            wcp_theme_render_item_tree( $child, $depth + 1, $filter_context_ids, $page_id );
         }
         echo '</div>';
     }

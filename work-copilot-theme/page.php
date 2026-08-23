@@ -207,7 +207,7 @@ get_header();
         <!-- Page-level items (not under any heading) -->
         <div class="wcp-items-list" data-context-id="<?php echo esc_attr($page_context_id); ?>">
             <?php foreach ($page_only_items as $item) :
-                wcp_theme_render_item_tree( $item, 0, $local_context_ids );
+                wcp_theme_render_item_tree( $item, 0, $local_context_ids, $page_id );
             endforeach; ?>
         </div>
 
@@ -244,7 +244,7 @@ get_header();
                 <div class="wcp-heading-body">
                     <div class="wcp-items-list" data-context-id="<?php echo esc_attr($heading_context_id); ?>">
                         <?php foreach ($items as $item) :
-                            wcp_theme_render_item_tree( $item, 0, $local_context_ids );
+                            wcp_theme_render_item_tree( $item, 0, $local_context_ids, $page_id );
                         endforeach; ?>
                     </div>
 
