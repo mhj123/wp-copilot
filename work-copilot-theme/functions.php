@@ -736,6 +736,117 @@ function wcp_theme_get_item_context_paths($item_id) {
     return $paths;
 }
 
+/**
+ * Resolve the id of the page a SPECIFIC context term belongs to (walking up
+ * through any nested headings) — like wcp_theme_get_item_page_id() but for
+ * an arbitrary term rather than always an item's first context. Returns 0
+ * if unresolved.
+ */
+function wcp_theme_resolve_context_term_page_id($term_id) {
+    $ref_type = get_term_meta($term_id, 'wcp_ref_type', true);
+    $ref_id   = (int) get_term_meta($term_id, 'wcp_ref_id', true);
+
+    $guard = 0;
+    while ($ref_type === 'wcp_heading' && $ref_id && $guard++ < 20) {
+        $parent_type = get_post_meta($ref_id, '_wcp_parent_type', true);
+        $ref_id      = (int) get_post_meta($ref_id, '_wcp_parent_id', true);
+        $ref_type    = $parent_type;
+    }
+
+    return ($ref_type === 'page' && $ref_id) ? $ref_id : 0;
+}
+
+/**
+ * If this item belongs (via any of its wcp_context associations) to a page
+ * that is itself a child of Researcher Mode's Library, return that paper
+ * page's URL — used to render a "View in Library" link on cross-linked
+ * items (e.g. a reference under a project's Sources heading). Returns ''
+ * if none apply.
+ */
+function wcp_theme_get_item_library_paper_url($item_id, $exclude_page_id = 0) {
+    if (!class_exists('WCP_Researcher_Mode')) {
+        return '';
+    }
+    $library_id = WCP_Researcher_Mode::instance()->get_library_page_id();
+    if (!$library_id) {
+        return '';
+    }
+
+    $terms = wp_get_post_terms($item_id, 'wcp_context');
+    if (empty($terms) || is_wp_error($terms)) {
+        return '';
+    }
+
+    foreach ($terms as $term) {
+        $page_id = wcp_theme_resolve_context_term_page_id($term->term_id);
+        if (!$page_id || $page_id === $exclude_page_id) {
+            continue;
+        }
+        $page = get_post($page_id);
+        if ($page && (int) $page->post_parent === (int) $library_id) {
+            return get_permalink($page_id);
+        }
+    }
+
+    return '';
+}
+
+/**
+ * For a paper page under Library: which OTHER pages (projects) reference
+ * its items via multi-context association? De-duplicated, sorted by title.
+ */
+function wcp_theme_get_paper_referenced_in($paper_page_id) {
+    if (!class_exists('WCP_Taxonomy_Sync')) {
+        return array();
+    }
+    $paper_term = WCP_Taxonomy_Sync::instance()->get_term_for_ref('page', $paper_page_id);
+    if (!$paper_term) {
+        return array();
+    }
+
+    $paper_term_ids = array($paper_term->term_id);
+    $children = get_term_children($paper_term->term_id, 'wcp_context');
+    if (!is_wp_error($children)) {
+        $paper_term_ids = array_merge($paper_term_ids, $children);
+    }
+
+    $item_ids = get_posts(array(
+        'post_type'      => 'post',
+        'post_status'    => 'publish',
+        'posts_per_page' => -1,
+        'fields'         => 'ids',
+        'tax_query'      => array(array(
+            'taxonomy' => 'wcp_context',
+            'field'    => 'term_id',
+            'terms'    => $paper_term_ids,
+        )),
+    ));
+
+    $projects = array();
+    foreach ($item_ids as $item_id) {
+        $terms = wp_get_post_terms($item_id, 'wcp_context');
+        if (is_wp_error($terms)) {
+            continue;
+        }
+        foreach ($terms as $term) {
+            if (in_array($term->term_id, $paper_term_ids, true)) {
+                continue; // this paper's own context — not a cross-reference
+            }
+            $project_page_id = wcp_theme_resolve_context_term_page_id($term->term_id);
+            if ($project_page_id && $project_page_id !== $paper_page_id && !isset($projects[$project_page_id])) {
+                $projects[$project_page_id] = array(
+                    'id'    => $project_page_id,
+                    'title' => get_the_title($project_page_id),
+                    'url'   => get_permalink($project_page_id),
+                );
+            }
+        }
+    }
+
+    usort($projects, function ($a, $b) { return strcasecmp($a['title'], $b['title']); });
+    return $projects;
+}
+
 // Run a dynamic listing query and return matching posts
 function wcp_theme_query_dynamic_listing($listing) {
     $tax_query = array('relation' => 'AND');

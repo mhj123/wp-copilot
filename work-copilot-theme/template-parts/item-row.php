@@ -116,6 +116,10 @@ $_delegation_labels = array(
     <?php if ($source_url) : ?>
         <a href="<?php echo esc_url($source_url); ?>" class="wcp-source-link" target="_blank" rel="noopener" title="<?php echo esc_attr($source_url); ?>">↗</a>
     <?php endif; ?>
+    <?php $_library_paper_url = function_exists('wcp_theme_get_item_library_paper_url') ? wcp_theme_get_item_library_paper_url($item->ID, isset($page_id) ? (int) $page_id : 0) : ''; ?>
+    <?php if ($_library_paper_url) : ?>
+        <a href="<?php echo esc_url($_library_paper_url); ?>" class="wcp-library-link" title="<?php esc_attr_e('View in Library', 'work-copilot-theme'); ?>"><?php _e('View in Library', 'work-copilot-theme'); ?></a>
+    <?php endif; ?>
 
     <?php $_desc_raw = wp_strip_all_tags($item->post_content); ?>
     <span class="wcp-item-description<?php echo empty($item->post_content) ? ' wcp-item-description-empty' : ''; ?>"

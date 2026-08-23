@@ -33,6 +33,31 @@ get_header();
         <h1 class="wcp-page-title-clean"><?php the_title(); ?></h1>
     </header>
 
+    <?php
+    // "Referenced in" — for a paper page under Researcher Mode's Library,
+    // list the projects whose Sources heading cross-links to this paper's
+    // items (multi-context association, not a copy).
+    $_referenced_in = array();
+    if (class_exists('WCP_Researcher_Mode') && function_exists('wcp_theme_get_paper_referenced_in')) {
+        $_library_id = WCP_Researcher_Mode::instance()->get_library_page_id();
+        if ($_library_id && (int) get_post($page_id)->post_parent === (int) $_library_id) {
+            $_referenced_in = wcp_theme_get_paper_referenced_in($page_id);
+        }
+    }
+    ?>
+    <?php if (!empty($_referenced_in)) : ?>
+    <section class="wcp-referenced-in-section">
+        <h2><?php _e('Referenced in', 'work-copilot-theme'); ?></h2>
+        <ul class="wcp-referenced-in-list">
+            <?php foreach ($_referenced_in as $_project) : ?>
+                <li class="wcp-referenced-in-item">
+                    <a href="<?php echo esc_url($_project['url']); ?>"><?php echo esc_html($_project['title']); ?></a>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    </section>
+    <?php endif; ?>
+
     <?php if (!empty($headings)) : ?>
     <nav class="wcp-page-toc" aria-label="<?php esc_attr_e('Page table of contents', 'work-copilot-theme'); ?>">
         <div class="wcp-page-toc-label"><?php _e('Contents', 'work-copilot-theme'); ?></div>

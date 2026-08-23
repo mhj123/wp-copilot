@@ -18,6 +18,11 @@
 }
 .wcp-theme-container *, .wcp-theme-container *::before, .wcp-theme-container *::after { box-sizing: border-box; }
 .wcp-theme-container a { color: var(--wcp-accent); text-decoration: none; }
+/* Links inside item content/descriptions stay a fixed light blue regardless
+   of the site's accent colour — these are user/AI-authored inline links
+   (markdown-rendered), not navigational UI chrome, so they shouldn't shift
+   with the theme. */
+.wcp-item-content a, .wcp-item-description a { color: #4a9eff; }
 .wcp-theme-container button:focus-visible, .wcp-theme-container a:focus-visible, .wcp-theme-container input:focus-visible, .wcp-theme-container select:focus-visible { outline: 3px solid color-mix(in srgb, var(--wcp-accent) 28%, transparent); outline-offset: 2px; }
 
 /* Navigation is deliberately quiet: the current area gets the colour, not every link. */
@@ -59,14 +64,22 @@ body.wcp-ai-panel-open.wcp-ai-panel-expanded .wcp-main-content { display: none; 
 .wcp-breadcrumb-home-icon, .wcp-breadcrumb-heading-icon { font-size: 11px; }
 .wcp-breadcrumb-separator { color: var(--wcp-text-faint); }
 
-/* Compact child-page cards make the structural next step scan faster than a bullet list. */
+/* A vertical list reads better once a page has more than a couple of children. */
 .wcp-subpages-section { margin: 0 0 18px; }
 .wcp-subpages-section h2 { margin: 0 0 9px; color: var(--wcp-text-muted); font-size: 11px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
-.wcp-subpages-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.wcp-subpages-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .wcp-subpage-item { margin: 0; }
-.wcp-subpage-item a { display: inline-flex; align-items: center; gap: 7px; padding: 8px 11px; border: 1px solid var(--wcp-border); border-radius: 8px; background: var(--wcp-surface); color: var(--wcp-text); font-size: 13px; font-weight: 600; box-shadow: 0 1px 2px rgba(20,31,50,.025); }
-.wcp-subpage-item a::before { width: 6px; height: 6px; border-radius: 50%; background: var(--wcp-accent); content: ""; }
-.wcp-subpage-item a:hover { border-color: color-mix(in srgb, var(--wcp-accent) 50%, var(--wcp-border)); color: var(--wcp-accent); }
+.wcp-subpage-item a { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 6px; color: var(--wcp-text); font-size: 13px; font-weight: 600; }
+.wcp-subpage-item a::before { width: 6px; height: 6px; border-radius: 50%; background: var(--wcp-accent); content: ""; flex-shrink: 0; }
+.wcp-subpage-item a:hover { background: color-mix(in srgb, var(--wcp-accent) 7%, transparent); color: var(--wcp-accent); }
+
+.wcp-referenced-in-section { margin: 0 0 18px; }
+.wcp-referenced-in-section h2 { margin: 0 0 9px; color: var(--wcp-text-muted); font-size: 11px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+.wcp-referenced-in-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.wcp-referenced-in-item { margin: 0; }
+.wcp-referenced-in-item a { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 6px; color: var(--wcp-text); font-size: 13px; font-weight: 600; }
+.wcp-referenced-in-item a::before { width: 6px; height: 6px; border-radius: 50%; background: var(--wcp-accent); content: ""; flex-shrink: 0; }
+.wcp-referenced-in-item a:hover { background: color-mix(in srgb, var(--wcp-accent) 7%, transparent); color: var(--wcp-accent); }
 
 /* The list is a single information-dense workspace surface. */
 .wcp-items-section { overflow: hidden; padding: 0; border: 1px solid var(--wcp-border); border-radius: 12px; background: var(--wcp-surface); box-shadow: 0 12px 32px rgba(23,35,55,.045); }
@@ -105,9 +118,9 @@ body.wcp-ai-panel-open.wcp-ai-panel-expanded .wcp-main-content { display: none; 
 .wcp-item-created { color: var(--wcp-text-faint); font-size: 11px; white-space: nowrap; }
 .wcp-row-actions { display: inline-flex; align-items: center; gap: 5px; }
 .wcp-inline-select, .wcp-due-date-input { min-width: 0; border: 1px solid var(--wcp-border); border-radius: 5px; background: var(--wcp-surface-muted); color: var(--wcp-text-muted); font-size: 10px; font-weight: 700; line-height: 1; padding: 4px 5px; text-transform: uppercase; }
-.wcp-item-row .wcp-edit-link, .wcp-source-link, .wcp-pin-toggle { border: 0; border-radius: 5px; background: transparent; color: var(--wcp-text-faint); cursor: pointer; font-size: 11px; opacity: 0; padding: 3px 4px; }
-.wcp-item-row:hover .wcp-edit-link, .wcp-item-row:focus-within .wcp-edit-link, .wcp-item-row:hover .wcp-source-link, .wcp-item-row:hover .wcp-pin-toggle, .wcp-item-row.wcp-pinned .wcp-pin-toggle { opacity: 1; }
-.wcp-item-row .wcp-edit-link:hover, .wcp-source-link:hover { background: color-mix(in srgb, var(--wcp-accent) 10%, transparent); color: var(--wcp-accent); }
+.wcp-item-row .wcp-edit-link, .wcp-source-link, .wcp-library-link, .wcp-pin-toggle { border: 0; border-radius: 5px; background: transparent; color: var(--wcp-text-faint); cursor: pointer; font-size: 11px; opacity: 0; padding: 3px 4px; white-space: nowrap; }
+.wcp-item-row:hover .wcp-edit-link, .wcp-item-row:focus-within .wcp-edit-link, .wcp-item-row:hover .wcp-source-link, .wcp-item-row:hover .wcp-library-link, .wcp-item-row:hover .wcp-pin-toggle, .wcp-item-row.wcp-pinned .wcp-pin-toggle { opacity: 1; }
+.wcp-item-row .wcp-edit-link:hover, .wcp-source-link:hover, .wcp-library-link:hover { background: color-mix(in srgb, var(--wcp-accent) 10%, transparent); color: var(--wcp-accent); }
 .wcp-item-delete:hover { color: #db4652 !important; }
 .wcp-item-description { flex: 0 0 calc(100% - 29px); margin-left: 19px; color: var(--wcp-text); font-size: 12px; line-height: 1.45; }
 .wcp-item-meta-pills { display: inline-flex; gap: 4px; }

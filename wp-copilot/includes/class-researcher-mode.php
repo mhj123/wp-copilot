@@ -19,8 +19,8 @@ class WCP_Researcher_Mode {
     const OPTION_RESEARCH_ROOT_ID     = 'wcp_researcher_research_root_id';
     const OPTION_TEMPLATE_VER         = 'wcp_researcher_template_version';
     const OPTION_PROJECT_TEMPLATE_VER = 'wcp_researcher_project_template_version';
-    const TEMPLATE_VERSION            = '2026-08-build0';
-    const PROJECT_TEMPLATE_VERSION    = '2026-08-build0-5';
+    const TEMPLATE_VERSION            = '2026-08-build0.1';
+    const PROJECT_TEMPLATE_VERSION    = '2026-08-build0.6';
     const LIBRARY_TITLE               = 'Library';
     const RESEARCH_ROOT_TITLE         = 'Research';
 
@@ -33,7 +33,6 @@ class WCP_Researcher_Mode {
     private static $evidence_headings = array(
         'Summary',
         'Findings',
-        'Relevance to project',
         'Notes',
     );
 
@@ -47,6 +46,7 @@ class WCP_Researcher_Mode {
         'Hypotheses',
         'Findings',
         'Gaps',
+        'Sources',
     );
 
     public static function instance() {

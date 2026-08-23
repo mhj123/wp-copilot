@@ -551,7 +551,7 @@ class WCP_AI_Actions {
             );
         }
 
-        list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, 'research_find_references');
+        list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, 'research_find_references', 'Sources');
 
         WCP_AI_Logger::instance()->log_action('research_find_references', array(
             'model' => 'exa-web-search',
@@ -2514,18 +2514,15 @@ class WCP_AI_Actions {
         }
 
         // Soft heading routing: proposals may name a preferred child heading
-        // (for example PDF summaries -> Summary, suggest-topics -> Objectives,
-        // gaps -> Gaps). Reuse the same resolver for all action types and keep
-        // the page-context fallback so pages without that heading still work.
+        // (for example suggest-topics -> Objectives, gaps -> Gaps, found
+        // references -> Sources). find_or_create_heading() creates it if the
+        // page doesn't have it yet (e.g. an older page predating a template
+        // change) rather than silently falling back to page-level context.
         if (!empty($proposal['target_heading'])) {
-            $target_heading_id = $this->find_child_heading_by_title($page_id, $proposal['target_heading']);
-            if ($target_heading_id) {
-                $target_heading_term_id = $this->heading_context_term_id($target_heading_id);
-                if ($target_heading_term_id) {
-                    $context_term_id = $target_heading_term_id;
-                    $debug_info['target_heading_id'] = $target_heading_id;
-                    $debug_info['target_heading'] = $proposal['target_heading'];
-                }
+            $target_heading_term_id = $this->find_or_create_heading($page_id, $proposal['target_heading']);
+            if ($target_heading_term_id) {
+                $context_term_id = $target_heading_term_id;
+                $debug_info['target_heading'] = $proposal['target_heading'];
             }
         }
 
