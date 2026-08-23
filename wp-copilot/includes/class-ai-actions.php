@@ -502,6 +502,7 @@ class WCP_AI_Actions {
         ));
 
         if ($conversation_id) {
+            WCP_Conversations_Manager::instance()->add_message($conversation_id, 'user', $prompt);
             WCP_Conversations_Manager::instance()->add_message($conversation_id, 'assistant', 'Generated ' . count($proposals) . ' research candidate(s) for review.', array('batch_id' => $batch_id));
         }
 
@@ -565,6 +566,7 @@ class WCP_AI_Actions {
         // whole point of exposing this (was previously invisible).
         $summary = 'Searched Exa for: "' . $query . '" — found ' . count($proposals) . ' reference candidate(s) for review.';
         if ($conversation_id) {
+            WCP_Conversations_Manager::instance()->add_message($conversation_id, 'user', $instruction);
             WCP_Conversations_Manager::instance()->add_message($conversation_id, 'assistant', $summary, array('batch_id' => $batch_id));
         }
 
