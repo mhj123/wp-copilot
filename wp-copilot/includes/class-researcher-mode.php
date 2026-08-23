@@ -20,7 +20,7 @@ class WCP_Researcher_Mode {
     const OPTION_TEMPLATE_VER         = 'wcp_researcher_template_version';
     const OPTION_PROJECT_TEMPLATE_VER = 'wcp_researcher_project_template_version';
     const TEMPLATE_VERSION            = '2026-08-build0.1';
-    const PROJECT_TEMPLATE_VERSION    = '2026-08-build0.6';
+    const PROJECT_TEMPLATE_VERSION    = '2026-08-build0.7';
     const LIBRARY_TITLE               = 'Library';
     const RESEARCH_ROOT_TITLE         = 'Research';
 
@@ -38,15 +38,25 @@ class WCP_Researcher_Mode {
 
     /**
      * Project-page heading contract for pages created under the Research root.
-     * Keep this as the single source of truth for Build 0.5.
+     * Keep this as the single source of truth for Build 0.5. Description/
+     * Objectives/Context deliberately live as content_blocks (page body
+     * sections) in project_template() instead, not as real wcp_heading
+     * posts — they're project framing prose, not a growing list that needs
+     * the Heading+Items mechanism the way Sources does.
      */
     private static $project_headings = array(
-        'Context',
-        'Objectives',
-        'Hypotheses',
-        'Findings',
-        'Gaps',
         'Sources',
+    );
+
+    /**
+     * Content sections (page-body prose, not structural headings) for
+     * pages created under the Research root. Rendered into post_content
+     * by WCP_Page_Template_Manager::apply_template().
+     */
+    private static $project_content_blocks = array(
+        array('title' => 'Description', 'level' => 'h2', 'placeholder' => 'What is this research project about?'),
+        array('title' => 'Objectives',   'level' => 'h2', 'placeholder' => 'What are you trying to find out or achieve?'),
+        array('title' => 'Context',      'level' => 'h2', 'placeholder' => 'Background, prior work, or why this project exists now.'),
     );
 
     public static function instance() {
@@ -68,6 +78,10 @@ class WCP_Researcher_Mode {
 
     public static function project_headings() {
         return self::$project_headings;
+    }
+
+    public static function project_content_blocks() {
+        return self::$project_content_blocks;
     }
 
     public function enable() {
@@ -282,7 +296,7 @@ class WCP_Researcher_Mode {
         }
 
         return array(
-            'content_blocks' => array(),
+            'content_blocks' => self::project_content_blocks(),
             'headings'       => $headings,
         );
     }
