@@ -135,8 +135,12 @@ if (empty($saved_prompts)) {
             <button type="button" class="wcp-ai-action-chip" data-action="web_search"><?php _e('Web search', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="generate_structure"><?php _e('Generate structure', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="import_document"><?php _e('Import document', 'work-copilot'); ?></button>
+            <input type="file" id="wcp-ai-document-upload" accept=".md,text/markdown" style="display:none;">
             <?php $wcp_pdf_summary_enabled = function_exists('wcp_feature') && wcp_feature('pdf_summary'); ?>
-            <input type="file" id="wcp-ai-document-upload" accept="<?php echo esc_attr($wcp_pdf_summary_enabled ? '.md,.pdf,text/markdown,application/pdf' : '.md,text/markdown'); ?>" style="display:none;">
+            <?php if ($researcher_mode_enabled && $wcp_pdf_summary_enabled) : ?>
+            <button type="button" class="wcp-ai-action-chip" data-action="import_pdf_reference"><?php _e('Import PDF reference', 'work-copilot'); ?></button>
+            <input type="file" id="wcp-ai-pdf-reference-upload" accept=".pdf,application/pdf" style="display:none;">
+            <?php endif; ?>
             <button type="button" class="wcp-ai-action-chip" data-action="generate_pages"><?php _e('Create sub-pages', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="create_goal"><?php _e('Create goal', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="rewrite_content"><?php _e('Edit page', 'work-copilot'); ?></button>

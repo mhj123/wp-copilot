@@ -263,6 +263,11 @@
                     $('#wcp-ai-document-upload').trigger('click');
                     return;
                 }
+                if (action === 'import_pdf_reference') {
+                    $('.wcp-ai-action-chip').removeClass('active');
+                    $('#wcp-ai-pdf-reference-upload').trigger('click');
+                    return;
+                }
                 if ($chip.hasClass('wcp-ai-action-chip--canned')) {
                     // Site-level canned-prompt chips (taxonomy outline, mission
                     // priorities, weekly summary) fire immediately with a fixed
@@ -285,11 +290,17 @@
                 this.saveSuggestedMission();
             });
 
-            // Document import — Markdown is split into structure; PDF is summarized into
-            // a normal ItemPost proposal after server-side text extraction.
+            // Document import — Markdown is split into structure on the current page.
             $(document).on('change', '#wcp-ai-document-upload', (e) => {
                 this.importDocument(e.target.files[0]);
                 $(e.target).val(''); // allow re-selecting the same file next time
+            });
+
+            // PDF reference import — separate action: creates a paper page under
+            // Researcher Mode's Library with a Summary item, not an item on this page.
+            $(document).on('change', '#wcp-ai-pdf-reference-upload', (e) => {
+                this.importPdfReference(e.target.files[0]);
+                $(e.target).val('');
             });
 
             // Send message
@@ -1015,55 +1026,14 @@
         },
 
         /**
-         * Import a document — markdown is read client-side and split into
-         * headings/items; PDFs are uploaded to the REST API and sent to Claude
-         * as native document blocks for a reviewed summary proposal. Both paths
-         * reuse handleActionResult() for the returned proposal payload.
+         * Import a markdown document — read client-side and split into
+         * headings/items on the current page. Reuses handleActionResult()
+         * for the returned create_structure proposal.
          */
         importDocument: function(file) {
             if (!file) { return; }
 
-            const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
-            this.appendMessage('user', (isPdf ? 'Uploaded PDF: ' : 'Imported document: ') + file.name);
-
-            if (isPdf) {
-                if (!wcpAiWidgetData.pdfSummaryEnabled) {
-                    this.showError('PDF summary import is disabled on this install.');
-                    return;
-                }
-                this.showLoading(true, 'Uploading PDF and asking Claude to draft a summary item...');
-                const data = new FormData();
-                data.append('pdf', file);
-                data.append('page_id', wcpAiWidgetData.pageId);
-                data.append('conversation_id', this.conversationId || '');
-                data.append('model', this.selectedModel);
-                data.append('thinking_budget', this.thinkingBudget);
-
-                $.ajax({
-                    url: wcpAiWidgetData.restUrl + '/ai/documents/summarize-pdf',
-                    method: 'POST',
-                    beforeSend: (xhr) => { xhr.setRequestHeader('X-WP-Nonce', wcpAiWidgetData.nonce); },
-                    data: data,
-                    processData: false,
-                    contentType: false,
-                    success: (response) => {
-                        this.showLoading(false);
-                        this.currentAction = 'chat';
-                        if (response.success) {
-                            this.handleActionResult(response);
-                        } else {
-                            this.showError(response.message || 'Could not summarise PDF');
-                        }
-                    },
-                    error: (xhr) => {
-                        this.showLoading(false);
-                        const msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : xhr.statusText;
-                        this.showError('PDF import failed: ' + msg);
-                    }
-                });
-                return;
-            }
-
+            this.appendMessage('user', 'Imported document: ' + file.name);
             this.showLoading(true, 'Reading your document and splitting it into headings and items...');
 
             const reader = new FileReader();
@@ -1099,6 +1069,50 @@
                 this.showError('Could not read the file — please try again.');
             };
             reader.readAsText(file);
+        },
+
+        /**
+         * Import a PDF as a Library reference — separate from importDocument():
+         * this creates a new paper page under Researcher Mode's Library with a
+         * Summary item proposal, not an item on the current page. Reuses the
+         * existing PDF upload endpoint; the server-side behavior is what
+         * differs (see summarize_pdf_document()'s import_pdf_reference proposal).
+         */
+        importPdfReference: function(file) {
+            if (!file) { return; }
+
+            this.appendMessage('user', 'Uploaded PDF: ' + file.name);
+            this.showLoading(true, 'Uploading PDF and asking Claude to draft a Library reference...');
+
+            const data = new FormData();
+            data.append('pdf', file);
+            data.append('page_id', wcpAiWidgetData.pageId);
+            data.append('conversation_id', this.conversationId || '');
+            data.append('model', this.selectedModel);
+            data.append('thinking_budget', this.thinkingBudget);
+
+            $.ajax({
+                url: wcpAiWidgetData.restUrl + '/ai/documents/summarize-pdf',
+                method: 'POST',
+                beforeSend: (xhr) => { xhr.setRequestHeader('X-WP-Nonce', wcpAiWidgetData.nonce); },
+                data: data,
+                processData: false,
+                contentType: false,
+                success: (response) => {
+                    this.showLoading(false);
+                    this.currentAction = 'chat';
+                    if (response.success) {
+                        this.handleActionResult(response);
+                    } else {
+                        this.showError(response.message || 'Could not import PDF reference');
+                    }
+                },
+                error: (xhr) => {
+                    this.showLoading(false);
+                    const msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : xhr.statusText;
+                    this.showError('PDF import failed: ' + msg);
+                }
+            });
         },
 
         /**

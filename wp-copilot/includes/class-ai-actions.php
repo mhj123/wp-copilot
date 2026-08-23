@@ -2010,10 +2010,10 @@ class WCP_AI_Actions {
     }
 
     /**
-     * Summarise an uploaded PDF into a single normal ItemPost proposal.
-     * AI guardrail: no post is written here; acceptance still goes through
-     * execute_proposal(), which creates a regular post and therefore enters
-     * the existing embeddings/RAG pipeline via save_post.
+     * Import an uploaded PDF as a reference paper page under Researcher
+     * Mode's Library, with one Summary item proposal. AI guardrail: no post
+     * is written here; acceptance still goes through execute_proposal()'s
+     * dedicated import_pdf_reference branch.
      *
      * The PDF is sent to Claude as a native document block via WCP_AI_Client;
      * do not extract or log base64/PDF contents locally.
@@ -2023,6 +2023,14 @@ class WCP_AI_Actions {
         $user_id = get_current_user_id();
         if (!$user_id) {
             return new WP_Error('auth_error', 'User not authenticated');
+        }
+
+        // Importing a PDF always files it under the Library, so this
+        // inherently requires Researcher Mode (the page it's invoked from is
+        // the "origin" for the Sources cross-link, not the write target).
+        $guard = $this->require_researcher_mode($page_id);
+        if (is_wp_error($guard)) {
+            return $guard;
         }
 
         $attachment_id = (int) $attachment_id;
@@ -2058,13 +2066,15 @@ class WCP_AI_Actions {
             $content .= "\nAttachment: " . esc_url_raw($source['attachment_url']);
         }
 
+        $paper_title = sanitize_text_field($parsed['title']);
+
         $proposal = array(
             'proposal_id'     => $proposal_id,
             'batch_id'        => $batch_id,
             'index'           => 0,
-            'action_type'     => 'summarize_pdf_document',
+            'action_type'     => 'import_pdf_reference',
             'item'            => array(
-                'title'     => sanitize_text_field($parsed['title']),
+                'title'     => $paper_title,
                 'content'   => $content,
                 'item_type' => 'info',
             ),
@@ -2077,11 +2087,15 @@ class WCP_AI_Actions {
                 'char_count'     => 0,
                 'truncated'      => false,
             ),
-            // Build 0 contract: PDF summaries live under the paper page's
-            // "Summary" heading when that heading exists. execute_proposal()
-            // resolves this at acceptance time and falls back to the page
-            // context if the heading is absent.
-            'target_heading'  => 'Summary',
+            // Import PDF reference contract: creates a new paper page under
+            // Researcher Mode's Library (inheriting the paper template's
+            // headings), files the summary item under that page's own
+            // "Summary" heading, and — if invoked from a page other than
+            // Library itself — also associates the item with that origin
+            // page under a "Sources" heading there. Resolved at acceptance
+            // time by execute_proposal()'s import_pdf_reference branch.
+            'paper_title'     => $paper_title,
+            'origin_page_id'  => (int) $page_id,
             'conversation_id' => $conversation_id,
             'page_id'         => $page_id,
             'created_at'      => current_time('mysql'),
@@ -2096,10 +2110,10 @@ class WCP_AI_Actions {
 
         if ($conversation_id) {
             WCP_Conversations_Manager::instance()->add_message($conversation_id, 'user', 'Uploaded PDF: ' . $filename);
-            WCP_Conversations_Manager::instance()->add_message($conversation_id, 'assistant', 'Proposed a PDF summary item for your review', array('batch_id' => $batch_id));
+            WCP_Conversations_Manager::instance()->add_message($conversation_id, 'assistant', 'Proposed "' . $paper_title . '" as a new Library reference for your review', array('batch_id' => $batch_id));
         }
 
-        WCP_AI_Logger::instance()->log_action('summarize_pdf_document', array(
+        WCP_AI_Logger::instance()->log_action('import_pdf_reference', array(
             'model'           => $response['model'],
             'prompt'          => $filename,
             'input_context'   => array(
@@ -2232,6 +2246,39 @@ class WCP_AI_Actions {
         }
 
         return 0;
+    }
+
+    /**
+     * Find a heading with this title under this page, creating it if absent.
+     * Returns the heading's wcp_context term id directly (what every caller
+     * actually needs), or 0 on failure.
+     */
+    private function find_or_create_heading($page_id, $heading_title) {
+        $heading_id = $this->find_child_heading_by_title($page_id, $heading_title);
+
+        if (!$heading_id) {
+            $next_menu_order = WCP_Post_Types::next_heading_menu_order('page', $page_id);
+            $heading_id = wp_insert_post(array(
+                'post_type'    => 'wcp_heading',
+                'post_title'   => sanitize_text_field($heading_title),
+                'post_content' => '',
+                'post_status'  => 'publish',
+                'post_author'  => get_current_user_id() ?: 1,
+                'menu_order'   => $next_menu_order,
+            ));
+            if (is_wp_error($heading_id)) {
+                return 0;
+            }
+            update_post_meta($heading_id, '_wcp_parent_type', 'page');
+            update_post_meta($heading_id, '_wcp_parent_id', $page_id);
+            // The initial auto-sync (save_post, fired inside wp_insert_post above)
+            // runs before the parent meta above exists, so it doesn't know the
+            // real parent yet — sync again now that it does.
+            WCP_Taxonomy_Sync::instance()->sync_heading_to_taxonomy($heading_id, get_post($heading_id), true);
+            WCP_Post_Types::mark_creator($heading_id, 'copilot');
+        }
+
+        return $this->heading_context_term_id((int) $heading_id);
     }
 
     private function item_titles_for_term($term_id, $limit = 30) {
@@ -2578,6 +2625,90 @@ class WCP_AI_Actions {
                 'created_posts' => array($new_page_id),
                 'message'       => 'Page created successfully',
                 'debug'         => array('page_id' => $new_page_id, 'parent_id' => $page_id),
+            );
+        }
+
+        // Handle "import PDF reference" proposals — creates a new paper page
+        // under Researcher Mode's Library (inheriting the paper template's
+        // headings via the existing page-template save_post hook), files the
+        // summary item under that page's own "Summary" heading, and — if
+        // invoked from a page other than Library itself — also associates
+        // the item with that origin page under a "Sources" heading there
+        // (multi-context: the item keeps BOTH associations, it isn't moved).
+        if (isset($proposal['action_type']) && $proposal['action_type'] === 'import_pdf_reference') {
+            $paper_title = $proposal['paper_title'] ?? ($proposal['item']['title'] ?? '');
+            if (empty($paper_title)) {
+                return new WP_Error('invalid_proposal', 'PDF reference proposal is missing a title');
+            }
+
+            $library_id = WCP_Researcher_Mode::instance()->get_library_page_id();
+            if (!$library_id) {
+                return new WP_Error('no_library', 'Researcher mode\'s Library page could not be found. Enable Researcher mode in Settings first.');
+            }
+
+            $new_page_id = wp_insert_post(array(
+                'post_type'    => 'page',
+                'post_title'   => sanitize_text_field($paper_title),
+                'post_content' => '', // empty so the page-template save_post hook applies Library's paper template
+                'post_status'  => 'publish',
+                'post_author'  => $user_id,
+                'post_parent'  => $library_id,
+            ));
+            if (is_wp_error($new_page_id)) {
+                return $new_page_id;
+            }
+            WCP_Post_Types::mark_creator($new_page_id, 'copilot');
+
+            $summary_term_id = $this->find_or_create_heading($new_page_id, 'Summary');
+
+            $item_id = wp_insert_post(array(
+                'post_type'    => 'post',
+                'post_title'   => sanitize_text_field($proposal['item']['title'] ?? $paper_title),
+                'post_content' => wp_kses_post($proposal['item']['content'] ?? ''),
+                'post_status'  => 'publish',
+                'post_author'  => $user_id,
+            ));
+            if (is_wp_error($item_id)) {
+                return $item_id;
+            }
+            WCP_Post_Types::mark_creator($item_id, 'copilot');
+            wp_set_post_terms($item_id, array('info'), 'item_type');
+            if ($summary_term_id) {
+                wp_set_post_terms($item_id, array($summary_term_id), 'wcp_context');
+            }
+
+            // Cross-link to the page this was invoked from (if any, and if it
+            // isn't Library itself) under a "Sources" heading there —
+            // appended, not replacing the Library association just set above.
+            $origin_page_id = (int) ($proposal['origin_page_id'] ?? 0);
+            if ($origin_page_id && $origin_page_id !== $library_id) {
+                $sources_term_id = $this->find_or_create_heading($origin_page_id, 'Sources');
+                if ($sources_term_id) {
+                    $current_terms = wp_get_post_terms($item_id, 'wcp_context', array('fields' => 'ids'));
+                    if (!is_wp_error($current_terms) && !in_array($sources_term_id, $current_terms, true)) {
+                        wp_set_post_terms($item_id, array_merge($current_terms, array($sources_term_id)), 'wcp_context');
+                    }
+                }
+            }
+
+            if (!empty($proposal['source']) && is_array($proposal['source'])) {
+                $source_url = $proposal['source']['attachment_url'] ?? '';
+                if ($source_url) {
+                    update_post_meta($item_id, '_wcp_source_url', esc_url_raw($source_url));
+                }
+                update_post_meta($item_id, '_wcp_source_type', sanitize_key($proposal['source']['type'] ?? ''));
+                update_post_meta($item_id, '_wcp_source_filename', sanitize_text_field($proposal['source']['filename'] ?? ''));
+                update_post_meta($item_id, '_wcp_source_attachment_id', (int) ($proposal['source']['attachment_id'] ?? 0));
+                update_post_meta($item_id, '_wcp_source_attachment_url', esc_url_raw($proposal['source']['attachment_url'] ?? ''));
+            }
+
+            delete_transient('wcp_proposal_' . $proposal_id);
+
+            return array(
+                'created_posts' => array($new_page_id, $item_id),
+                'message'       => 'Created "' . $paper_title . '" in Library with a Summary item'
+                    . ($origin_page_id && $origin_page_id !== $library_id ? ', linked to Sources on this page' : ''),
+                'debug'         => array('library_id' => $library_id, 'paper_page_id' => $new_page_id, 'item_id' => $item_id, 'origin_page_id' => $origin_page_id),
             );
         }
 
