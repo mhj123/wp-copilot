@@ -2954,7 +2954,11 @@ class WCP_REST_API {
                 }
                 $page_id_param = (int) $request->get_param('page_id');
                 $conversation_id_param = $request->get_param('conversation_id');
-                return WCP_AI_Actions::instance()->find_references_for_item( $item_id, $page_id_param, $conversation_id_param );
+                $fri_result = WCP_AI_Actions::instance()->find_references_for_item( $item_id, $page_id_param, $conversation_id_param );
+                if ( is_wp_error( $fri_result ) ) {
+                    return $fri_result;
+                }
+                return rest_ensure_response( array_merge( array('success' => true), $fri_result ) );
 
             case 'action_plan':
                 $sys = "You are helping the user break down a task into a concrete, ordered action plan. "
