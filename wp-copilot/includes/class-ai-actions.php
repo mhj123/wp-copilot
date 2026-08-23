@@ -594,11 +594,12 @@ class WCP_AI_Actions {
      * conversion, only the query/grounding that produced $findings differs.
      */
     /**
-     * One Claude call over all findings, asking for a short "what this is
-     * and why it's relevant to the topic" summary per finding — replaces
-     * showing Exa's raw excerpt verbatim. Returns an array of strings in
-     * the same order as $findings (missing/failed entries fall back to
-     * empty string, handled by the caller).
+     * One Claude call over all findings, asking for two things per finding:
+     * what the source actually SAYS about the topic (quoting verbatim where
+     * the excerpt supports it) and why it's relevant. Replaces showing Exa's
+     * raw excerpt verbatim. Returns an array of {content, relevance} in the
+     * same order as $findings (missing/failed entries fall back to an empty
+     * array, handled by the caller via format_finding_summary()).
      */
     private function research_synthesize_finding_summaries($findings, $topic) {
         if (empty($findings)) {
@@ -614,20 +615,42 @@ class WCP_AI_Actions {
             $listing .= "\n";
         }
 
-        $sys = "For each numbered search result below, write a 1-2 sentence summary that explains: (1) what the "
-             . "source is (e.g. a biography entry, an academic paper, an archive record, a database listing), and "
-             . "(2) why it's relevant to the topic. Base this only on the title/URL/excerpt given — do not invent "
-             . "details the excerpt doesn't support. Do not repeat the title or URL in your summary text; those "
-             . "are shown separately. Return ONLY a valid JSON array of strings, exactly one per result, in the "
-             . "same order. No text before or after.";
+        $sys = "For each numbered search result below, produce two fields:\n"
+             . "1. \"content\": what the source actually SAYS about the topic — grounded in, and quoting verbatim "
+             . "where possible (in quotation marks), the passage(s) in the excerpt that mention or bear on the "
+             . "topic. Write this as direct reporting of the source's content, not a description of the source — "
+             . "do not start with phrases like \"This source describes...\" or \"The text explains...\"; state "
+             . "what it says. If the excerpt has no text bearing directly on the topic, say so plainly rather "
+             . "than inventing a passage.\n"
+             . "2. \"relevance\": 1 sentence on what kind of source this is (e.g. a biography entry, an academic "
+             . "paper, an archive record) and why it's relevant to the topic.\n"
+             . "Base both fields only on the title/URL/excerpt given — do not invent details the excerpt doesn't "
+             . "support. Do not repeat the title or URL; those are shown separately. Return ONLY a valid JSON "
+             . "array of objects, exactly one per result, in the same order, shape: "
+             . '[{"content": "...", "relevance": "..."}]' . ". No text before or after.";
         $usr = "Topic: {$topic}\n\nResults:\n{$listing}";
 
-        $response = WCP_AI_Client::instance()->request_with_conversation($sys, $usr, array(), 1024, 60);
+        $response = WCP_AI_Client::instance()->request_with_conversation($sys, $usr, array(), 1536, 60);
         if (is_wp_error($response)) {
             return array();
         }
         $parsed = $this->parse_json_response($response['content']);
         return (!is_wp_error($parsed) && is_array($parsed)) ? $parsed : array();
+    }
+
+    /**
+     * Combine a {content, relevance} pair from research_synthesize_finding_summaries()
+     * into the two-paragraph body used for a reference item — what the source
+     * says first, why it's relevant second. Also accepts a plain string, for
+     * defensiveness against a model response that skips the object shape.
+     */
+    private function format_finding_summary($summary) {
+        if (is_array($summary)) {
+            $content = trim(wp_strip_all_tags((string) ($summary['content'] ?? '')));
+            $relevance = trim(wp_strip_all_tags((string) ($summary['relevance'] ?? '')));
+            return trim($content . ($content !== '' && $relevance !== '' ? "\n\n" : '') . $relevance);
+        }
+        return trim(wp_strip_all_tags((string) $summary));
     }
 
     private function research_findings_to_items($findings, $query) {
@@ -653,7 +676,7 @@ class WCP_AI_Actions {
             $seen_titles[$title_key] = true;
 
             $domain = wp_parse_url($url, PHP_URL_HOST) ?: $url;
-            $summary = isset($summaries[$i]) ? trim(wp_strip_all_tags((string) $summaries[$i])) : '';
+            $summary = isset($summaries[$i]) ? $this->format_finding_summary($summaries[$i]) : '';
             $body = $summary !== '' ? sanitize_textarea_field($summary) : wp_kses_post($finding['snippet'] ?? '');
 
             $items[] = array(
@@ -3012,7 +3035,7 @@ class WCP_AI_Actions {
                 );
                 if (!empty($summaries[0])) {
                     $domain = wp_parse_url($item['url'], PHP_URL_HOST) ?: $item['url'];
-                    $summary = sanitize_textarea_field(trim(wp_strip_all_tags($summaries[0])));
+                    $summary = sanitize_textarea_field($this->format_finding_summary($summaries[0]));
                     // Preserve the original content's trailing Source/Provenance
                     // lines — just replace the summary paragraph above them.
                     $rest = preg_replace('/^.*?(\n\nSource:)/s', '$1', $item['content'], 1);
