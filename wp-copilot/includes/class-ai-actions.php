@@ -664,6 +664,7 @@ class WCP_AI_Actions {
                 'url' => $url,
                 'domain' => $domain,
                 'source_type' => 'web_search',
+                'topic' => $query,
             );
         }
         return $items;
@@ -2992,6 +2993,33 @@ class WCP_AI_Actions {
 
         // Handle both single and multiple item proposals
         $item = isset($proposal['item']) ? $proposal['item'] : null;
+
+        // Enrich web-search-sourced references at accept time (not
+        // proposal time — most candidates get discarded, so only fetching
+        // full text for the ones actually kept avoids paying that cost for
+        // free): re-summarise from the source's full extracted text instead
+        // of the short highlight snippet the initial search used. Falls
+        // back to the original shallow content on any failure — enrichment
+        // is a quality upgrade, not something that should block accepting
+        // the reference at all.
+        if ($item && ($item['source_type'] ?? '') === 'web_search' && !empty($item['url'])) {
+            $full_text = WCP_Exa_Client::instance()->get_full_text($item['url']);
+            if (!is_wp_error($full_text)) {
+                $topic = $item['topic'] ?? get_the_title($page_id);
+                $summaries = $this->research_synthesize_finding_summaries(
+                    array(array('title' => $item['title'], 'url' => $item['url'], 'snippet' => mb_substr($full_text, 0, 12000))),
+                    $topic
+                );
+                if (!empty($summaries[0])) {
+                    $domain = wp_parse_url($item['url'], PHP_URL_HOST) ?: $item['url'];
+                    $summary = sanitize_textarea_field(trim(wp_strip_all_tags($summaries[0])));
+                    // Preserve the original content's trailing Source/Provenance
+                    // lines — just replace the summary paragraph above them.
+                    $rest = preg_replace('/^.*?(\n\nSource:)/s', '$1', $item['content'], 1);
+                    $item['content'] = $summary . ($rest !== $item['content'] ? $rest : "\n\nSource: {$domain} — {$item['url']}");
+                }
+            }
+        }
 
         // Debug: log what we found
         $debug_info['proposal_id'] = $proposal_id;

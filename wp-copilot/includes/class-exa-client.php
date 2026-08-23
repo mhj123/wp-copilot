@@ -114,6 +114,55 @@ class WCP_Exa_Client {
     }
 
     /**
+     * Fetch the full extracted text of a specific, already-known URL — via
+     * Exa's /contents endpoint, not a new search. Used to enrich a
+     * reference's summary once it's actually been selected/accepted,
+     * rather than fetching full text for every candidate up front.
+     *
+     * @param string $url
+     * @return string|WP_Error Full page text, or WP_Error
+     */
+    public function get_full_text($url) {
+        if (!$this->is_configured()) {
+            return new WP_Error('not_configured', 'Exa API key not configured');
+        }
+        if (empty(trim($url))) {
+            return new WP_Error('empty_url', 'Cannot fetch content for an empty URL');
+        }
+
+        $response = wp_remote_post('https://api.exa.ai/contents', array(
+            'headers' => array(
+                'Content-Type' => 'application/json',
+                'x-api-key'    => $this->api_key,
+            ),
+            'body' => wp_json_encode(array(
+                'urls' => array($url),
+                'text' => true,
+            )),
+            'timeout' => 30,
+        ));
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $data = json_decode(wp_remote_retrieve_body($response), true);
+
+        if ($response_code !== 200) {
+            $error_message = isset($data['error']) ? $data['error'] : 'Unknown API error';
+            return new WP_Error('api_error', $error_message, array('status' => $response_code));
+        }
+
+        $text = $data['results'][0]['text'] ?? '';
+        if ($text === '') {
+            return new WP_Error('no_content', 'Exa returned no content for this URL');
+        }
+
+        return $text;
+    }
+
+    /**
      * Truncate a snippet to a sane atomic-note length, preserving word
      * boundaries. Findings are meant to be a short pointer to the source,
      * not a dump of the paper's text — the full document is at the URL.
