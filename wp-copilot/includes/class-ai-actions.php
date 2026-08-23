@@ -548,6 +548,7 @@ class WCP_AI_Actions {
                 'item_type' => 'info',
                 'tags' => array('web-search', 'exa'),
                 'url' => $url,
+                'source_type' => 'web_search',
             );
         }
 
@@ -2785,6 +2786,12 @@ class WCP_AI_Actions {
                 $source_url = $item['url'] ?? ($proposal['source']['attachment_url'] ?? '');
                 if ($source_url) {
                     update_post_meta($post_id, '_wcp_source_url', esc_url_raw($source_url));
+                }
+                // Items that carry their own source_type (e.g. research_find_references'
+                // web results) but no top-level proposal['source'] block still need
+                // _wcp_source_type set — used to distinguish PDF vs web sources in the UI.
+                if (!empty($item['source_type'])) {
+                    update_post_meta($post_id, '_wcp_source_type', sanitize_key($item['source_type']));
                 }
 
                 // Preserve source/provenance metadata for accepted AI proposals

@@ -374,7 +374,8 @@ body.admin-bar .wcp-ai-widget.minimized {
     color: #666;
 }
 
-.wcp-ai-selected-count {
+.wcp-ai-selected-count,
+.wcp-ai-pagepicker-count {
     font-weight: 600;
     color: #0073aa;
 }

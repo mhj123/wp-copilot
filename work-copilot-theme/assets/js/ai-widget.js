@@ -530,7 +530,7 @@
          * Update selected pages count
          */
         updateSelectedCount: function() {
-            $('.wcp-ai-selected-count').text(this.selectedPages.length);
+            $('.wcp-ai-pagepicker-count').text(this.selectedPages.length);
         },
 
         /**
@@ -1485,6 +1485,12 @@
                 return;
             }
 
+            const $btn = $('.wcp-ai-accept-btn');
+            const $label = $btn.find('.wcp-ai-accept-label');
+            const originalLabel = $label.text();
+            $btn.prop('disabled', true);
+            $label.text('Creating…');
+
             const data = {
                 decision: 'accept',
                 selected_proposal_ids: selectedIds
@@ -1531,10 +1537,14 @@
                             }, 1000);
                         }
                     } else {
+                        $btn.prop('disabled', false);
+                        $label.text(originalLabel);
                         this.showError(response.message || 'Failed to create items');
                     }
                 },
                 error: (xhr) => {
+                    $btn.prop('disabled', false);
+                    $label.text(originalLabel);
                     this.showError('Connection error: ' + xhr.statusText);
                 }
             });
@@ -1796,6 +1806,7 @@
                 $container.append($card);
             });
 
+            this.updateProposalSelectedCount();
             $('.wcp-ai-approval-panel').slideDown();
             this.appendMessage('assistant', 'I extracted ' + proposals.length + ' memory(s) from our conversation. Review and accept the ones you want to keep.');
         },

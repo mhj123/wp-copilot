@@ -106,7 +106,7 @@ if (empty($saved_prompts)) {
             </div>
             <div class="wcp-ai-selected-pages">
                 <span class="wcp-ai-selected-label"><?php _e('Selected:', 'work-copilot'); ?></span>
-                <span class="wcp-ai-selected-count">0</span>
+                <span class="wcp-ai-pagepicker-count">0</span>
             </div>
         </div>
 

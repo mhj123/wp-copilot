@@ -112,7 +112,14 @@ $_delegation_labels = array(
     </span>
 
     <input type="checkbox" class="wcp-item-select-cb" data-item-id="<?php echo esc_attr($item->ID); ?>" data-item-title="<?php echo esc_attr($item->post_title); ?>" style="display:none;">
-    <?php $source_url = get_post_meta($item->ID, '_wcp_source_url', true); ?>
+    <?php
+    $source_url  = get_post_meta($item->ID, '_wcp_source_url', true);
+    $source_type = get_post_meta($item->ID, '_wcp_source_type', true);
+    $_source_lozenge_labels = array('pdf_upload' => 'PDF', 'web_search' => 'Web');
+    ?>
+    <?php if (isset($_source_lozenge_labels[$source_type])) : ?>
+        <span class="wcp-pill wcp-pill-source-type wcp-pill-source-<?php echo esc_attr($source_type); ?>"><?php echo esc_html($_source_lozenge_labels[$source_type]); ?></span>
+    <?php endif; ?>
     <?php if ($source_url) : ?>
         <a href="<?php echo esc_url($source_url); ?>" class="wcp-source-link" target="_blank" rel="noopener" title="<?php echo esc_attr($source_url); ?>">↗</a>
     <?php endif; ?>

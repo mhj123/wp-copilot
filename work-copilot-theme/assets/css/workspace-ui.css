@@ -126,6 +126,9 @@ body.wcp-ai-panel-open.wcp-ai-panel-expanded .wcp-main-content { display: none; 
 .wcp-item-meta-pills { display: inline-flex; gap: 4px; }
 .wcp-pill { border-radius: 999px; background: var(--wcp-surface-muted); color: var(--wcp-text-muted); font-size: 10px; padding: 2px 7px; }
 .wcp-pill-context { background: color-mix(in srgb, var(--wcp-accent) 11%, white); color: var(--wcp-accent); }
+.wcp-pill-source-type { font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.wcp-pill-source-pdf_upload { background: color-mix(in srgb, #e0524a 12%, white); color: #c23a32; }
+.wcp-pill-source-web_search { background: color-mix(in srgb, #4a9eff 12%, white); color: #2f7fdb; }
 
 .wcp-heading-group { margin: 0; padding-bottom: 0; border-bottom: 1px solid var(--wcp-border); }
 .wcp-heading-title-simple { display: flex; align-items: center; gap: 6px; margin: 0; padding: 5px 13px 3px; background: #fcfcfd; color: var(--wcp-text); font-size: 14px; font-weight: 750; }
