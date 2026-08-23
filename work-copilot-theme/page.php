@@ -276,6 +276,12 @@ get_header();
             <button type="button" id="wcp-btn-new-goal" class="wcp-edit-link" data-page-id="<?php echo esc_attr($page_id); ?>">+ new goal</button>
             <button type="button" id="wcp-btn-new-subpage" class="wcp-edit-link" data-page-id="<?php echo esc_attr($page_id); ?>">+ new subpage</button>
             <button type="button" id="wcp-btn-new-dynamic-listing" class="wcp-edit-link" data-page-id="<?php echo esc_attr($page_id); ?>">+ dynamic list</button>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline;">
+                <input type="hidden" name="action" value="wcp_export_page_md">
+                <input type="hidden" name="page_id" value="<?php echo esc_attr($page_id); ?>">
+                <?php wp_nonce_field('wcp_export_page_md_' . $page_id); ?>
+                <button type="submit" class="wcp-edit-link"><?php _e('export as .md', 'work-copilot-theme'); ?></button>
+            </form>
             <form id="wcp-create-subpage-form" style="display:none;">
                 <input type="hidden" name="page_id" value="<?php echo esc_attr($page_id); ?>">
                 <input type="text" name="title" required placeholder="<?php esc_attr_e('Subpage title...', 'work-copilot-theme'); ?>" class="wcp-form-control wcp-quick-title">

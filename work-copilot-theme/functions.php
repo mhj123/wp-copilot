@@ -585,6 +585,87 @@ function wcp_theme_get_page_only_items($page_id) {
     ));
 }
 
+/**
+ * Render a single item as a Markdown section: title, content/description,
+ * and source URL if present. Item content already carries markdown-style
+ * formatting where the AI/import flows write it (bullets, **bold**, #
+ * headings) so it's used near-verbatim, just trimmed.
+ */
+function wcp_theme_item_to_markdown($item) {
+    $title      = trim($item->post_title);
+    $content    = trim($item->post_content);
+    $source_url = get_post_meta($item->ID, '_wcp_source_url', true);
+
+    $md = "### {$title}\n\n";
+    if ($content !== '') {
+        $md .= $content . "\n\n";
+    }
+    if ($source_url) {
+        $md .= "Source: {$source_url}\n\n";
+    }
+    return $md;
+}
+
+/**
+ * Export a page's content, headings, and items (title, description, source
+ * URL) to a Markdown document. Page-scoped, not a whole-corpus export —
+ * see WCP_CSV_Exporter (wp-copilot plugin) for the site-wide equivalent.
+ */
+function wcp_theme_export_page_to_markdown($page_id) {
+    $page = get_post($page_id);
+    if (!$page || $page->post_type !== 'page') {
+        return '';
+    }
+
+    $md = "# {$page->post_title}\n\n";
+
+    $page_content = trim(wp_strip_all_tags(apply_filters('the_content', $page->post_content)));
+    if ($page_content !== '') {
+        $md .= $page_content . "\n\n";
+    }
+
+    foreach (wcp_theme_get_page_only_items($page_id) as $item) {
+        $md .= wcp_theme_item_to_markdown($item);
+    }
+
+    foreach (wcp_theme_get_page_headings($page_id) as $heading) {
+        $md .= "## {$heading->post_title}\n\n";
+        foreach (wcp_theme_get_heading_items($heading->ID) as $item) {
+            $md .= wcp_theme_item_to_markdown($item);
+        }
+    }
+
+    return $md;
+}
+
+/**
+ * Serve the Markdown export as a file download — same admin-post + raw
+ * header()/exit pattern the plugin's CSV export already uses
+ * (WCP_Admin::handle_export_csv()), just page-scoped and theme-side since
+ * the underlying per-page heading/item query helpers above are theme-owned.
+ */
+function wcp_theme_handle_export_page_md() {
+    $page_id = isset($_POST['page_id']) ? (int) $_POST['page_id'] : 0;
+    $page    = $page_id ? get_post($page_id) : null;
+    if (!$page || $page->post_type !== 'page') {
+        wp_die(__('Invalid page.', 'work-copilot-theme'), '', array('response' => 404));
+    }
+    if (!current_user_can('edit_post', $page_id)) {
+        wp_die(__('You do not have permission to export this page.', 'work-copilot-theme'), '', array('response' => 403));
+    }
+    check_admin_referer('wcp_export_page_md_' . $page_id);
+
+    $markdown = wcp_theme_export_page_to_markdown($page_id);
+    $filename = sanitize_title($page->post_title) . '.md';
+
+    nocache_headers();
+    header('Content-Type: text/markdown; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    echo $markdown;
+    exit;
+}
+add_action('admin_post_wcp_export_page_md', 'wcp_theme_handle_export_page_md');
+
 // Get breadcrumb trail for a Page
 function wcp_theme_get_page_breadcrumbs($page_id) {
     $breadcrumbs = array();
