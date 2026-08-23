@@ -1121,6 +1121,14 @@ jQuery(document).ready(function($) {
         $('#wcp-page-ai-panel').slideToggle(150);
     });
 
+    // Export page as Markdown — a real form submit (native file download via
+    // Content-Disposition), just triggered from a plain button so it matches
+    // the [ai] button's styling/markup instead of a visually-inconsistent
+    // <button type="submit">.
+    $(document).on('click', '#wcp-btn-export-md', function() {
+        document.getElementById('wcp-export-md-form').submit();
+    });
+
     // Chip click reveals a prompt textarea for that action (mirrors the
     // item-level AI panel's "Freeform" reveal).
     var wcpPageAiPlaceholders = {
