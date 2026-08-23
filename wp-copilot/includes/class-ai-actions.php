@@ -478,7 +478,9 @@ class WCP_AI_Actions {
         if (is_wp_error($guard)) { return $guard; }
 
         $atoms = $this->research_space_atoms($page_id);
-        $sys = "You propose candidate research atoms for a workspace. Return ONLY a JSON array. Each object must have title, content, and tags. Do not invent item_type values; accepted research-chip atoms are stored as item_type 'info' and their research role is carried by heading placement/tags. Do not mention or create typed links. Do not use full paper text; reason only from the compressed atoms/summaries supplied. These are candidates requiring human acceptance.";
+        $sys = "You propose candidate research atoms for a workspace. Do not invent item_type values; accepted research-chip atoms are stored as item_type 'info' and their research role is carried by heading placement/tags. Do not mention or create typed links. Do not use full paper text; reason only from the compressed atoms/summaries supplied. These are candidates requiring human acceptance.\n\n"
+             . "Return ONLY a valid JSON array. No text before or after — no headings, no commentary, no markdown fences. Format:\n"
+             . '[{"title":"Subtopic title","content":"1-2 sentences","tags":["tag1"]}]';
         $usr = trim($prompt) . "\n\nAccepted atoms/summaries:\n" . $this->research_atoms_text($atoms);
         $response = WCP_AI_Client::instance()->request_with_conversation($sys, $usr, $this->research_conversation_history($conversation_id), 2048, 90);
         if (is_wp_error($response)) { return $response; }

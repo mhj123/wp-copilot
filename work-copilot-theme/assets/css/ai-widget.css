@@ -1254,15 +1254,20 @@ body.admin-bar .wcp-ai-widget.minimized {
     margin: 8px 0 12px;
 }
 
-/* Onboard chip — visually distinct */
-.wcp-ai-action-chip--onboard {
+/* Immediate-fire chips (Onboard, and any "canned" chip with a fixed prompt —
+   Suggest topics, Identify gaps, Taxonomy outline, etc.) get a distinct look
+   so it's visually obvious at a glance which chips run right away vs which
+   ones expect you to type a prompt afterward. */
+.wcp-ai-action-chip--onboard,
+.wcp-ai-action-chip--canned {
     background: #f0f7ff;
     border-color: #0073aa;
     color: #0073aa;
     font-weight: 600;
 }
 
-.wcp-ai-action-chip--onboard:hover {
+.wcp-ai-action-chip--onboard:hover,
+.wcp-ai-action-chip--canned:hover {
     background: #0073aa;
     color: #fff;
 }
