@@ -1050,6 +1050,19 @@ body.admin-bar .wcp-ai-widget.closed {
     color: #333;
 }
 
+.wcp-ai-proposal-source {
+    display: block;
+    margin: -4px 0 6px;
+    font-size: 12px;
+    color: #4a9eff;
+    text-decoration: none;
+    word-break: break-all;
+}
+
+.wcp-ai-proposal-source:hover {
+    text-decoration: underline;
+}
+
 .wcp-ai-proposal-content {
     margin-bottom: 10px;
     font-size: 14px;

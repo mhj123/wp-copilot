@@ -593,11 +593,50 @@ class WCP_AI_Actions {
      * find_references_for_item() (item-level) — same findings-to-items
      * conversion, only the query/grounding that produced $findings differs.
      */
+    /**
+     * One Claude call over all findings, asking for a short "what this is
+     * and why it's relevant to the topic" summary per finding — replaces
+     * showing Exa's raw excerpt verbatim. Returns an array of strings in
+     * the same order as $findings (missing/failed entries fall back to
+     * empty string, handled by the caller).
+     */
+    private function research_synthesize_finding_summaries($findings, $topic) {
+        if (empty($findings)) {
+            return array();
+        }
+
+        $listing = '';
+        foreach ($findings as $i => $finding) {
+            $listing .= ($i + 1) . ". Title: " . ($finding['title'] ?? '') . "\n   URL: " . ($finding['url'] ?? '') . "\n";
+            if (!empty($finding['snippet'])) {
+                $listing .= "   Excerpt: " . $finding['snippet'] . "\n";
+            }
+            $listing .= "\n";
+        }
+
+        $sys = "For each numbered search result below, write a 1-2 sentence summary that explains: (1) what the "
+             . "source is (e.g. a biography entry, an academic paper, an archive record, a database listing), and "
+             . "(2) why it's relevant to the topic. Base this only on the title/URL/excerpt given — do not invent "
+             . "details the excerpt doesn't support. Do not repeat the title or URL in your summary text; those "
+             . "are shown separately. Return ONLY a valid JSON array of strings, exactly one per result, in the "
+             . "same order. No text before or after.";
+        $usr = "Topic: {$topic}\n\nResults:\n{$listing}";
+
+        $response = WCP_AI_Client::instance()->request_with_conversation($sys, $usr, array(), 1024, 60);
+        if (is_wp_error($response)) {
+            return array();
+        }
+        $parsed = $this->parse_json_response($response['content']);
+        return (!is_wp_error($parsed) && is_array($parsed)) ? $parsed : array();
+    }
+
     private function research_findings_to_items($findings, $query) {
+        $summaries = $this->research_synthesize_finding_summaries($findings, $query);
+
         $items = array();
         $seen_urls = array();
         $seen_titles = array();
-        foreach ($findings as $finding) {
+        foreach ($findings as $i => $finding) {
             if (empty($finding['url'])) { continue; }
             $title = sanitize_text_field($finding['title'] ?: $finding['url']);
             $url = esc_url_raw($finding['url']);
@@ -613,13 +652,17 @@ class WCP_AI_Actions {
             $seen_urls[$url_key] = true;
             $seen_titles[$title_key] = true;
 
-            $snippet = wp_kses_post($finding['snippet'] ?? '');
+            $domain = wp_parse_url($url, PHP_URL_HOST) ?: $url;
+            $summary = isset($summaries[$i]) ? trim(wp_strip_all_tags((string) $summaries[$i])) : '';
+            $body = $summary !== '' ? sanitize_textarea_field($summary) : wp_kses_post($finding['snippet'] ?? '');
+
             $items[] = array(
                 'title' => $title,
-                'content' => "URL: {$url}\n\nSnippet: {$snippet}\n\nProvenance: found via web search (Exa). Query: {$query}. Result URL: {$url}. This is not a formal peer-reviewed citation.",
+                'content' => "{$body}\n\nSource: {$domain} — {$url}\n\nProvenance: found via web search (Exa). Query: {$query}. Result URL: {$url}. This is not a formal peer-reviewed citation.",
                 'item_type' => 'source',
                 'tags' => array('web-search', 'exa'),
                 'url' => $url,
+                'domain' => $domain,
                 'source_type' => 'web_search',
             );
         }

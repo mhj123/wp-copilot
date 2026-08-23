@@ -1255,6 +1255,10 @@
                                     .val(proposal.proposal_id)
                             ),
                         $('<h5>').text(item.title),
+                        item.url ? $('<a>')
+                            .addClass('wcp-ai-proposal-source')
+                            .attr({ href: item.url, target: '_blank', rel: 'noopener' })
+                            .text(item.domain || item.url) : '',
                         $('<div>')
                             .addClass('wcp-ai-proposal-content')
                             .text(item.content),

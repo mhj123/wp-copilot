@@ -1755,9 +1755,12 @@ jQuery(document).ready(function($) {
                     }
                     var rows = proposals.map(function(p) {
                         var it = p.item || {};
-                        return '<li><label>'
+                        var source = it.url
+                            ? ' — <a href="' + $('<span>').text(it.url).html() + '" target="_blank" rel="noopener" style="color:#4a9eff;">' + $('<span>').text(it.domain || it.url).html() + '</a>'
+                            : '';
+                        return '<li style="margin-bottom:4px;"><label>'
                             + '<input type="checkbox" class="wcp-fri-cb" checked data-proposal-id="' + p.proposal_id + '"> '
-                            + '<strong>' + $('<span>').text(it.title || '').html() + '</strong>'
+                            + '<strong>' + $('<span>').text(it.title || '').html() + '</strong>' + source
                             + '</label></li>';
                     }).join('');
                     $result.html(
