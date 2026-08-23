@@ -521,7 +521,21 @@ class WCP_AI_Actions {
         $response = WCP_AI_Client::instance()->request_with_conversation($sys, $usr, $this->research_conversation_history($conversation_id), 2048, 90);
         if (is_wp_error($response)) { return $response; }
         $parsed = $this->parse_json_response($response['content']);
-        if (is_wp_error($parsed)) { return $parsed; }
+        if (is_wp_error($parsed)) {
+            // Corrective retry: the model answered in prose despite the
+            // "ONLY a JSON array" instruction (observed in practice, not
+            // hypothetical). Feed its own answer back and ask it to
+            // reformat — more reliable than just re-asking the original
+            // question, which can fail the same way twice.
+            $retry_usr = "Reformat the following into ONLY a valid JSON array, no other text before or after. Format:\n"
+                . '[{"title":"...","content":"...","tags":["..."]}]' . "\n\n"
+                . "Content to reformat:\n" . $response['content'];
+            $retry_response = WCP_AI_Client::instance()->request_with_conversation($sys, $retry_usr, array(), 2048, 60);
+            if (!is_wp_error($retry_response)) {
+                $parsed = $this->parse_json_response($retry_response['content']);
+            }
+            if (is_wp_error($parsed)) { return $parsed; }
+        }
         if (isset($parsed['title'])) { $parsed = array($parsed); }
 
         $items = array();
@@ -559,7 +573,7 @@ class WCP_AI_Actions {
     }
 
     public function research_identify_gaps($prompt, $page_id, $conversation_id = null) {
-        $prompt = trim($prompt) ?: 'Identify lightweight coverage gaps in this research space based on item types, tags, and accepted atoms.';
+        $prompt = trim($prompt) ?: 'Identify gaps in the research headings and items on this page, and propose additional topics';
         return $this->research_generate_candidate_atoms($prompt, $page_id, $conversation_id, 'research_identify_gaps', 'Gaps');
     }
 
