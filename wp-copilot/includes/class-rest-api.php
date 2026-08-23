@@ -3145,7 +3145,12 @@ class WCP_REST_API {
         if ( ! function_exists('wp_handle_upload') ) {
             require_once ABSPATH . 'wp-admin/includes/file.php';
         }
-        if ( ! function_exists('wp_insert_attachment') ) {
+        // wp_insert_attachment() is a core function (wp-includes/post.php) and is
+        // always defined, so guarding on it here never actually triggers this
+        // require — wp_generate_attachment_metadata() below (which genuinely
+        // lives in wp-admin/includes/image.php, not loaded outside wp-admin)
+        // was fataling as a result. Guard on the function that's actually needed.
+        if ( ! function_exists('wp_generate_attachment_metadata') ) {
             require_once ABSPATH . 'wp-admin/includes/media.php';
             require_once ABSPATH . 'wp-admin/includes/image.php';
         }
