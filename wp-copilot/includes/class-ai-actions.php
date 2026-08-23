@@ -438,37 +438,6 @@ class WCP_AI_Actions {
         );
     }
 
-    public function research_chat_space($prompt, $page_id, $conversation_id = null) {
-        $guard = $this->require_researcher_mode($page_id);
-        if (is_wp_error($guard)) { return $guard; }
-        if (trim($prompt) === '') { return new WP_Error('empty_prompt', 'A question is required'); }
-
-        $atoms = $this->research_space_atoms($page_id);
-        $page_body = $this->page_body_text($page_id);
-        $sys = 'You are a research-space synthesis assistant. Answer from the compressed representation provided: the page\'s own content, accepted atoms, summaries, item types, tags, and contexts. Do not use or request full paper text (the full text of attached PDFs/references) — the page\'s own body content is fine and expected. If the evidence is thin, say so. Do not create or mutate content.';
-        $usr = trim($prompt) . "\n\n"
-             . ($page_body !== '' ? "Page content:\n{$page_body}\n\n" : '')
-             . "Accepted atoms and summaries in this space:\n" . $this->research_atoms_text($atoms);
-        $response = WCP_AI_Client::instance()->request_with_conversation($sys, $usr, $this->research_conversation_history($conversation_id), 2048, 90);
-        if (is_wp_error($response)) { return $response; }
-
-        if ($conversation_id) {
-            $cm = WCP_Conversations_Manager::instance();
-            $cm->add_message($conversation_id, 'user', $prompt);
-            $cm->add_message($conversation_id, 'assistant', $response['content']);
-        }
-
-        WCP_AI_Logger::instance()->log_action('research_chat_space', array(
-            'model' => $response['model'],
-            'prompt' => $prompt,
-            'input_context' => array('page_id' => $page_id, 'atom_count' => count($atoms), 'full_text_loaded' => false),
-            'output' => $response['content'],
-            'context_post_id' => $page_id,
-        ));
-
-        return array('outcome' => 'chat', 'message' => $response['content'], 'metadata' => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null));
-    }
-
     private function research_create_item_proposals($items, $page_id, $conversation_id, $action_type, $target_heading = '', $parent_item_id = 0) {
         $proposals = array();
         $batch_id = wp_generate_uuid4();

@@ -150,7 +150,6 @@ if (empty($saved_prompts)) {
             <button type="button" class="wcp-ai-action-chip" data-action="fetch_structure"><?php _e('Fetch structure', 'work-copilot'); ?></button>
             <?php if ($researcher_mode_enabled) : ?>
             <button type="button" class="wcp-ai-action-chip" data-action="research_list_references"><?php _e('List refs/claims', 'work-copilot'); ?></button>
-            <button type="button" class="wcp-ai-action-chip" data-action="research_chat_space"><?php _e('Chat to space', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip wcp-ai-action-chip--canned" data-action="research_suggest_topics" data-prompt="Suggest useful sub-topics or sub-questions for this research space."><?php _e('Suggest topics', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip wcp-ai-action-chip--canned" data-action="research_identify_gaps" data-prompt="Identify gaps in the research headings and items on this page, and propose additional topics"><?php _e('Identify gaps', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="research_find_references"><?php _e('Find references', 'work-copilot'); ?></button>
