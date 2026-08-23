@@ -316,6 +316,19 @@
                 }
             });
 
+            // Find references — confirm/cancel the derived (or edited) query
+            $(document).on('click', '.wcp-ai-query-search', (e) => {
+                const $msg = $(e.currentTarget).closest('.wcp-ai-query-confirm');
+                const query = $msg.find('.wcp-ai-query-input').val().trim();
+                if (!query) { return; }
+                const instruction = $msg.data('instruction');
+                $msg.remove();
+                this.runReferenceSearch(instruction, query);
+            });
+            $(document).on('click', '.wcp-ai-query-cancel', (e) => {
+                $(e.currentTarget).closest('.wcp-ai-query-confirm').remove();
+            });
+
             // Save prompt
             $(document).on('click', '#wcp-ai-save-prompt', () => {
                 this.showSavePromptModal();
@@ -931,6 +944,17 @@
                 return;
             }
 
+            // Find references — derive the Exa query from the typed
+            // instruction first and let the user review/edit it before any
+            // search actually runs, rather than searching immediately.
+            if (this.currentAction === 'research_find_references') {
+                $('.wcp-ai-send-btn').prop('disabled', false);
+                this.currentAction = 'chat';
+                $('.wcp-ai-action-chip').removeClass('active');
+                this.requestReferenceQuery(prompt);
+                return;
+            }
+
             // Build request data
             const data = {
                 action_type: this.currentAction,
@@ -1020,6 +1044,100 @@
                 error: (xhr) => {
                     this.showLoading(false);
                     $('.wcp-ai-send-btn').prop('disabled', false);
+                    this.showError('Connection error: ' + xhr.statusText);
+                }
+            });
+        },
+
+        /**
+         * Find references, step 1: derive the Exa search query from the
+         * typed instruction without searching yet.
+         */
+        requestReferenceQuery: function(instruction) {
+            this.showLoading(true, 'Working out a search query…');
+            $.ajax({
+                url: wcpAiWidgetData.restUrl + '/ai/actions/execute',
+                method: 'POST',
+                beforeSend: (xhr) => {
+                    xhr.setRequestHeader('X-WP-Nonce', wcpAiWidgetData.nonce);
+                },
+                data: {
+                    action_type: 'derive_reference_query',
+                    prompt: instruction,
+                    page_id: wcpAiWidgetData.pageId
+                },
+                success: (response) => {
+                    this.showLoading(false);
+                    if (!response.success) {
+                        this.showError(response.message || 'Could not derive a search query');
+                        return;
+                    }
+                    this.renderQueryConfirm(instruction, response.result.query);
+                },
+                error: (xhr) => {
+                    this.showLoading(false);
+                    this.showError('Connection error: ' + xhr.statusText);
+                }
+            });
+        },
+
+        /**
+         * Find references, step 2: show the derived query for review/editing
+         * before it's actually sent to Exa.
+         */
+        renderQueryConfirm: function(instruction, query) {
+            const $container = $('.wcp-ai-messages');
+            const $message = $('<div>').addClass('wcp-ai-message wcp-ai-message-assistant wcp-ai-query-confirm');
+            $message.data('instruction', instruction);
+            $message.append($('<div>').addClass('wcp-ai-message-content').text('Search query for Exa (edit if needed):'));
+            $message.append($('<textarea>').addClass('wcp-ai-query-input').attr('rows', 2).val(query));
+            $message.append(
+                $('<div>').addClass('wcp-ai-query-actions')
+                    .append($('<button>').attr('type', 'button').addClass('wcp-btn wcp-btn-primary wcp-btn-sm wcp-ai-query-search').text('Search'))
+                    .append(' ')
+                    .append($('<button>').attr('type', 'button').addClass('wcp-edit-link wcp-ai-query-cancel').text('cancel'))
+            );
+            $container.append($message);
+            this.scrollToBottom();
+            $message.find('.wcp-ai-query-input').trigger('focus');
+        },
+
+        /**
+         * Find references, step 3: run the actual Exa search with the
+         * (possibly edited) query, bypassing re-derivation server-side.
+         */
+        runReferenceSearch: function(instruction, query) {
+            this.showLoading(true, 'Searching for references…');
+            const data = {
+                action_type: 'research_find_references',
+                prompt: instruction,
+                query: query,
+                page_id: wcpAiWidgetData.pageId,
+                conversation_id: this.conversationId,
+                context_mode: this.contextMode,
+                model: this.selectedModel,
+                thinking_budget: this.thinkingBudget
+            };
+            if (this.contextMode === 'select') {
+                data.selected_pages = this.selectedPages;
+            }
+            $.ajax({
+                url: wcpAiWidgetData.restUrl + '/ai/actions/execute',
+                method: 'POST',
+                beforeSend: (xhr) => {
+                    xhr.setRequestHeader('X-WP-Nonce', wcpAiWidgetData.nonce);
+                },
+                data: data,
+                success: (response) => {
+                    this.showLoading(false);
+                    if (response.success) {
+                        this.handleActionResult(response.result);
+                    } else {
+                        this.showError(response.message || 'Action failed');
+                    }
+                },
+                error: (xhr) => {
+                    this.showLoading(false);
                     this.showError('Connection error: ' + xhr.statusText);
                 }
             });

@@ -601,6 +601,27 @@ body.admin-bar .wcp-ai-widget.closed {
     align-items: flex-end;
 }
 
+/* "Find references" query review — editable textarea + confirm/cancel,
+   shown before any Exa search actually runs. */
+.wcp-ai-query-confirm .wcp-ai-query-input {
+    align-self: stretch;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-top: 6px;
+    padding: 8px 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    resize: vertical;
+}
+
+.wcp-ai-query-actions {
+    margin-top: 6px;
+    align-self: flex-end;
+}
+
 .wcp-ai-msgsave {
     margin-top: 4px;
     font-size: 11px;

@@ -1525,6 +1525,34 @@ jQuery(document).ready(function($) {
         );
     }
 
+    // Shared by the "Search" button below (after query edit/confirm) — the
+    // find_references_for_item chip no longer calls the actual search
+    // directly, so this rendering can't stay inline in the generic chip
+    // dispatch's success callback.
+    function wcpRenderFriResults($result, r) {
+        var proposals = r.proposals || [];
+        if (!proposals.length) {
+            $result.html('<em style="color:#888;font-size:12px;">No references found.</em>');
+            return;
+        }
+        var rows = proposals.map(function(p) {
+            var it = p.item || {};
+            var source = it.url
+                ? ' — <a href="' + $('<span>').text(it.url).html() + '" target="_blank" rel="noopener" style="color:#4a9eff;">' + $('<span>').text(it.domain || it.url).html() + '</a>'
+                : '';
+            return '<li style="margin-bottom:4px;"><label>'
+                + '<input type="checkbox" class="wcp-fri-cb" checked data-proposal-id="' + p.proposal_id + '"> '
+                + '<strong>' + $('<span>').text(it.title || '').html() + '</strong>' + source
+                + '</label></li>';
+        }).join('');
+        $result.html(
+            '<p style="font-size:12px;margin:0 0 6px;color:#555;">' + $('<span>').text(r.message || 'Found references').html() + '</p>'
+            + '<ul class="wcp-fri-list" style="margin:0 0 8px;padding-left:16px;font-size:12px;list-style:none;">' + rows + '</ul>'
+            + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-fri-accept" data-batch-id="' + r.batch_id + '">Add selected</button>'
+            + ' <button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
+        );
+    }
+
     $(document).on('click', '.wcp-item-ai-btn', function() {
         var $row   = $(this).closest('.wcp-item-row');
         var $panel = $row.find('.wcp-item-ai-panel');
@@ -1657,6 +1685,38 @@ jQuery(document).ready(function($) {
             return;
         }
 
+        if (action === 'find_references_for_item') {
+            // Derive the Exa search query from the item's own title/content
+            // first and let the user review/edit it — the derived query can
+            // read quite differently from the item text it came from — before
+            // any search actually runs.
+            $result.show().html('<em style="color:#aaa;font-size:12px;">Deriving search query…</em>');
+            $.ajax({
+                url: wcpThemeData.restUrl + '/items/' + itemId + '/ai',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ action: 'find_references_query_preview', page_id: $panel.data('page-id') }),
+                beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+                success: function(r) {
+                    if (!r.success) { $result.html('<em style="color:#c0392b;">' + (r.message || 'Error') + '</em>'); return; }
+                    $result.html(
+                        '<p style="font-size:12px;margin:0 0 6px;color:#555;">Search query for Exa (edit if needed):</p>'
+                        + '<textarea class="wcp-fri-query-input" rows="2" style="width:100%;box-sizing:border-box;font-size:12px;">' + $('<span>').text(r.query).html() + '</textarea>'
+                        + '<div style="margin-top:6px;">'
+                        + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-fri-search" data-item-id="' + itemId + '">Search</button>'
+                        + ' <button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Cancel</button>'
+                        + '</div>'
+                    );
+                    $result.find('.wcp-fri-query-input').focus();
+                },
+                error: function(xhr) {
+                    var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Connection error';
+                    $result.html('<em style="color:#c0392b;">' + msg + '</em>');
+                }
+            });
+            return;
+        }
+
         if (action === 'freeform') {
             // Collect a freeform instruction first, then run on demand.
             $result.show().html(
@@ -1747,28 +1807,6 @@ jQuery(document).ready(function($) {
                         + '<button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
                         + '</div>';
                     $result.html(html2);
-                } else if (action === 'find_references_for_item') {
-                    var proposals = r.proposals || [];
-                    if (!proposals.length) {
-                        $result.html('<em style="color:#888;font-size:12px;">No references found.</em>');
-                        return;
-                    }
-                    var rows = proposals.map(function(p) {
-                        var it = p.item || {};
-                        var source = it.url
-                            ? ' — <a href="' + $('<span>').text(it.url).html() + '" target="_blank" rel="noopener" style="color:#4a9eff;">' + $('<span>').text(it.domain || it.url).html() + '</a>'
-                            : '';
-                        return '<li style="margin-bottom:4px;"><label>'
-                            + '<input type="checkbox" class="wcp-fri-cb" checked data-proposal-id="' + p.proposal_id + '"> '
-                            + '<strong>' + $('<span>').text(it.title || '').html() + '</strong>' + source
-                            + '</label></li>';
-                    }).join('');
-                    $result.html(
-                        '<p style="font-size:12px;margin:0 0 6px;color:#555;">' + $('<span>').text(r.message || 'Found references').html() + '</p>'
-                        + '<ul class="wcp-fri-list" style="margin:0 0 8px;padding-left:16px;font-size:12px;list-style:none;">' + rows + '</ul>'
-                        + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-fri-accept" data-batch-id="' + r.batch_id + '">Add selected</button>'
-                        + ' <button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
-                    );
                 }
             },
             error: function() { $result.html('<em style="color:#c0392b;">Connection error</em>'); }
@@ -1974,6 +2012,32 @@ jQuery(document).ready(function($) {
                 wcpRenderItemProposal($result, itemId, r.proposal);
             },
             error: function() { $result.html('<em style="color:#c0392b;">Error</em>'); }
+        });
+    });
+
+    $(document).on('click', '.wcp-fri-search', function() {
+        var $btn    = $(this);
+        var itemId  = $btn.data('item-id');
+        var $result = $btn.closest('.wcp-item-ai-result');
+        var $panel  = $btn.closest('.wcp-item-ai-panel');
+        var query   = $result.find('.wcp-fri-query-input').val().trim();
+        if (!query) { $result.find('.wcp-fri-query-input').focus(); return; }
+
+        $result.html('<em style="color:#aaa;font-size:12px;">Searching…</em>');
+        $.ajax({
+            url: wcpThemeData.restUrl + '/items/' + itemId + '/ai',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ action: 'find_references_for_item', page_id: $panel.data('page-id'), query: query }),
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(r) {
+                if (!r.success) { $result.html('<em style="color:#c0392b;">' + (r.message || 'Error') + '</em>'); return; }
+                wcpRenderFriResults($result, r);
+            },
+            error: function(xhr) {
+                var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Connection error';
+                $result.html('<em style="color:#c0392b;">' + msg + '</em>');
+            }
         });
     });
 
