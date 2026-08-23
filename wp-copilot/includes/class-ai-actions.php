@@ -321,6 +321,29 @@ class WCP_AI_Actions {
         return $atoms;
     }
 
+    /**
+     * A page's own body text, stripped and truncated — for prompts that
+     * ground on "the project's actual topic," not just its items/atoms.
+     * Item-based context helpers (research_space_atoms, build_structure_
+     * snapshot) never include this, so any action grounding purely on
+     * those is blind to content that lives directly in the page body
+     * (e.g. Researcher Mode's Description/Objectives/Context sections) —
+     * this is the shared fix point for that whole class of gap.
+     *
+     * @return string '' if the page has no body content.
+     */
+    private function page_body_text($page_id, $max_chars = 8000) {
+        $page = get_post($page_id);
+        $text = $page ? trim(wp_strip_all_tags($page->post_content)) : '';
+        if ($text === '') {
+            return '';
+        }
+        if (mb_strlen($text) > $max_chars) {
+            $text = mb_substr($text, 0, $max_chars) . ' [truncated]';
+        }
+        return $text;
+    }
+
     private function research_atoms_text($atoms) {
         if (empty($atoms)) {
             return '(no accepted atoms or summaries yet)';
@@ -349,12 +372,14 @@ class WCP_AI_Actions {
      */
     private function research_derive_search_query($instruction, $page_id, $atoms) {
         $page_title = get_the_title($page_id);
+        $page_body = $this->page_body_text($page_id);
         $sys = 'You turn a research assistant instruction into a single, well-formed search query for an academic/web search API. '
-             . 'Ground the query in the research space\'s actual topic (page title and accepted atoms/summaries below) — '
+             . 'Ground the query in the research space\'s actual topic (page title, page content, and accepted atoms/summaries below) — '
              . 'do not search for the literal instruction text (e.g. "items on this page" is not a search query). '
              . 'Respond with ONLY the search query itself: no quotes, no explanation, no markdown.';
         $usr = "Instruction: " . trim($instruction) . "\n\n"
              . "Page: {$page_title}\n\n"
+             . ($page_body !== '' ? "Page content:\n{$page_body}\n\n" : '')
              . "Accepted atoms/summaries in this space:\n" . $this->research_atoms_text($atoms);
 
         $response = WCP_AI_Client::instance()->request_with_conversation($sys, $usr, array(), 100, 30);
@@ -419,8 +444,11 @@ class WCP_AI_Actions {
         if (trim($prompt) === '') { return new WP_Error('empty_prompt', 'A question is required'); }
 
         $atoms = $this->research_space_atoms($page_id);
-        $sys = 'You are a research-space synthesis assistant. Answer only from the compressed representation provided: accepted atoms, summaries, item types, tags, and contexts. Do not use or request full paper text. If the evidence is thin, say so. Do not create or mutate content.';
-        $usr = trim($prompt) . "\n\nAccepted atoms and summaries in this space:\n" . $this->research_atoms_text($atoms);
+        $page_body = $this->page_body_text($page_id);
+        $sys = 'You are a research-space synthesis assistant. Answer from the compressed representation provided: the page\'s own content, accepted atoms, summaries, item types, tags, and contexts. Do not use or request full paper text (the full text of attached PDFs/references) — the page\'s own body content is fine and expected. If the evidence is thin, say so. Do not create or mutate content.';
+        $usr = trim($prompt) . "\n\n"
+             . ($page_body !== '' ? "Page content:\n{$page_body}\n\n" : '')
+             . "Accepted atoms and summaries in this space:\n" . $this->research_atoms_text($atoms);
         $response = WCP_AI_Client::instance()->request_with_conversation($sys, $usr, $this->research_conversation_history($conversation_id), 2048, 90);
         if (is_wp_error($response)) { return $response; }
 
@@ -486,17 +514,10 @@ class WCP_AI_Actions {
         // body, framing content that lives there (e.g. Researcher Mode's
         // Description/Objectives/Context sections) is invisible here, same
         // gap onboard() had.
-        $usr = trim($prompt);
-        $page = get_post($page_id);
-        $page_body = $page ? trim(wp_strip_all_tags($page->post_content)) : '';
-        if ($page_body !== '') {
-            $truncated = mb_strlen($page_body) > 8000;
-            if ($truncated) {
-                $page_body = mb_substr($page_body, 0, 8000);
-            }
-            $usr .= "\n\nPage content:\n{$page_body}" . ($truncated ? ' [truncated]' : '');
-        }
-        $usr .= "\n\nAccepted atoms/summaries:\n" . $this->research_atoms_text($atoms);
+        $page_body = $this->page_body_text($page_id);
+        $usr = trim($prompt)
+             . ($page_body !== '' ? "\n\nPage content:\n{$page_body}" : '')
+             . "\n\nAccepted atoms/summaries:\n" . $this->research_atoms_text($atoms);
         $response = WCP_AI_Client::instance()->request_with_conversation($sys, $usr, $this->research_conversation_history($conversation_id), 2048, 90);
         if (is_wp_error($response)) { return $response; }
         $parsed = $this->parse_json_response($response['content']);
@@ -534,7 +555,7 @@ class WCP_AI_Actions {
 
     public function research_suggest_topics($prompt, $page_id, $conversation_id = null) {
         $prompt = trim($prompt) ?: 'Suggest useful sub-topics or sub-questions for this research space.';
-        return $this->research_generate_candidate_atoms($prompt, $page_id, $conversation_id, 'research_suggest_topics', 'Objectives');
+        return $this->research_generate_candidate_atoms($prompt, $page_id, $conversation_id, 'research_suggest_topics', 'Topics');
     }
 
     public function research_identify_gaps($prompt, $page_id, $conversation_id = null) {
@@ -3792,13 +3813,9 @@ class WCP_AI_Actions {
         // page's own body — without this, pages that carry real prose in
         // post_content (e.g. Researcher Mode's Description/Objectives/
         // Context sections) look "empty" to onboard() even when they aren't.
-        $page_body = trim( wp_strip_all_tags( $page->post_content ) );
+        $page_body = $this->page_body_text( $page_id );
         if ( $page_body !== '' ) {
-            $truncated = mb_strlen( $page_body ) > 8000;
-            if ( $truncated ) {
-                $page_body = mb_substr( $page_body, 0, 8000 );
-            }
-            $user_message .= "Page content:\n{$page_body}" . ( $truncated ? ' [truncated]' : '' ) . "\n\n";
+            $user_message .= "Page content:\n{$page_body}\n\n";
         }
 
         $user_message .= "Current structure:\n{$structure_snapshot}\n\n";
