@@ -1632,7 +1632,7 @@ class WCP_REST_API {
                 wp_set_post_terms($iid, array($term_id), 'wcp_context');
             }
             $type = $item['item_type'] ?? '';
-            if (in_array($type, array('task', 'info', 'learning', 'spec'), true)) {
+            if (in_array($type, array('task', 'info', 'learning', 'spec', 'source'), true)) {
                 wp_set_post_terms($iid, array($type), 'item_type');
                 if ($type === 'task') {
                     wp_set_post_terms($iid, array('to-do'), 'task_status');
@@ -2857,11 +2857,11 @@ class WCP_REST_API {
                       . "'content' may use Markdown (bullet lists with -, **bold**, headings with #) where it improves clarity — it will be rendered, not shown as raw text.";
                 $resp = $ai_client->request_with_conversation( $sys, $item_text, array(), 256 );
                 if ( is_wp_error($resp) ) return $resp;
-                $parsed = json_decode( $resp['content'], true );
+                $parsed = WCP_AI_Actions::instance()->parse_json_response( $resp['content'] );
                 return rest_ensure_response(array(
                     'success'  => true,
                     'action'   => 'improve_phrasing',
-                    'proposal' => $parsed ?: array('title' => $resp['content'], 'content' => ''),
+                    'proposal' => ! is_wp_error($parsed) ? $parsed : array('title' => $resp['content'], 'content' => ''),
                 ));
 
             case 'freeform':
@@ -2877,11 +2877,11 @@ class WCP_REST_API {
                 $usr  = "User instruction: {$user_prompt}\n\n{$item_text}";
                 $resp = $ai_client->request_with_conversation( $sys, $usr, array(), 512 );
                 if ( is_wp_error($resp) ) return $resp;
-                $parsed = json_decode( $resp['content'], true );
+                $parsed = WCP_AI_Actions::instance()->parse_json_response( $resp['content'] );
                 return rest_ensure_response(array(
                     'success'  => true,
                     'action'   => 'freeform',
-                    'proposal' => is_array($parsed) ? $parsed : array('title' => $resp['content'], 'content' => ''),
+                    'proposal' => ( ! is_wp_error($parsed) && is_array($parsed) ) ? $parsed : array('title' => $resp['content'], 'content' => ''),
                 ));
 
             case 'suggest_subtasks':
@@ -2889,7 +2889,8 @@ class WCP_REST_API {
                       . "Return ONLY a JSON array of strings: [\"subtask 1\", \"subtask 2\", ...]";
                 $resp = $ai_client->request_with_conversation( $sys, $item_text, array(), 512 );
                 if ( is_wp_error($resp) ) return $resp;
-                $subtasks = json_decode( $resp['content'], true ) ?: array();
+                $subtasks = WCP_AI_Actions::instance()->parse_json_response( $resp['content'] );
+                if ( is_wp_error($subtasks) ) { $subtasks = array(); }
                 return rest_ensure_response(array(
                     'success'  => true,
                     'action'   => 'suggest_subtasks',
@@ -2904,7 +2905,8 @@ class WCP_REST_API {
                       . "Available contexts:\n{$ctx_list}";
                 $resp = $ai_client->request_with_conversation( $sys, $item_text, array(), 256 );
                 if ( is_wp_error($resp) ) return $resp;
-                $ids = array_map('intval', json_decode($resp['content'], true) ?: array());
+                $parsed_ids = WCP_AI_Actions::instance()->parse_json_response( $resp['content'] );
+                $ids = array_map('intval', ! is_wp_error($parsed_ids) ? (array) $parsed_ids : array());
                 // Get names for display
                 $names = array();
                 foreach ( $all_ctxs as $t ) {
@@ -2936,8 +2938,8 @@ class WCP_REST_API {
                       . '[{"title":"Subtopic title","description":"Why this is worth exploring."}]';
                 $resp = $ai_client->request_with_conversation( $sys, $item_text, array(), 1024, 60 );
                 if ( is_wp_error($resp) ) return $resp;
-                $subtopics = json_decode( $resp['content'], true );
-                if ( ! is_array($subtopics) ) {
+                $subtopics = WCP_AI_Actions::instance()->parse_json_response( $resp['content'] );
+                if ( is_wp_error($subtopics) || ! is_array($subtopics) ) {
                     return new WP_Error('parse_error', 'Could not parse subtopics', array('status' => 500));
                 }
                 return rest_ensure_response(array(
@@ -2964,8 +2966,8 @@ class WCP_REST_API {
                      . '[{"title":"Step title","description":"Brief rationale or detail."}]';
                 $resp = $ai_client->request_with_conversation( $sys, $item_text, array(), 1024, 60 );
                 if ( is_wp_error($resp) ) return $resp;
-                $steps = json_decode( $resp['content'], true );
-                if ( ! is_array($steps) ) {
+                $steps = WCP_AI_Actions::instance()->parse_json_response( $resp['content'] );
+                if ( is_wp_error($steps) || ! is_array($steps) ) {
                     return new WP_Error('parse_error', 'Could not parse action plan', array('status' => 500));
                 }
                 return rest_ensure_response(array(
@@ -3018,8 +3020,8 @@ class WCP_REST_API {
                 $resp = $ai_client->request_with_conversation( $sys, $usr, array(), 1024, 60 );
                 if ( is_wp_error($resp) ) return $resp;
 
-                $steps = json_decode( $resp['content'], true );
-                if ( ! is_array($steps) ) {
+                $steps = WCP_AI_Actions::instance()->parse_json_response( $resp['content'] );
+                if ( is_wp_error($steps) || ! is_array($steps) ) {
                     return new WP_Error( 'parse_error', 'Could not parse action plan', array('status' => 500) );
                 }
 

@@ -23,6 +23,7 @@ class WCP_Taxonomies {
         add_action('init', array($this, 'populate_default_terms'), 20);
         add_action('init', array($this, 'populate_task_status_terms'), 21);
         add_action('init', array($this, 'populate_spec_terms'), 22);
+        add_action('init', array($this, 'populate_source_terms'), 23);
     }
 
     public function register_taxonomies() {
@@ -160,7 +161,7 @@ class WCP_Taxonomies {
         }
 
         // Item types
-        $item_types = array('task', 'info', 'learning', 'spec');
+        $item_types = array('task', 'info', 'learning', 'spec', 'source');
         foreach ($item_types as $type) {
             if (!term_exists($type, 'item_type')) {
                 wp_insert_term($type, 'item_type', array(
@@ -228,5 +229,25 @@ class WCP_Taxonomies {
         }
 
         update_option('wcp_spec_terms_created', true);
+    }
+
+    /**
+     * Populate the 'source' item type, for existing installs where
+     * populate_default_terms() already ran before this type existed.
+     * Items created by document/PDF import and reference-finding actions
+     * use this type instead of task/info/learning/spec — it marks "this
+     * item's job is to represent external source material," not describe
+     * internally-authored content.
+     */
+    public function populate_source_terms() {
+        if (get_option('wcp_source_terms_created')) {
+            return;
+        }
+
+        if (!term_exists('source', 'item_type')) {
+            wp_insert_term('source', 'item_type', array('slug' => 'source'));
+        }
+
+        update_option('wcp_source_terms_created', true);
     }
 }

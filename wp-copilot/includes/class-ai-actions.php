@@ -576,7 +576,7 @@ class WCP_AI_Actions {
             $items[] = array(
                 'title' => $title,
                 'content' => "URL: {$url}\n\nSnippet: {$snippet}\n\nProvenance: found via web search (Exa). Query: {$query}. Result URL: {$url}. This is not a formal peer-reviewed citation.",
-                'item_type' => 'info',
+                'item_type' => 'source',
                 'tags' => array('web-search', 'exa'),
                 'url' => $url,
                 'source_type' => 'web_search',
@@ -1985,7 +1985,7 @@ class WCP_AI_Actions {
         }
 
         $batch_id         = wp_generate_uuid4();
-        $valid_item_types = array('task', 'info', 'learning', 'spec');
+        $valid_item_types = array('task', 'info', 'learning', 'spec', 'source');
 
         // New headings → proposals + ref map for the plan tree.
         $headings   = array();
@@ -2151,7 +2151,7 @@ class WCP_AI_Actions {
             'item'            => array(
                 'title'     => $paper_title,
                 'content'   => $content,
-                'item_type' => 'info',
+                'item_type' => 'source',
             ),
             'source'          => array(
                 'type'           => 'pdf_upload',
@@ -2273,6 +2273,17 @@ class WCP_AI_Actions {
                 WCP_Conversations_Manager::instance()->add_message($conversation_id, 'system', 'Failed to parse AI response: ' . $parsed->get_error_message());
             }
             return $parsed;
+        }
+
+        // Everything created from an imported document is provenance-typed
+        // 'source' — it represents external source material, not
+        // internally-authored task/info/learning/spec content — regardless
+        // of what type the AI would otherwise have classified it as.
+        if (!empty($parsed['items']) && is_array($parsed['items'])) {
+            foreach ($parsed['items'] as &$_imported_item) {
+                $_imported_item['item_type'] = 'source';
+            }
+            unset($_imported_item);
         }
 
         return $this->build_structure_proposal($parsed, $page_id, $valid_heading_terms, $conversation_id, array(
@@ -2744,7 +2755,7 @@ class WCP_AI_Actions {
                 return $item_id;
             }
             WCP_Post_Types::mark_creator($item_id, 'copilot');
-            wp_set_post_terms($item_id, array('info'), 'item_type');
+            wp_set_post_terms($item_id, array('source'), 'item_type');
             if ($summary_term_id) {
                 wp_set_post_terms($item_id, array($summary_term_id), 'wcp_context');
             }
