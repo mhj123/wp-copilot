@@ -400,16 +400,12 @@ class WCP_AI_Actions {
             $cm->add_message($conversation_id, 'assistant', $response['content']);
         }
 
-        WCP_AI_Logger::instance()->log_action(array(
-            'action_type' => 'research_chat_space',
-            'user_id' => get_current_user_id(),
+        WCP_AI_Logger::instance()->log_action('research_chat_space', array(
             'model' => $response['model'],
             'prompt' => $prompt,
-            'input_context' => json_encode(array('page_id' => $page_id, 'atom_count' => count($atoms), 'full_text_loaded' => false)),
-            'output_snapshot' => $response['content'],
+            'input_context' => array('page_id' => $page_id, 'atom_count' => count($atoms), 'full_text_loaded' => false),
+            'output' => $response['content'],
             'context_post_id' => $page_id,
-            'accepted_items' => array(),
-            'dismissed_items' => array(),
         ));
 
         return array('outcome' => 'chat', 'message' => $response['content'], 'metadata' => array('model' => $response['model'], 'tokens' => $response['usage'] ?? null));
@@ -467,16 +463,12 @@ class WCP_AI_Actions {
 
         list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, $action_type, $target_heading);
 
-        WCP_AI_Logger::instance()->log_action(array(
-            'action_type' => $action_type,
-            'user_id' => get_current_user_id(),
+        WCP_AI_Logger::instance()->log_action($action_type, array(
             'model' => $response['model'],
             'prompt' => $prompt,
-            'input_context' => json_encode(array('page_id' => $page_id, 'atom_count' => count($atoms), 'full_text_loaded' => false, 'typed_links_used' => false)),
-            'output_snapshot' => json_encode($items),
+            'input_context' => array('page_id' => $page_id, 'atom_count' => count($atoms), 'full_text_loaded' => false, 'typed_links_used' => false),
+            'output' => $items,
             'context_post_id' => $page_id,
-            'accepted_items' => array(),
-            'dismissed_items' => array(),
         ));
 
         if ($conversation_id) {
@@ -525,16 +517,12 @@ class WCP_AI_Actions {
 
         list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, 'research_find_references');
 
-        WCP_AI_Logger::instance()->log_action(array(
-            'action_type' => 'research_find_references',
-            'user_id' => get_current_user_id(),
+        WCP_AI_Logger::instance()->log_action('research_find_references', array(
             'model' => 'exa-web-search',
             'prompt' => $query,
-            'input_context' => json_encode(array('page_id' => $page_id, 'source' => 'Exa web search', 'full_text_loaded' => false, 'typed_links_used' => false)),
-            'output_snapshot' => json_encode($items),
+            'input_context' => array('page_id' => $page_id, 'source' => 'Exa web search', 'full_text_loaded' => false, 'typed_links_used' => false),
+            'output' => $items,
             'context_post_id' => $page_id,
-            'accepted_items' => array(),
-            'dismissed_items' => array(),
         ));
 
         if ($conversation_id) {
@@ -2648,9 +2636,14 @@ class WCP_AI_Actions {
         global $wpdb;
         $table = $wpdb->prefix . 'wcp_ai_actions';
 
-        // Find recent action for this proposal (within last hour)
+        // Find recent action for this proposal (within last hour).
+        // 'generate-multiple' is a proposal-level label only; generate_items()
+        // logs it under action_type 'generate_items', so the search must remap.
+        // Actions added since (e.g. summarize_pdf_document) log under their own
+        // exact action_type and must NOT be remapped, or this lookup can never
+        // match the row it's trying to backfill accepted_items onto.
         $action_type_search = $proposal_action_type;
-        if (empty($action_type_search) || in_array($proposal_action_type, array('generate-multiple', 'summarize_pdf_document'), true)) {
+        if (empty($action_type_search) || $proposal_action_type === 'generate-multiple') {
             $action_type_search = 'generate_items';
         }
 
