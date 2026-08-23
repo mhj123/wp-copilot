@@ -164,6 +164,15 @@ class Work_Copilot {
         WCP_Post_Types::instance();
         WCP_Taxonomies::instance();
 
+        // On a fresh activation, 'init' has already fired for this request by
+        // the time this hook runs (activate_{plugin} fires after the plugin
+        // file is first included, not before init) — so the instance()
+        // constructors above only registered 'init' callbacks that will never
+        // run this request. Register post types/taxonomies synchronously so
+        // ensure_memories_page() below can actually query wcp_context.
+        WCP_Post_Types::instance()->register_post_types();
+        WCP_Taxonomies::instance()->register_taxonomies();
+
         flush_rewrite_rules();
 
         $this->create_tables();

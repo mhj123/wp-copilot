@@ -62,7 +62,7 @@ class WCP_Exa_Client {
                 'numResults'    => $num_results,
                 'contents'      => array(
                     'highlights' => array(
-                        'numSentences'     => 3,
+                        'numSentences'     => 1,
                         'highlightsPerUrl' => 1,
                     ),
                 ),
@@ -91,6 +91,13 @@ class WCP_Exa_Client {
         foreach ($data['results'] as $result) {
             $snippet = '';
             if (!empty($result['highlights']) && is_array($result['highlights'])) {
+                // Despite highlightsPerUrl:1 capping this to a single string,
+                // Exa's numSentences appears to apply PER query-term match
+                // location within the source document, not to the highlight
+                // as a whole — a doc with several match locations comes back
+                // as multiple long sentence-windows concatenated together
+                // (observed up to ~4000 chars from a single "highlight").
+                // Cap it ourselves rather than trust the API to bound it.
                 $snippet = implode(' … ', $result['highlights']);
             } elseif (!empty($result['text'])) {
                 $snippet = mb_substr($result['text'], 0, 400);
@@ -99,11 +106,30 @@ class WCP_Exa_Client {
             $findings[] = array(
                 'title'   => $result['title'] ?? $result['url'] ?? 'Untitled',
                 'url'     => $result['url'] ?? '',
-                'snippet' => trim($snippet),
+                'snippet' => $this->truncate_snippet(trim($snippet), 500),
             );
         }
 
         return $findings;
+    }
+
+    /**
+     * Truncate a snippet to a sane atomic-note length, preserving word
+     * boundaries. Findings are meant to be a short pointer to the source,
+     * not a dump of the paper's text — the full document is at the URL.
+     */
+    private function truncate_snippet($text, $max_chars) {
+        if (mb_strlen($text) <= $max_chars) {
+            return $text;
+        }
+
+        $truncated = mb_substr($text, 0, $max_chars);
+        $last_space = mb_strrpos($truncated, ' ');
+        if ($last_space !== false && $last_space > $max_chars * 0.8) {
+            $truncated = mb_substr($truncated, 0, $last_space);
+        }
+
+        return rtrim($truncated, " .…") . '…';
     }
 
     /**

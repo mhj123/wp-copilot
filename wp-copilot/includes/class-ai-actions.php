@@ -335,6 +335,36 @@ class WCP_AI_Actions {
         return implode("\n", $lines);
     }
 
+    /**
+     * Turn a free-form chat instruction into an actual Exa search query,
+     * grounded in the research space's own content. Without this step, a
+     * message like "find academic sources about the items on this page"
+     * gets sent to Exa LITERALLY — a search engine has no way to resolve
+     * "the items on this page" itself, so it returns generic results about
+     * researching in general rather than the page's real topic.
+     *
+     * Falls back to the raw instruction if the derivation call fails, so a
+     * transient AI error degrades to the old (bad but working) behavior
+     * rather than blocking the action outright.
+     */
+    private function research_derive_search_query($instruction, $page_id, $atoms) {
+        $page_title = get_the_title($page_id);
+        $sys = 'You turn a research assistant instruction into a single, well-formed search query for an academic/web search API. '
+             . 'Ground the query in the research space\'s actual topic (page title and accepted atoms/summaries below) — '
+             . 'do not search for the literal instruction text (e.g. "items on this page" is not a search query). '
+             . 'Respond with ONLY the search query itself: no quotes, no explanation, no markdown.';
+        $usr = "Instruction: " . trim($instruction) . "\n\n"
+             . "Page: {$page_title}\n\n"
+             . "Accepted atoms/summaries in this space:\n" . $this->research_atoms_text($atoms);
+
+        $response = WCP_AI_Client::instance()->request_with_conversation($sys, $usr, array(), 100, 30);
+        if (is_wp_error($response) || empty(trim($response['content'] ?? ''))) {
+            return trim($instruction);
+        }
+
+        return trim($response['content'], " \t\n\r\0\x0B\"'");
+    }
+
     private function research_conversation_history($conversation_id) {
         $history = array();
         if ($conversation_id) {
@@ -488,16 +518,20 @@ class WCP_AI_Actions {
         return $this->research_generate_candidate_atoms($prompt, $page_id, $conversation_id, 'research_identify_gaps', 'Gaps');
     }
 
-    public function research_find_references($query, $page_id, $conversation_id = null) {
+    public function research_find_references($instruction, $page_id, $conversation_id = null) {
         $guard = $this->require_researcher_mode($page_id);
         if (is_wp_error($guard)) { return $guard; }
-        $query = trim($query);
-        if ($query === '') { return new WP_Error('empty_query', 'A reference search query is required'); }
+        $instruction = trim($instruction);
+        if ($instruction === '') { return new WP_Error('empty_query', 'A reference search query is required'); }
 
         $exa_client = WCP_Exa_Client::instance();
         if (!$exa_client->is_configured()) {
             return new WP_Error('not_configured', 'Exa API key not configured. Add one in Work Copilot → Settings.');
         }
+
+        $atoms = $this->research_space_atoms($page_id);
+        $query = $this->research_derive_search_query($instruction, $page_id, $atoms);
+
         $findings = $exa_client->search($query, 6);
         if (is_wp_error($findings)) { return $findings; }
 
@@ -512,6 +546,7 @@ class WCP_AI_Actions {
                 'content' => "URL: {$url}\n\nSnippet: {$snippet}\n\nProvenance: found via web search (Exa). Query: {$query}. Result URL: {$url}. This is not a formal peer-reviewed citation.",
                 'item_type' => 'info',
                 'tags' => array('web-search', 'exa'),
+                'url' => $url,
             );
         }
 
@@ -519,17 +554,21 @@ class WCP_AI_Actions {
 
         WCP_AI_Logger::instance()->log_action('research_find_references', array(
             'model' => 'exa-web-search',
-            'prompt' => $query,
-            'input_context' => array('page_id' => $page_id, 'source' => 'Exa web search', 'full_text_loaded' => false, 'typed_links_used' => false),
+            'prompt' => $instruction,
+            'input_context' => array('page_id' => $page_id, 'source' => 'Exa web search', 'derived_query' => $query, 'full_text_loaded' => false, 'typed_links_used' => false),
             'output' => $items,
             'context_post_id' => $page_id,
         ));
 
+        // Surface the actual Exa query in the reply — the instruction and the
+        // search query are no longer the same text, and seeing the gap is the
+        // whole point of exposing this (was previously invisible).
+        $summary = 'Searched Exa for: "' . $query . '" — found ' . count($proposals) . ' reference candidate(s) for review.';
         if ($conversation_id) {
-            WCP_Conversations_Manager::instance()->add_message($conversation_id, 'assistant', 'Found ' . count($proposals) . ' web reference candidate(s) via Exa for review.', array('batch_id' => $batch_id));
+            WCP_Conversations_Manager::instance()->add_message($conversation_id, 'assistant', $summary, array('batch_id' => $batch_id));
         }
 
-        return array('outcome' => 'create_items', 'proposals' => $proposals, 'batch_id' => $batch_id, 'metadata' => array('source' => 'Exa web search'));
+        return array('outcome' => 'create_items', 'proposals' => $proposals, 'batch_id' => $batch_id, 'metadata' => array('source' => 'Exa web search', 'query' => $query), 'message' => $summary);
     }
 
     /**
@@ -2607,6 +2646,15 @@ class WCP_AI_Actions {
                 // generic generate flows, etc.). Existing flows that omit tags are unchanged.
                 if (!empty($item['tags']) && is_array($item['tags'])) {
                     wp_set_post_terms($post_id, array_map('sanitize_text_field', $item['tags']), 'post_tag');
+                }
+
+                // Populate the same _wcp_source_url field the Raindrop/CSV
+                // importers and section-duplication already use — it's read
+                // by item-row.php to render the ↗ source-link icon, so any
+                // item with a real source URL gets that UI for free.
+                $source_url = $item['url'] ?? ($proposal['source']['attachment_url'] ?? '');
+                if ($source_url) {
+                    update_post_meta($post_id, '_wcp_source_url', esc_url_raw($source_url));
                 }
 
                 // Preserve source/provenance metadata for accepted AI proposals

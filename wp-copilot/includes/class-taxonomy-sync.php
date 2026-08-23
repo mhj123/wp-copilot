@@ -173,7 +173,7 @@ class WCP_Taxonomy_Sync {
             ),
         ));
 
-        return !empty($terms) ? $terms[0] : null;
+        return (!is_wp_error($terms) && !empty($terms)) ? $terms[0] : null;
     }
 
     /**
