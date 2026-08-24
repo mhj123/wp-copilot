@@ -228,7 +228,7 @@ if (empty($saved_prompts)) {
             </div>
             <div class="wcp-ai-approval-actions">
                 <button type="button" class="wcp-ai-accept-btn button button-primary">
-                    <span class="wcp-ai-accept-label"><?php _e('Create Selected', 'work-copilot'); ?></span> (<span class="wcp-ai-selected-count">0</span>)
+                    <span class="wcp-ai-accept-label"><?php _e('Create Selected', 'work-copilot'); ?></span>
                 </button>
                 <button type="button" class="wcp-ai-dismiss-btn button">
                     <?php _e('Dismiss All', 'work-copilot'); ?>

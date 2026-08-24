@@ -1388,9 +1388,6 @@
                 $container.append($proposalCard);
             });
 
-            // Update selected count
-            this.updateProposalSelectedCount();
-
             $('.wcp-ai-approval-panel').slideDown();
 
             // Append system message
@@ -1462,7 +1459,6 @@
                 $container.append($proposalCard);
             });
 
-            this.updateProposalSelectedCount();
             $('.wcp-ai-approval-panel').slideDown();
 
             const itemWord = proposals.length === 1 ? 'item' : 'items';
@@ -1571,15 +1567,6 @@
             } else {
                 $card.removeClass('selected');
             }
-            this.updateProposalSelectedCount();
-        },
-
-        /**
-         * Update the selected count in the accept button
-         */
-        updateProposalSelectedCount: function() {
-            const count = $('.wcp-proposal-checkbox input:checked').length;
-            $('.wcp-ai-approval-actions .wcp-ai-selected-count').text(count);
         },
 
         /**
@@ -1928,7 +1915,6 @@
                 $container.append($card);
             });
 
-            this.updateProposalSelectedCount();
             $('.wcp-ai-approval-panel').slideDown();
             this.appendMessage('assistant', 'I extracted ' + proposals.length + ' memory(s) from our conversation. Review and accept the ones you want to keep.');
         },
