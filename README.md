@@ -86,20 +86,6 @@ The AI is opt-in, explicit, and reviewable throughout:
 
 ## Screenshots
 
-<img width="1440" height="557" alt="image" src="https://github.com/user-attachments/assets/60aa7019-60b7-46fd-a86a-2a00de58aa86" />
-
-**Structure view** — Pages and Headings render as a nested hierarchy. This isn't a
-separate menu you maintain: creating, renaming, or reparenting a Page or Heading
-automatically syncs a hidden taxonomy behind it, so the same tree drives navigation,
-AI context-scoping, and filtering everywhere else in the plugin — no manual tagging.
-
-<img width="1327" height="614" alt="image" src="https://github.com/user-attachments/assets/1f76bb25-26da-4182-9241-f6f5bcfc40e4" />
-
-**Recent activity, organised by topic** — items added or edited in the last 7 days,
-grouped by the Page or Heading they belong to rather than dumped into one flat feed.
-Each item carries lightweight taxonomy (type, priority, pinned) shown inline, so what
-changed and where is visible at a glance without opening anything.
-
 <img width="1433" height="639" alt="image" src="https://github.com/user-attachments/assets/7a7b9895-4b67-4796-9293-b3ea24ae3d17" />
 
 **AI Assistant** — a chat panel scoped to whatever Page you're on (shown here:
@@ -122,15 +108,27 @@ Chips available in this panel:
 | **Edit page** | Proposes a rewritten version of the page's content — shown as a diff to accept, not applied directly. |
 | **Append to page** | Proposes new content to add to the end of the page, rather than rewriting what's there. |
 | **Edit items** | Describes a change to make across multiple items on the page at once, returned as a reviewable diff instead of one-by-one edits. |
-| **Fetch posts** | Pulls relevant existing WordPress posts into the conversation as context. |
-| **Fetch structure** | Pulls the current Page/Heading tree into the conversation as context. |
-| **List refs/claims** | Lists existing reference-type items and the claims they source, filtered to the query. |
+| **Fetch posts** | Pulls relevant existing posts into the conversation as context. |
 | **Suggested topics** | Proposes sub-topics or sub-questions worth covering on this page. |
 | **Identify gaps** | Reviews the page's existing Headings/Items and flags missing coverage. |
 | **Find references** | Searches the web for sources on a topic and files accepted results as items with source URL/domain attached. |
 
 Every one of these — like every AI action in WP Copilot — is logged with its prompt,
 input context, and output, whether you accept or dismiss the result.
+
+<img width="1440" height="557" alt="image" src="https://github.com/user-attachments/assets/60aa7019-60b7-46fd-a86a-2a00de58aa86" />
+
+**Structure view** — Pages and Headings render as a nested hierarchy. This isn't a
+separate menu you maintain: creating, renaming, or reparenting a Page or Heading
+automatically syncs a hidden taxonomy behind it, so the same tree drives navigation,
+AI context-scoping, and filtering everywhere else in the plugin — no manual tagging.
+
+<img width="1327" height="614" alt="image" src="https://github.com/user-attachments/assets/1f76bb25-26da-4182-9241-f6f5bcfc40e4" />
+
+**Recent activity, organised by topic** — items added or edited in the last 7 days,
+grouped by the Page or Heading they belong to rather than dumped into one flat feed.
+Each item carries lightweight taxonomy (type, priority, pinned) shown inline, so what
+changed and where is visible at a glance without opening anything.
 
 
 ## Installation
