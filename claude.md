@@ -1,11 +1,5 @@
 # Claude Instructions — Work Copilot (WordPress Plugin)
 
-> **Launch prep in progress — read [`HANDOVER.md`](HANDOVER.md) first.**
-> The repository history was rewritten; an old local clone cannot be pulled.
-> The most recent commits have passed syntax checks only and are not yet
-> runtime-tested. `HANDOVER.md` covers setup, what needs verifying, the
-> ordered work plan, and the one open decision that blocks several items.
-
 You are building a WordPress.org plugin named **work-copilot**.
 
 This plugin implements a personal knowledge + work management system using:
