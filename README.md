@@ -84,6 +84,18 @@ The AI is opt-in, explicit, and reviewable throughout:
 
 ---
 
+## Screenshots
+
+<img width="1440" height="557" alt="image" src="https://github.com/user-attachments/assets/60aa7019-60b7-46fd-a86a-2a00de58aa86" />
+**Structure view** — pages and headings render as a nested hierarchy.
+
+<img width="1327" height="614" alt="image" src="https://github.com/user-attachments/assets/1f76bb25-26da-4182-9241-f6f5bcfc40e4" />
+**Recent items** — organised by topic.
+
+<img width="1433" height="639" alt="image" src="https://github.com/user-attachments/assets/7a7b9895-4b67-4796-9293-b3ea24ae3d17" />
+**AI Assistant** — chat with the AI assistant about the page topic, request that it generate action plans or advice, always with opt-in before acceptance. 
+
+
 ## Installation
 
 **Requirements**
