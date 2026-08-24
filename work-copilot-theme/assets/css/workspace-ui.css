@@ -44,7 +44,7 @@ body.admin-bar .wcp-sidebar { top: 32px; height: calc(100vh - 32px); }
 .wcp-page-list li.current-page > .wcp-nav-row { background: color-mix(in srgb, var(--wcp-accent) 19%, #17191e); box-shadow: inset 2px 0 var(--wcp-accent); }
 .wcp-page-list li.current-page > .wcp-nav-row > a { color: #fff; font-weight: 650; }
 .wcp-sidebar-footer { padding: 14px; border-top: 1px solid rgba(255,255,255,.08); }
-.wcp-add-page-btn { display: flex; align-items: center; justify-content: center; min-height: 38px; border-radius: 8px; background: var(--wcp-accent); color: #fff; font-size: 13px; font-weight: 700; box-shadow: 0 5px 14px color-mix(in srgb, var(--wcp-accent) 25%, transparent); }
+a.wcp-add-page-btn { display: flex; align-items: center; justify-content: center; min-height: 38px; border-radius: 8px; background: var(--wcp-accent); color: #fff; font-size: 13px; font-weight: 700; box-shadow: 0 5px 14px color-mix(in srgb, var(--wcp-accent) 25%, transparent); }
 .wcp-add-page-btn:hover { color: #fff; filter: brightness(1.06); }
 
 .wcp-main-content { min-width: 0; min-height: 100vh; flex: 1; margin-left: 0; }
