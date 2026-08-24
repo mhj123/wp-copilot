@@ -63,8 +63,7 @@ The AI is opt-in, explicit, and reviewable throughout:
 - **Full auditability** — every AI action records the model, prompt, input context, and
   output, retained even if you dismiss the result.
 
-<details>
-<summary><strong>Feature set in more detail</strong></summary>
+<strong>Feature set in more detail:</strong>
 
 - **Structure generation** — turn a rough brief into a proposed set of pages/headings/
   items; import a Markdown document and split it into structure automatically.
@@ -80,8 +79,6 @@ The AI is opt-in, explicit, and reviewable throughout:
   a task to an external agent (off by default) and review its report/artifacts when it
   returns.
 
-</details>
-
 ---
 
 ## Screenshots
@@ -94,7 +91,21 @@ Nothing the AI does is applied automatically — every action returns a proposal
 the "Monthly Budget Review — Session Protocol" heading shown here awaiting
 **Create selected** / **Dismiss**) that you review before it touches your data.
 
-Chips available in this panel:
+<img width="1440" height="557" alt="image" src="https://github.com/user-attachments/assets/60aa7019-60b7-46fd-a86a-2a00de58aa86" />
+
+**Structure view** — Pages and Headings render as a nested hierarchy. This isn't a
+separate menu you maintain: creating, renaming, or reparenting a Page or Heading
+automatically syncs a hidden taxonomy behind it, so the same tree drives navigation,
+AI context-scoping, and filtering everywhere else in the plugin — no manual tagging.
+
+<img width="1327" height="614" alt="image" src="https://github.com/user-attachments/assets/1f76bb25-26da-4182-9241-f6f5bcfc40e4" />
+
+**Recent activity, organised by topic** — items added or edited in the last 7 days,
+grouped by the Page or Heading they belong to rather than dumped into one flat feed.
+Each item carries lightweight taxonomy (type, priority, pinned) shown inline, so what
+changed and where is visible at a glance without opening anything.
+
+Chips available in the chat panel:
 
 | Chip | What it does |
 |---|---|
@@ -116,19 +127,6 @@ Chips available in this panel:
 Every one of these — like every AI action in WP Copilot — is logged with its prompt,
 input context, and output, whether you accept or dismiss the result.
 
-<img width="1440" height="557" alt="image" src="https://github.com/user-attachments/assets/60aa7019-60b7-46fd-a86a-2a00de58aa86" />
-
-**Structure view** — Pages and Headings render as a nested hierarchy. This isn't a
-separate menu you maintain: creating, renaming, or reparenting a Page or Heading
-automatically syncs a hidden taxonomy behind it, so the same tree drives navigation,
-AI context-scoping, and filtering everywhere else in the plugin — no manual tagging.
-
-<img width="1327" height="614" alt="image" src="https://github.com/user-attachments/assets/1f76bb25-26da-4182-9241-f6f5bcfc40e4" />
-
-**Recent activity, organised by topic** — items added or edited in the last 7 days,
-grouped by the Page or Heading they belong to rather than dumped into one flat feed.
-Each item carries lightweight taxonomy (type, priority, pinned) shown inline, so what
-changed and where is visible at a glance without opening anything.
 
 
 ## Installation
