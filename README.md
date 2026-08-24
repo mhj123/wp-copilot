@@ -81,9 +81,10 @@ The AI is opt-in, explicit, and reviewable throughout:
 
 ---
 
-## Screenshots
 
-<img width="1433" height="639" alt="image" src="https://github.com/user-attachments/assets/7a7b9895-4b67-4796-9293-b3ea24ae3d17" />
+
+## Screenshots
+<img width="1435" height="621" alt="image" src="https://github.com/user-attachments/assets/122e8003-b745-4853-9a5f-5bc64b25af45" />
 
 **AI Assistant** — a chat panel scoped to whatever Page you're on (shown here:
 *Budgeting*), with a row of explicit action chips instead of one open-ended prompt box.
@@ -91,12 +92,14 @@ Nothing the AI does is applied automatically — every action returns a proposal
 the "Monthly Budget Review — Session Protocol" heading shown here awaiting
 **Create selected** / **Dismiss**) that you review before it touches your data.
 
+
 <img width="1440" height="557" alt="image" src="https://github.com/user-attachments/assets/60aa7019-60b7-46fd-a86a-2a00de58aa86" />
 
 **Structure view** — Pages and Headings render as a nested hierarchy. This isn't a
 separate menu you maintain: creating, renaming, or reparenting a Page or Heading
 automatically syncs a hidden taxonomy behind it, so the same tree drives navigation,
 AI context-scoping, and filtering everywhere else in the plugin — no manual tagging.
+
 
 <img width="1327" height="614" alt="image" src="https://github.com/user-attachments/assets/1f76bb25-26da-4182-9241-f6f5bcfc40e4" />
 
