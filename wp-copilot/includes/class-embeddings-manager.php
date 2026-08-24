@@ -224,7 +224,7 @@ class WCP_Embeddings_Manager {
         // Check if embeddings are enabled but not configured
         if (get_option('wcp_embeddings_enabled', false) && !WCP_Embeddings_Client::instance()->is_configured()) {
             echo '<div class="notice notice-warning"><p>';
-            echo '<strong>Work Copilot:</strong> Embeddings are enabled but OpenAI API key is not configured. ';
+            echo '<strong>WP Copilot:</strong> Embeddings are enabled but OpenAI API key is not configured. ';
             echo '<a href="' . admin_url('admin.php?page=wcp-settings') . '">Configure now</a>';
             echo '</p></div>';
         }

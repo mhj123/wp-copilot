@@ -1,4 +1,4 @@
-=== Work Copilot ===
+=== WP Copilot ===
 Contributors: mhj123
 Tags: notes, knowledge management, productivity, ai, second brain
 Requires at least: 6.3
@@ -12,7 +12,7 @@ A personal knowledge and work management system built on native WordPress Posts 
 
 == Description ==
 
-Work Copilot turns WordPress into a personal knowledge and work management system, without inventing new data structures where native ones already fit.
+WP Copilot turns WordPress into a personal knowledge and work management system, without inventing new data structures where native ones already fit.
 
 **How it works**
 
@@ -23,11 +23,11 @@ Work Copilot turns WordPress into a personal knowledge and work management syste
 
 **AI assistance, on your terms**
 
-Work Copilot can optionally connect to Claude (Anthropic) to help you draft notes, edit items, summarise a page, or turn a rough brain-dump into structured items. Every AI action follows the same rule:
+WP Copilot can optionally connect to Claude (Anthropic) to help you draft notes, edit items, summarise a page, or turn a rough brain-dump into structured items. Every AI action follows the same rule:
 
 * AI never writes to your database automatically.
 * Every AI suggestion is a **proposal** — you explicitly accept or dismiss it.
-* Every AI action (prompt, input, output, and your decision) is written to an audit log you can review at any time under Work Copilot → AI Audit Log.
+* Every AI action (prompt, input, output, and your decision) is written to an audit log you can review at any time under WP Copilot → AI Audit Log.
 
 AI features are entirely optional. The plugin is fully usable as a structured notes system without ever configuring an API key.
 
@@ -42,19 +42,19 @@ This is built for a single user organizing their own notes and work inside their
 
 == Requirements & Supported Setup ==
 
-Work Copilot requires a single-user WordPress install where you are the sole user and hold the Administrator role. It is intended for a dedicated, single-purpose site. Multi-user, shared, and collaborative installs are not supported.
+WP Copilot requires a single-user WordPress install where you are the sole user and hold the Administrator role. It is intended for a dedicated, single-purpose site. Multi-user, shared, and collaborative installs are not supported.
 
-This is a firm requirement, not a recommendation. Work Copilot's actions are gated by WordPress's standard content capabilities, which are site-wide rather than plugin-specific. The plugin is designed and tested for a single administrator with full access to their own workspace. Running it on a site with additional user accounts is unsupported and outside its security model — other accounts may be able to reach Work Copilot functions and content in ways the plugin does not attempt to isolate.
+This is a firm requirement, not a recommendation. WP Copilot's actions are gated by WordPress's standard content capabilities, which are site-wide rather than plugin-specific. The plugin is designed and tested for a single administrator with full access to their own workspace. Running it on a site with additional user accounts is unsupported and outside its security model — other accounts may be able to reach WP Copilot functions and content in ways the plugin does not attempt to isolate.
 
-If you need Work Copilot on a site that currently has other users, set it up on a separate, dedicated single-user install instead.
+If you need WP Copilot on a site that currently has other users, set it up on a separate, dedicated single-user install instead.
 
 == AI and Your Data ==
 
-Work Copilot never acts autonomously. Every AI action is explicitly invoked, all AI-generated output is proposed for your review rather than saved directly, and you accept or dismiss each suggestion. AI actions are logged for auditability.
+WP Copilot never acts autonomously. Every AI action is explicitly invoked, all AI-generated output is proposed for your review rather than saved directly, and you accept or dismiss each suggestion. AI actions are logged for auditability.
 
 == External Services ==
 
-Work Copilot connects to third-party APIs **only for the specific features listed below, only if you supply an API key for that feature, and only when you actively trigger the related action.** No content leaves your site if you don't configure a key. No data is sent on a schedule or in the background for these AI features — each call happens synchronously in response to something you clicked.
+WP Copilot connects to third-party APIs **only for the specific features listed below, only if you supply an API key for that feature, and only when you actively trigger the related action.** No content leaves your site if you don't configure a key. No data is sent on a schedule or in the background for these AI features — each call happens synchronously in response to something you clicked.
 
 **1. Anthropic (Claude API)** — used for all AI assistant features (chat, drafting/editing items, page summaries, coaching prompts).
 
@@ -80,7 +80,7 @@ You are responsible for reviewing each provider's terms and privacy policy befor
 
 1. Upload the `work-copilot` folder to `/wp-content/plugins/`, or install directly from the WordPress plugin directory.
 2. Activate the plugin through the 'Plugins' screen in WordPress.
-3. Go to Work Copilot → Settings to (optionally) add your Anthropic API key to enable AI features. OpenAI and Raindrop.io keys are separate and also optional.
+3. Go to WP Copilot → Settings to (optionally) add your Anthropic API key to enable AI features. OpenAI and Raindrop.io keys are separate and also optional.
 4. Start creating Pages and Items — no configuration is required for the core notes/structure features.
 
 == Frequently Asked Questions ==
@@ -95,11 +95,11 @@ No. Every AI-generated item, edit, or suggestion is stored as a proposal and onl
 
 = Is this suitable for a multi-author site? =
 
-No. This is a firm requirement, not a limitation we're working to remove — see "Requirements & Supported Setup" above. Work Copilot's actions are gated by WordPress's standard, site-wide content capabilities, and it is designed and tested only for a single Administrator on a dedicated install.
+No. This is a firm requirement, not a limitation we're working to remove — see "Requirements & Supported Setup" above. WP Copilot's actions are gated by WordPress's standard, site-wide content capabilities, and it is designed and tested only for a single Administrator on a dedicated install.
 
 = Where can I see what data was sent to the AI? =
 
-Work Copilot → AI Audit Log shows the prompt, input context, output, and your accept/dismiss decision for every AI action.
+WP Copilot → AI Audit Log shows the prompt, input context, output, and your accept/dismiss decision for every AI action.
 
 == Screenshots ==
 

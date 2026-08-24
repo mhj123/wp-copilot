@@ -7,7 +7,7 @@
  * settings/options. Deliberately does NOT touch user content — Pages,
  * Items (native Posts), or Heading posts (the wcp_heading CPT) are left
  * exactly as they are. Deleting a plugin should not delete someone's notes;
- * if Work Copilot is reinstalled later, that content and structure is
+ * if WP Copilot is reinstalled later, that content and structure is
  * exactly where it was. Removing the CPT/taxonomy *registration* here would
  * be pointless anyway — the classes that register them aren't loaded during
  * uninstall, so there's nothing to unregister.

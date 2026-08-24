@@ -391,7 +391,7 @@ class WCP_REST_API {
 
     public function check_permission() {
         // 'edit_posts' is held by Contributor, WordPress's lowest
-        // content-creating role — readme.txt documents Work Copilot as a
+        // content-creating role — readme.txt documents WP Copilot as a
         // single-Administrator-only install; 'edit_published_posts' (held by
         // Author and above, not Contributor) makes that policy real in code
         // rather than relying on the docs alone. See "Requirements &

@@ -41,7 +41,7 @@ P-features exist to recycle them.
 
 ## 1. Purpose & Vision
 
-Work Copilot already has every *node* of a learning flywheel — capture,
+WP Copilot already has every *node* of a learning flywheel — capture,
 structure, retrieval, action, reflection — but the *arrows* between them are
 missing or weak. This PRD specifies the arrows:
 

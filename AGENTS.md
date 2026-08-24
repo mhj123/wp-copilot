@@ -1,4 +1,4 @@
-# Codex Instructions — Work Copilot (WordPress Plugin)
+# Codex Instructions — WP Copilot (WordPress Plugin)
 
 You are building a WordPress.org plugin named **work-copilot**.
 

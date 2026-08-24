@@ -483,7 +483,7 @@ class WCP_Settings {
 
         ?>
         <p class="description" style="margin-top: 10px;">
-            <?php _e('These instructions set the overall tone and behavior for all AI interactions in Work Copilot.', 'work-copilot'); ?>
+            <?php _e('These instructions set the overall tone and behavior for all AI interactions in WP Copilot.', 'work-copilot'); ?>
         </p>
         <?php
     }
@@ -540,7 +540,7 @@ class WCP_Settings {
             <?php _e('Enable Researcher mode and provision the Library/Research scaffolds', 'work-copilot'); ?>
         </label>
         <p class="description">
-            <?php _e('On enable, Work Copilot creates or adopts native “Library” and “Research” pages. Library carries the paper template; Research carries the project template: Context, Objectives, Hypotheses, Findings, Gaps. Re-enabling is idempotent.', 'work-copilot'); ?>
+            <?php _e('On enable, WP Copilot creates or adopts native “Library” and “Research” pages. Library carries the paper template; Research carries the project template: Context, Objectives, Hypotheses, Findings, Gaps. Re-enabling is idempotent.', 'work-copilot'); ?>
         </p>
         <?php if ($library_id) : ?>
             <p class="description">

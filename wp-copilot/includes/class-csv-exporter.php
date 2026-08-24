@@ -2,7 +2,7 @@
 /**
  * CSV Exporter
  *
- * Exports the Work Copilot knowledge tree (pages → subpages → headings → items)
+ * Exports the WP Copilot knowledge tree (pages → subpages → headings → items)
  * as CSV, preserving the relational structure as columns. Walks the hierarchical
  * `wcp_context` taxonomy (mirrored from pages/headings by WCP_Taxonomy_Sync)
  * rather than re-deriving structure, then emits each context node's items in

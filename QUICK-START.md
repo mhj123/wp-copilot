@@ -1,10 +1,10 @@
-# Work Copilot - Quick Start Guide 🚀
+# WP Copilot - Quick Start Guide 🚀
 
 ## Your Project is Ready!
 
 You now have:
-- ✅ **Work Copilot Plugin** (with AI enabled)
-- ✅ **Work Copilot Theme** (with sidebar navigation)
+- ✅ **WP Copilot Plugin** (with AI enabled)
+- ✅ **WP Copilot Theme** (with sidebar navigation)
 
 Both are ready to install in WordPress.
 
@@ -35,7 +35,7 @@ cp -r /path/to/work-copilot/wp-copilot /path/to/wordpress/wp-content/plugins/
 
 Then in WordPress:
 1. Go to **Plugins**
-2. Find "Work Copilot"
+2. Find "WP Copilot"
 3. Click **Activate**
 
 ---
@@ -70,7 +70,7 @@ zip -r work-copilot-theme.zip work-copilot-theme -x "*.DS_Store" -x "__MACOSX"
 
 ### Configure in WordPress
 
-1. Go to **Work Copilot → Settings**
+1. Go to **WP Copilot → Settings**
 2. Check **"Enable AI Features"**
 3. Paste your API key
 4. Click **"Save Settings"**
@@ -80,7 +80,7 @@ zip -r work-copilot-theme.zip work-copilot-theme -x "*.DS_Store" -x "__MACOSX"
 
 ---
 
-## Step 4: Start Using Work Copilot
+## Step 4: Start Using WP Copilot
 
 ### Create Your First Page
 
@@ -98,7 +98,7 @@ Visit your page on the frontend and use the **Create New Item** form:
 - Click "Create Item"
 
 Or use the dashboard:
-1. Go to **Work Copilot → Dashboard**
+1. Go to **WP Copilot → Dashboard**
 2. Use the quick create form
 
 ### View Your Work
@@ -148,9 +148,9 @@ work-copilot/
 - **Theme README:** `work-copilot-theme/README.md`
 
 ### In WordPress
-- **Settings:** Work Copilot → Settings
-- **AI Audit Log:** Work Copilot → AI Audit Log
-- **Dashboard:** Work Copilot → Dashboard
+- **Settings:** WP Copilot → Settings
+- **AI Audit Log:** WP Copilot → AI Audit Log
+- **Dashboard:** WP Copilot → Dashboard
 
 ---
 

@@ -1,4 +1,4 @@
-# Claude Instructions — Work Copilot (WordPress Plugin)
+# Claude Instructions — WP Copilot (WordPress Plugin)
 
 You are building a WordPress.org plugin named **work-copilot**.
 

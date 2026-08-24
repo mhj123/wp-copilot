@@ -5,7 +5,7 @@
                 <p>&copy; <?php echo date('Y'); ?> <?php bloginfo('name'); ?>.
                    <?php _e('Powered by', 'work-copilot-theme'); ?>
                    <a href="https://wordpress.org">WordPress</a> &amp;
-                   <a href="#">Work Copilot</a>.
+                   <a href="#">WP Copilot</a>.
                 </p>
             </div>
         </footer>

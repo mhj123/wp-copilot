@@ -1,6 +1,6 @@
 <?php
 /**
- * Work Copilot Theme Functions
+ * WP Copilot Theme Functions
  */
 
 if (!defined('ABSPATH')) {

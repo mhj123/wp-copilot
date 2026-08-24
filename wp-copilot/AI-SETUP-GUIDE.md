@@ -1,6 +1,6 @@
 # AI Features Setup Guide
 
-Your Work Copilot plugin is now ready to use real AI! Follow these steps to enable AI-powered features.
+Your WP Copilot plugin is now ready to use real AI! Follow these steps to enable AI-powered features.
 
 ## What You'll Get
 
@@ -23,16 +23,16 @@ Once configured, you can use:
 4. Click "Create Key"
 5. Copy your API key (starts with `sk-ant-...`)
 
-**Pricing:** Claude API uses pay-as-you-go pricing. For typical Work Copilot usage:
+**Pricing:** Claude API uses pay-as-you-go pricing. For typical WP Copilot usage:
 - Tag suggestions: ~$0.01 per 10 requests
 - Chat responses: ~$0.05 per conversation
 - Coaching: ~$0.10 per session
 
 See [anthropic.com/pricing](https://www.anthropic.com/pricing) for current rates.
 
-## Step 2: Configure Work Copilot
+## Step 2: Configure WP Copilot
 
-1. In WordPress Admin, go to **Work Copilot → Settings**
+1. In WordPress Admin, go to **WP Copilot → Settings**
 2. Check **"Enable AI Features"**
 3. Paste your API key in the **"Anthropic API Key"** field
 4. Choose your preferred model (Claude 3.5 Sonnet recommended)
@@ -44,7 +44,7 @@ See [anthropic.com/pricing](https://www.anthropic.com/pricing) for current rates
 ### AI-Assisted Tagging
 
 **In the admin dashboard:**
-1. Go to Work Copilot → Dashboard
+1. Go to WP Copilot → Dashboard
 2. Enter a note title and content
 3. Click **"AI Suggest Tags"**
 4. Review suggestions and apply them
@@ -108,7 +108,7 @@ When you use AI features:
 - No data is stored by Anthropic for training purposes
 - All AI interactions are logged locally in your WordPress database
 
-You can view all AI actions in **Work Copilot → AI Audit Log**.
+You can view all AI actions in **WP Copilot → AI Audit Log**.
 
 ## API Models Explained
 

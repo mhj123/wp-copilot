@@ -576,7 +576,7 @@ class WCP_AI_Actions {
 
         $exa_client = WCP_Exa_Client::instance();
         if (!$exa_client->is_configured()) {
-            return new WP_Error('not_configured', 'Exa API key not configured. Add one in Work Copilot → Settings.');
+            return new WP_Error('not_configured', 'Exa API key not configured. Add one in WP Copilot → Settings.');
         }
 
         if ($query_override !== '') {
@@ -795,7 +795,7 @@ class WCP_AI_Actions {
 
         $exa_client = WCP_Exa_Client::instance();
         if (!$exa_client->is_configured()) {
-            return new WP_Error('not_configured', 'Exa API key not configured. Add one in Work Copilot → Settings.');
+            return new WP_Error('not_configured', 'Exa API key not configured. Add one in WP Copilot → Settings.');
         }
 
         $query_override = trim((string) $query_override);
@@ -928,7 +928,7 @@ class WCP_AI_Actions {
 
         $exa_client = WCP_Exa_Client::instance();
         if (!$exa_client->is_configured()) {
-            return new WP_Error('not_configured', 'Exa API key not configured. Add one in Work Copilot → Settings.');
+            return new WP_Error('not_configured', 'Exa API key not configured. Add one in WP Copilot → Settings.');
         }
 
         $findings = $exa_client->search($query);

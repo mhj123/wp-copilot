@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name: Work Copilot
+ * Plugin Name: WP Copilot
  * Plugin URI: https://wordpress.org/plugins/work-copilot
  * Description: Personal knowledge and work management system with AI-assisted sensemaking
  * Version: 1.2.2

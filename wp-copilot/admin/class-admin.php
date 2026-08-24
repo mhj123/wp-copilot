@@ -93,8 +93,8 @@ class WCP_Admin {
 
     public function add_admin_menu() {
         add_menu_page(
-            __('Work Copilot', 'work-copilot'),
-            __('Work Copilot', 'work-copilot'),
+            __('WP Copilot', 'work-copilot'),
+            __('WP Copilot', 'work-copilot'),
             'edit_posts',
             'work-copilot',
             array($this, 'render_dashboard'),
@@ -136,7 +136,7 @@ class WCP_Admin {
     public function render_import_export() {
         ?>
         <div class="wrap">
-            <h1><?php _e('Work Copilot — Import / Export', 'work-copilot'); ?></h1>
+            <h1><?php _e('WP Copilot — Import / Export', 'work-copilot'); ?></h1>
 
             <h2><?php _e('Export to CSV', 'work-copilot'); ?></h2>
             <p class="description">
@@ -376,7 +376,7 @@ class WCP_Admin {
     }
 
     public function enqueue_scripts($hook) {
-        // Enqueue on Work Copilot pages
+        // Enqueue on WP Copilot pages
         if (strpos($hook, 'work-copilot') !== false || in_array($hook, array('post.php', 'post-new.php', 'edit.php'), true)) {
             wp_enqueue_style(
                 'work-copilot-admin',
@@ -403,7 +403,7 @@ class WCP_Admin {
     public function render_dashboard() {
         ?>
         <div class="wrap wcp-dashboard">
-            <h1><?php _e('Work Copilot Dashboard', 'work-copilot'); ?></h1>
+            <h1><?php _e('WP Copilot Dashboard', 'work-copilot'); ?></h1>
 
             <div class="wcp-grid">
                 <div class="wcp-col-8">

@@ -1,6 +1,6 @@
 # AI Features Now Enabled! ✨
 
-Your Work Copilot plugin has been updated with **real AI capabilities** powered by Claude (Anthropic).
+Your WP Copilot plugin has been updated with **real AI capabilities** powered by Claude (Anthropic).
 
 ## What Changed
 
@@ -44,7 +44,7 @@ Your Work Copilot plugin has been updated with **real AI capabilities** powered 
    - Generate an API key
 
 2. **Configure Plugin**
-   - In WordPress: Work Copilot → Settings
+   - In WordPress: WP Copilot → Settings
    - Enable AI Features (checkbox)
    - Paste your API key
    - Save Settings
@@ -98,7 +98,7 @@ See `wp-copilot/AI-SETUP-GUIDE.md` for complete step-by-step instructions.
 ✅ AI never writes to database automatically
 ✅ You must explicitly accept all suggestions
 ✅ All AI actions are logged for transparency
-✅ Review AI Audit Log anytime (Work Copilot → AI Audit Log)
+✅ Review AI Audit Log anytime (WP Copilot → AI Audit Log)
 
 ### Data Handling
 - Your content is sent to Anthropic's Claude API
@@ -122,7 +122,7 @@ See current pricing: https://www.anthropic.com/pricing
 
 ## Testing Before Use
 
-1. Go to Work Copilot → Settings
+1. Go to WP Copilot → Settings
 2. After entering your API key, click **"Test Connection"**
 3. You should see: "Connection successful!" with a message from Claude
 4. If it fails, check:
@@ -162,7 +162,7 @@ wp-copilot/
 
 1. ✅ **Read** `wp-copilot/AI-SETUP-GUIDE.md`
 2. ✅ **Get** your Anthropic API key
-3. ✅ **Configure** in Work Copilot → Settings
+3. ✅ **Configure** in WP Copilot → Settings
 4. ✅ **Test** the connection
 5. ✅ **Try** AI tagging on a post
 6. ✅ **Explore** chat and coaching features
@@ -200,7 +200,7 @@ Then activate (or reactivate) the plugin in WordPress Admin.
 → Try a different model in Settings (Sonnet vs Opus)
 
 ### Want to see what's happening?
-→ Check Work Copilot → AI Audit Log
+→ Check WP Copilot → AI Audit Log
 
 ## Important Notes
 
@@ -215,7 +215,7 @@ Then activate (or reactivate) the plugin in WordPress Admin.
 - **Plugin docs:** `wp-copilot/README.md`
 - **AI setup:** `wp-copilot/AI-SETUP-GUIDE.md`
 - **Claude docs:** https://docs.anthropic.com/
-- **Audit log:** Work Copilot → AI Audit Log (see exactly what AI does)
+- **Audit log:** WP Copilot → AI Audit Log (see exactly what AI does)
 
 ---
 

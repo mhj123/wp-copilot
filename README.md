@@ -1,20 +1,20 @@
-# Work Copilot
+# WP Copilot
 
 **A self-hosted WordPress application for capturing what you know and think — atomic
 notes, structured context, and AI that helps you make sense of it all without ever
 taking the wheel.**
 
-Work Copilot turns a WordPress install into a personal knowledge and work system. You
+WP Copilot turns a WordPress install into a personal knowledge and work system. You
 capture ideas as small, reusable notes; you organise them with a structure that
 doubles as meaning; and an AI assistant helps you tag, connect, summarise, and reflect
 — always proposing, never acting on its own.
 
 ---
 
-## Why Work Copilot
+## Why WP Copilot
 
 Most note tools force a trade-off: either rigid structure you have to maintain, or a
-flat pile you can't navigate. Work Copilot takes a different stance:
+flat pile you can't navigate. WP Copilot takes a different stance:
 
 - **Atomic by intent.** A note is a single idea, task, learning, or observation — small
   enough to reuse. The same note can live in many contexts at once, so you capture a
@@ -33,7 +33,7 @@ flat pile you can't navigate. Work Copilot takes a different stance:
 
 ## Core concepts
 
-Work Copilot has three building blocks:
+WP Copilot has three building blocks:
 
 - **Pages** — contextual entities like projects, themes, people, or meetings. Nestable,
   each mapped to a semantic term. Pages define navigation and the AI's context
@@ -94,19 +94,19 @@ The AI is opt-in, explicit, and reviewable throughout:
 
 **Steps**
 1. Download the latest release (or clone this repo) into `wp-content/plugins/work-copilot`.
-2. Activate **Work Copilot** in your WordPress admin under Plugins.
-3. Go to Work Copilot → Settings to add your Anthropic API key (optional — enables AI
+2. Activate **WP Copilot** in your WordPress admin under Plugins.
+3. Go to WP Copilot → Settings to add your Anthropic API key (optional — enables AI
    features).
 4. Start creating Pages and Items — no further setup is required.
 
 See `ENABLE-AI-SUMMARY.md` and `QUICK-START.md` for further setup detail.
 
-**Single-admin installs only.** Work Copilot is designed and tested for one
+**Single-admin installs only.** WP Copilot is designed and tested for one
 Administrator on a dedicated install — not a firm technical restriction, but the
 security model the plugin is built around. Its REST API is gated by WordPress's
 standard, site-wide content capabilities rather than per-plugin permissions, so
 running it on a site with other user accounts is unsupported: those accounts may be
-able to reach Work Copilot's functions and content in ways the plugin doesn't attempt
+able to reach WP Copilot's functions and content in ways the plugin doesn't attempt
 to isolate. See `wp-copilot/readme.txt` → "Requirements & Supported Setup" for detail.
 
 ---
@@ -123,7 +123,7 @@ to isolate. See `wp-copilot/readme.txt` → "Requirements & Supported Setup" for
   OpenAI (only if you enable semantic search/embeddings) and Raindrop.io (only if you
   enable bookmark import — outbound token only, no WordPress content leaves your site
   for this one). Full detail: see `wp-copilot/readme.txt` → "External Services".
-- Work Copilot does not cap or rate-limit AI API usage. Every AI action spends your own
+- WP Copilot does not cap or rate-limit AI API usage. Every AI action spends your own
   configured API key's credit; you (or anyone with access to your admin account) are
   responsible for monitoring usage against your provider's billing.
 
@@ -131,7 +131,7 @@ to isolate. See `wp-copilot/readme.txt` → "Requirements & Supported Setup" for
 
 ## Status
 
-Work Copilot is at version 1.2.2, actively maintained. Feedback and issues are welcome
+WP Copilot is at version 1.2.2, actively maintained. Feedback and issues are welcome
 via the Issues tab.
 
 ---

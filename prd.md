@@ -1,11 +1,11 @@
 # Product Requirements Document
-## Work Copilot — WordPress Knowledge & Work System
+## WP Copilot — WordPress Knowledge & Work System
 
 ---
 
 ## 1. Purpose & Vision
 
-Work Copilot is a **single-user, self-hosted WordPress application** for managing daily work and thinking.
+WP Copilot is a **single-user, self-hosted WordPress application** for managing daily work and thinking.
 
 It combines:
 - atomic notes (native WP posts),
