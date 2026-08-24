@@ -35,6 +35,10 @@ $_delegation_labels = array(
     'completed'   => 'completed',
     'failed'      => 'failed',
 );
+$_is_reference = $_item_type_slug === 'reference';
+$_reference_icons = array('pdf_upload' => '📄', 'web_search' => '🌐', 'doc' => '📝');
+$_reference_source_type = $_is_reference ? get_post_meta($item->ID, '_wcp_source_type', true) : '';
+$_reference_icon = $_reference_icons[$_reference_source_type] ?? '📝';
 ?>
 <div class="wcp-item-row<?php echo $is_done ? ' wcp-task-done' : ''; echo esc_attr($_creator_class); echo $_is_pinned ? ' wcp-pinned' : ''; ?>"
      id="wcp-item-<?php echo esc_attr($item->ID); ?>"
@@ -49,6 +53,9 @@ $_delegation_labels = array(
      data-context-ids="<?php echo esc_attr(implode(',', $_context_ids)); ?>"
      data-tags="<?php echo esc_attr(implode(',', $item_tags)); ?>">
     <span class="wcp-drag-handle" title="Drag to reorder">&#8942;</span>
+    <?php if ($_is_reference) : ?>
+        <span class="wcp-reference-icon" title="<?php echo esc_attr($_reference_source_type ?: 'reference'); ?>" aria-hidden="true"><?php echo $_reference_icon; ?></span>
+    <?php endif; ?>
     <input type="checkbox"
            class="wcp-task-checkbox"
            data-item-id="<?php echo esc_attr($item->ID); ?>"
@@ -61,7 +68,7 @@ $_delegation_labels = array(
     <span class="wcp-row-actions">
         <select class="wcp-inline-select wcp-type-select" data-item-id="<?php echo esc_attr($item->ID); ?>">
             <option value=""><?php _e('type', 'work-copilot-theme'); ?></option>
-            <?php foreach (array('task', 'info', 'learning', 'spec') as $type) : ?>
+            <?php foreach (array('task', 'note', 'learning', 'spec', 'reference') as $type) : ?>
                 <option value="<?php echo $type; ?>" <?php selected(!empty($item_types) && $item_types[0] === $type); ?>><?php echo $type; ?></option>
             <?php endforeach; ?>
         </select>
@@ -105,6 +112,9 @@ $_delegation_labels = array(
         <a href="<?php echo esc_url(get_permalink($item->ID)); ?>" class="wcp-item-view-link wcp-edit-link" title="View item">[view]</a>
         <button type="button" class="wcp-item-ai-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>" title="AI actions">[ai]</button>
         <button type="button" class="wcp-desc-toggle wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>" title="Show/hide description">[desc]</button>
+        <?php if (!empty($_item_has_children)) : ?>
+        <button type="button" class="wcp-subitems-toggle wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>" title="Show/hide subitems">[subitems]</button>
+        <?php endif; ?>
         <label class="wcp-pin-toggle" title="Pin to top of page">
             <input type="checkbox" class="wcp-pin-checkbox" data-item-id="<?php echo esc_attr($item->ID); ?>" <?php checked($_is_pinned); ?>>
             <span class="wcp-pin-icon" aria-hidden="true">&#128204;</span>
@@ -117,7 +127,7 @@ $_delegation_labels = array(
     $source_type = get_post_meta($item->ID, '_wcp_source_type', true);
     $_source_lozenge_labels = array('pdf_upload' => 'PDF', 'web_search' => 'Web');
     ?>
-    <?php if (isset($_source_lozenge_labels[$source_type])) : ?>
+    <?php if (!$_is_reference && isset($_source_lozenge_labels[$source_type])) : ?>
         <span class="wcp-pill wcp-pill-source-type wcp-pill-source-<?php echo esc_attr($source_type); ?>"><?php echo esc_html($_source_lozenge_labels[$source_type]); ?></span>
     <?php endif; ?>
     <?php if ($source_url) : ?>
@@ -133,7 +143,11 @@ $_delegation_labels = array(
           data-item-id="<?php echo esc_attr($item->ID); ?>"
           data-raw="<?php echo esc_attr($_desc_raw); ?>"><?php echo esc_html($_desc_raw); ?></span>
 
-    <?php if (!empty($item_contexts)) : ?>
+    <?php // Reference items are multi-context by design (the Library page's
+    // Summary heading, plus wherever they're also filed) — showing those as
+    // pills here is noise, not signal; the type badge/icon already says
+    // "this is a reference." ?>
+    <?php if (!$_is_reference && !empty($item_contexts)) : ?>
         <span class="wcp-item-meta-pills">
             <?php foreach ($item_contexts as $ctx) : ?>
                 <span class="wcp-pill wcp-pill-context"><?php echo esc_html($ctx); ?></span>

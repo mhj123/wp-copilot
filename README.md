@@ -101,6 +101,14 @@ The AI is opt-in, explicit, and reviewable throughout:
 
 See `ENABLE-AI-SUMMARY.md` and `QUICK-START.md` for further setup detail.
 
+**Single-admin installs only.** Work Copilot is designed and tested for one
+Administrator on a dedicated install — not a firm technical restriction, but the
+security model the plugin is built around. Its REST API is gated by WordPress's
+standard, site-wide content capabilities rather than per-plugin permissions, so
+running it on a site with other user accounts is unsupported: those accounts may be
+able to reach Work Copilot's functions and content in ways the plugin doesn't attempt
+to isolate. See `wp-copilot/readme.txt` → "Requirements & Supported Setup" for detail.
+
 ---
 
 ## Privacy & control
@@ -115,6 +123,9 @@ See `ENABLE-AI-SUMMARY.md` and `QUICK-START.md` for further setup detail.
   OpenAI (only if you enable semantic search/embeddings) and Raindrop.io (only if you
   enable bookmark import — outbound token only, no WordPress content leaves your site
   for this one). Full detail: see `wp-copilot/readme.txt` → "External Services".
+- Work Copilot does not cap or rate-limit AI API usage. Every AI action spends your own
+  configured API key's credit; you (or anyone with access to your admin account) are
+  responsible for monitoring usage against your provider's billing.
 
 ---
 

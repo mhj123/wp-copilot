@@ -25,11 +25,13 @@ class WCP_REST_API {
     public function register_routes() {
         $namespace = 'work-copilot/v1';
 
-        // Version check endpoint (for debugging)
+        // Version check endpoint (for debugging) — was anonymous-accessible
+        // (__return_true), disclosing PHP_VERSION to any caller. Single-admin
+        // installs don't need this reachable while logged out.
         register_rest_route($namespace, '/version', array(
             'methods' => 'GET',
             'callback' => array($this, 'get_version'),
-            'permission_callback' => '__return_true',
+            'permission_callback' => array($this, 'check_permission'),
         ));
 
         // Get context tree
@@ -402,7 +404,7 @@ class WCP_REST_API {
      */
     public function get_version() {
         return rest_ensure_response(array(
-            'version' => '1.2.1',
+            'version' => WCP_VERSION,
             'timestamp' => current_time('mysql'),
             'php_version' => PHP_VERSION,
         ));
@@ -1632,7 +1634,7 @@ class WCP_REST_API {
                 wp_set_post_terms($iid, array($term_id), 'wcp_context');
             }
             $type = $item['item_type'] ?? '';
-            if (in_array($type, array('task', 'info', 'learning', 'spec', 'source'), true)) {
+            if (in_array($type, array('task', 'note', 'learning', 'spec', 'source'), true)) {
                 wp_set_post_terms($iid, array($type), 'item_type');
                 if ($type === 'task') {
                     wp_set_post_terms($iid, array('to-do'), 'task_status');
@@ -2159,7 +2161,7 @@ class WCP_REST_API {
         }
 
         // No default type — an unset/invalid type means the item carries no type term
-        $valid_types = array('task', 'info', 'learning', 'spec', 'memory');
+        $valid_types = array('task', 'note', 'learning', 'spec', 'memory');
         if (!in_array($item_type, $valid_types, true)) {
             $item_type = '';
         }
@@ -2233,9 +2235,9 @@ class WCP_REST_API {
             foreach ($items as $it) {
                 if (empty($it['title'])) { continue; }
                 $t = isset($it['item_type']) ? sanitize_key($it['item_type']) : $item_type;
-                if (!in_array($t, array('task', 'info', 'learning', 'spec'), true)) {
+                if (!in_array($t, array('task', 'note', 'learning', 'spec'), true)) {
                     // Fall back to the form's type when valid, otherwise leave untyped
-                    $t = in_array($item_type, array('task', 'info', 'learning', 'spec'), true) ? $item_type : '';
+                    $t = in_array($item_type, array('task', 'note', 'learning', 'spec'), true) ? $item_type : '';
                 }
                 $to_create[] = array(
                     'title'     => sanitize_text_field($it['title']),

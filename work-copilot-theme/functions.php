@@ -493,10 +493,12 @@ function wcp_theme_render_item_tree( $item, $depth = 0, $filter_context_ids = ar
             )
         ) );
     }
+    $children = wcp_theme_get_item_children( $item->ID );
+    $_item_has_children = ! empty( $children );
+
     include locate_template( 'template-parts/item-row.php' );
 
-    $children = wcp_theme_get_item_children( $item->ID );
-    if ( ! empty( $children ) ) {
+    if ( $_item_has_children ) {
         echo '<div class="wcp-subitems-list" data-parent-id="' . esc_attr( $item->ID ) . '">';
         foreach ( $children as $child ) {
             wcp_theme_render_item_tree( $child, $depth + 1, $filter_context_ids, $page_id );
@@ -730,10 +732,31 @@ function wcp_theme_get_heading_breadcrumbs($heading_id) {
 
 // Get breadcrumb trail for an Item Post from its context terms
 function wcp_theme_get_item_breadcrumbs($post_id) {
+    // Subitems (post_parent pointing at another item) inherit their parent's
+    // wcp_context terms, so the structural trail below is identical for both
+    // — walk the post_parent chain separately and append each ancestor item
+    // so a subitem's breadcrumb actually shows the item it's nested under,
+    // not just the heading they both happen to share.
+    $item_ancestors = array();
+    $current = get_post($post_id);
+    $guard = 0;
+    while ($current && $current->post_parent && $current->post_type === 'post' && $guard++ < 20) {
+        $parent = get_post($current->post_parent);
+        if (!$parent || $parent->post_type !== 'post') {
+            break;
+        }
+        $item_ancestors[] = array(
+            'title' => $parent->post_title,
+            'url'   => get_permalink($parent->ID),
+        );
+        $current = $parent;
+    }
+    $item_ancestors = array_reverse($item_ancestors);
+
     $context_terms = wp_get_post_terms($post_id, 'wcp_context');
 
     if (empty($context_terms) || is_wp_error($context_terms)) {
-        return array();
+        return $item_ancestors;
     }
 
     // Use the first context term
@@ -746,12 +769,12 @@ function wcp_theme_get_item_breadcrumbs($post_id) {
 
     // Build breadcrumbs from the referenced post (page or heading)
     if ($ref_type === 'page' && $ref_id) {
-        return wcp_theme_get_page_breadcrumbs($ref_id);
+        return array_merge(wcp_theme_get_page_breadcrumbs($ref_id), $item_ancestors);
     } elseif ($ref_type === 'wcp_heading' && $ref_id) {
-        return wcp_theme_get_heading_breadcrumbs($ref_id);
+        return array_merge(wcp_theme_get_heading_breadcrumbs($ref_id), $item_ancestors);
     }
 
-    return array();
+    return $item_ancestors;
 }
 
 /**

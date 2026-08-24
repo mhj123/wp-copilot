@@ -769,7 +769,7 @@
             const $type = $('<select>').addClass('wcp-ai-msgsave-type')
                 .append(opt('', 'type', true))
                 .append(opt('task', 'task'))
-                .append(opt('info', 'info'))
+                .append(opt('note', 'note'))
                 .append(opt('learning', 'learning'))
                 .append(opt('spec', 'spec'))
                 .append(opt('memory', 'memory'));

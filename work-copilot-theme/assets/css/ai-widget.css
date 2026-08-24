@@ -148,7 +148,8 @@ body.admin-bar .wcp-ai-widget.closed {
     flex-direction: column;
     flex: 1;
     min-height: 0; /* Allow flex children to shrink */
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .wcp-ai-widget:not(.minimized):not(.closed) .wcp-ai-toggle {

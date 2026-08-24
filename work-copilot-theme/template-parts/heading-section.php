@@ -70,7 +70,7 @@ $heading_creator_class = $heading_created_by === 'hermes' ? ' wcp-by-hermes' : (
                     <select name="item_type" class="wcp-form-control">
                         <option value=""><?php _e('-- Select --', 'work-copilot-theme'); ?></option>
                         <option value="task"><?php _e('Task', 'work-copilot-theme'); ?></option>
-                        <option value="info"><?php _e('Info', 'work-copilot-theme'); ?></option>
+                        <option value="note"><?php _e('Note', 'work-copilot-theme'); ?></option>
                         <option value="learning"><?php _e('Learning', 'work-copilot-theme'); ?></option>
                         <option value="spec"><?php _e('Spec', 'work-copilot-theme'); ?></option>
                     </select>

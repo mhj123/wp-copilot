@@ -103,6 +103,7 @@ body.wcp-ai-panel-open.wcp-ai-panel-expanded .wcp-main-content { display: none; 
 .wcp-item-row:hover, .wcp-item-row:focus-within { background: #fafbfe; }
 .wcp-drag-handle { width: 10px; color: var(--wcp-text-faint); cursor: grab; opacity: 0; }
 .wcp-item-row:hover .wcp-drag-handle { opacity: .65; }
+.wcp-reference-icon { font-size: 13px; line-height: 1; flex-shrink: 0; }
 .wcp-task-checkbox { width: 17px; height: 17px; margin: 0; accent-color: var(--wcp-accent); }
 .wcp-item-title { min-width: 130px; flex: 1 1 280px; overflow: hidden; color: var(--wcp-text); font-size: 14px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 .wcp-item-title-input { min-width: 130px; flex: 1 1 280px; border: 1px solid var(--wcp-border-strong); border-radius: 5px; padding: 2px 6px; color: var(--wcp-text); font: inherit; font-size: 14px; }

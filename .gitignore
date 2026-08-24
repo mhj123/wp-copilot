@@ -32,6 +32,7 @@ wp-copilot/plugin-load-log.txt
 
 # Debug files
 wp-copilot/debug-test.php
+wp-copilot/debug-log.txt
 
 # Environment files
 .env

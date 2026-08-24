@@ -997,7 +997,7 @@ a.wcp-pill-tag:hover {
     color: #fff;
 }
 
-.wcp-type-info {
+.wcp-type-note {
     background: #95a5a6;
     color: #fff;
 }
@@ -3535,9 +3535,9 @@ a.wcp-tag:hover {
 /* Pin, priority and subtask controls don't apply to atomic types.
    The pin toggle stays visible while an item IS pinned so it can
    still be unpinned. */
-.wcp-item-row:is([data-item-type="info"], [data-item-type="spec"], [data-item-type="learning"]):not(.wcp-pinned) .wcp-pin-toggle,
-.wcp-item-row:is([data-item-type="info"], [data-item-type="spec"], [data-item-type="learning"]) .wcp-priority-select,
-.wcp-item-row:is([data-item-type="info"], [data-item-type="spec"], [data-item-type="learning"]) .wcp-subtask-add-btn {
+.wcp-item-row:is([data-item-type="note"], [data-item-type="spec"], [data-item-type="learning"], [data-item-type="reference"]):not(.wcp-pinned) .wcp-pin-toggle,
+.wcp-item-row:is([data-item-type="note"], [data-item-type="spec"], [data-item-type="learning"], [data-item-type="reference"]) .wcp-priority-select,
+.wcp-item-row:is([data-item-type="note"], [data-item-type="spec"], [data-item-type="learning"], [data-item-type="reference"]) .wcp-subtask-add-btn {
     display: none !important;
 }
 

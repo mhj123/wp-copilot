@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) exit;
         <select name="item_type" class="wcp-inline-select">
             <option value=""><?php _e('type', 'work-copilot-theme'); ?></option>
             <option value="task"><?php _e('task', 'work-copilot-theme'); ?></option>
-            <option value="info"><?php _e('info', 'work-copilot-theme'); ?></option>
+            <option value="note"><?php _e('note', 'work-copilot-theme'); ?></option>
             <option value="learning"><?php _e('learning', 'work-copilot-theme'); ?></option>
             <option value="spec"><?php _e('spec', 'work-copilot-theme'); ?></option>
         </select>

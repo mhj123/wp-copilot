@@ -20,7 +20,7 @@ class WCP_Researcher_Mode {
     const OPTION_TEMPLATE_VER         = 'wcp_researcher_template_version';
     const OPTION_PROJECT_TEMPLATE_VER = 'wcp_researcher_project_template_version';
     const TEMPLATE_VERSION            = '2026-08-build0.1';
-    const PROJECT_TEMPLATE_VERSION    = '2026-08-build0.7';
+    const PROJECT_TEMPLATE_VERSION    = '2026-08-build0.8';
     const LIBRARY_TITLE               = 'Library';
     const RESEARCH_ROOT_TITLE         = 'Research';
 
@@ -42,10 +42,10 @@ class WCP_Researcher_Mode {
      * Objectives/Context deliberately live as content_blocks (page body
      * sections) in project_template() instead, not as real wcp_heading
      * posts — they're project framing prose, not a growing list that needs
-     * the Heading+Items mechanism the way Sources does.
+     * the Heading+Items mechanism the way References does.
      */
     private static $project_headings = array(
-        'Sources',
+        'References',
     );
 
     /**

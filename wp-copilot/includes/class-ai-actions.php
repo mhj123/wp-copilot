@@ -475,7 +475,7 @@ class WCP_AI_Actions {
         if (is_wp_error($guard)) { return $guard; }
 
         $atoms = $this->research_space_atoms($page_id);
-        $sys = "You propose candidate research atoms for a workspace. Do not invent item_type values; accepted research-chip atoms are stored as item_type 'info' and their research role is carried by heading placement/tags. Do not mention or create typed links. Do not use full paper text; reason only from the compressed atoms/summaries supplied. These are candidates requiring human acceptance.\n\n"
+        $sys = "You propose candidate research atoms for a workspace. Do not invent item_type values; accepted research-chip atoms are stored as item_type 'note' and their research role is carried by heading placement/tags. Do not mention or create typed links. Do not use full paper text; reason only from the compressed atoms/summaries supplied. These are candidates requiring human acceptance.\n\n"
              . "Return ONLY a valid JSON array. No text before or after — no headings, no commentary, no markdown fences. Format:\n"
              . '[{"title":"Subtopic title","content":"1-2 sentences","tags":["tag1"]}]';
 
@@ -513,7 +513,7 @@ class WCP_AI_Actions {
             $items[] = array(
                 'title' => sanitize_text_field($candidate['title']),
                 'content' => wp_kses_post($candidate['content'] . "\n\nProvenance: AI-generated research chip ({$action_type}) from accepted atoms/summaries in this space."),
-                'item_type' => 'info',
+                'item_type' => 'note',
                 'tags' => array_map('sanitize_text_field', (array) ($candidate['tags'] ?? array('research'))),
             );
         }
@@ -591,7 +591,7 @@ class WCP_AI_Actions {
 
         $items = $this->research_findings_to_items($findings, $query);
 
-        list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, 'research_find_references', 'Sources');
+        list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, 'research_find_references', 'References');
 
         WCP_AI_Logger::instance()->log_action('research_find_references', array(
             'model' => 'exa-web-search',
@@ -705,15 +705,25 @@ class WCP_AI_Actions {
             $summary = isset($summaries[$i]) ? $this->format_finding_summary($summaries[$i]) : '';
             $body = $summary !== '' ? sanitize_textarea_field($summary) : wp_kses_post($finding['snippet'] ?? '');
 
+            // Kept split (not just the combined $body above) so accept-time
+            // handling can build two separate items for item-level Find
+            // References: a general Summary for the Library page, and a
+            // topic-grounded excerpt filed under the triggering item. Page-
+            // level Find References still uses the combined $body as one item.
+            $raw_summary = $summaries[$i] ?? array();
+            $summary_content = is_array($raw_summary) ? trim(wp_strip_all_tags((string) ($raw_summary['content'] ?? ''))) : '';
+            $summary_relevance = is_array($raw_summary) ? trim(wp_strip_all_tags((string) ($raw_summary['relevance'] ?? ''))) : '';
+
             $items[] = array(
                 'title' => $title,
-                'content' => "{$body}\n\nSource: {$domain} — {$url}\n\nProvenance: found via web search (Exa). Query: {$query}. Result URL: {$url}. This is not a formal peer-reviewed citation.",
-                'item_type' => 'source',
-                'tags' => array('web-search', 'exa'),
+                'content' => "{$body}\n\nSource: {$domain} — {$url}",
+                'item_type' => 'reference',
                 'url' => $url,
                 'domain' => $domain,
                 'source_type' => 'web_search',
                 'topic' => $query,
+                'summary_content' => $summary_content !== '' ? sanitize_textarea_field($summary_content) : '',
+                'summary_relevance' => $summary_relevance !== '' ? sanitize_textarea_field($summary_relevance) : '',
             );
         }
         return $items;
@@ -723,7 +733,7 @@ class WCP_AI_Actions {
      * Item-level counterpart to research_find_references(): finds references
      * grounded in a SPECIFIC item's own title/content rather than a typed
      * instruction, and files them under a heading named after that item
-     * (a sibling heading, not a conversion of the item) instead of "Sources".
+     * (a sibling heading, not a conversion of the item) instead of "References".
      * The heading is only actually created when the resulting proposal is
      * accepted (find_or_create_heading() runs inside execute_proposal()'s
      * target_heading resolution) — nothing is created here, preserving the
@@ -2231,7 +2241,7 @@ class WCP_AI_Actions {
         }
 
         $batch_id         = wp_generate_uuid4();
-        $valid_item_types = array('task', 'info', 'learning', 'spec', 'source');
+        $valid_item_types = array('task', 'note', 'learning', 'spec', 'source');
 
         // New headings → proposals + ref map for the plan tree.
         $headings   = array();
@@ -2348,7 +2358,7 @@ class WCP_AI_Actions {
 
         // Importing a PDF always files it under the Library, so this
         // inherently requires Researcher Mode (the page it's invoked from is
-        // the "origin" for the Sources cross-link, not the write target).
+        // the "origin" for the References cross-link, not the write target).
         $guard = $this->require_researcher_mode($page_id);
         if (is_wp_error($guard)) {
             return $guard;
@@ -2397,7 +2407,7 @@ class WCP_AI_Actions {
             'item'            => array(
                 'title'     => $paper_title,
                 'content'   => $content,
-                'item_type' => 'source',
+                'item_type' => 'reference',
             ),
             'source'          => array(
                 'type'           => 'pdf_upload',
@@ -2413,7 +2423,7 @@ class WCP_AI_Actions {
             // headings), files the summary item under that page's own
             // "Summary" heading, and — if invoked from a page other than
             // Library itself — also associates the item with that origin
-            // page under a "Sources" heading there. Resolved at acceptance
+            // page under a "References" heading there. Resolved at acceptance
             // time by execute_proposal()'s import_pdf_reference branch.
             'paper_title'     => $paper_title,
             'origin_page_id'  => (int) $page_id,
@@ -2847,7 +2857,7 @@ class WCP_AI_Actions {
 
         // Soft heading routing: proposals may name a preferred child heading
         // (for example suggest-topics -> Objectives, gaps -> Gaps, found
-        // references -> Sources). find_or_create_heading() creates it if the
+        // references -> References). find_or_create_heading() creates it if the
         // page doesn't have it yet (e.g. an older page predating a template
         // change) rather than silently falling back to page-level context.
         if (!empty($proposal['target_heading'])) {
@@ -2962,7 +2972,7 @@ class WCP_AI_Actions {
         // headings via the existing page-template save_post hook), files the
         // summary item under that page's own "Summary" heading, and — if
         // invoked from a page other than Library itself — also associates
-        // the item with that origin page under a "Sources" heading there
+        // the item with that origin page under a "References" heading there
         // (multi-context: the item keeps BOTH associations, it isn't moved).
         if (isset($proposal['action_type']) && $proposal['action_type'] === 'import_pdf_reference') {
             $paper_title = $proposal['paper_title'] ?? ($proposal['item']['title'] ?? '');
@@ -3001,17 +3011,17 @@ class WCP_AI_Actions {
                 return $item_id;
             }
             WCP_Post_Types::mark_creator($item_id, 'copilot');
-            wp_set_post_terms($item_id, array('source'), 'item_type');
+            wp_set_post_terms($item_id, array('reference'), 'item_type');
             if ($summary_term_id) {
                 wp_set_post_terms($item_id, array($summary_term_id), 'wcp_context');
             }
 
             // Cross-link to the page this was invoked from (if any, and if it
-            // isn't Library itself) under a "Sources" heading there —
+            // isn't Library itself) under a "References" heading there —
             // appended, not replacing the Library association just set above.
             $origin_page_id = (int) ($proposal['origin_page_id'] ?? 0);
             if ($origin_page_id && $origin_page_id !== $library_id) {
-                $sources_term_id = $this->find_or_create_heading($origin_page_id, 'Sources');
+                $sources_term_id = $this->find_or_create_heading($origin_page_id, 'References');
                 if ($sources_term_id) {
                     $current_terms = wp_get_post_terms($item_id, 'wcp_context', array('fields' => 'ids'));
                     if (!is_wp_error($current_terms) && !in_array($sources_term_id, $current_terms, true)) {
@@ -3036,7 +3046,7 @@ class WCP_AI_Actions {
             return array(
                 'created_posts' => array($new_page_id, $item_id),
                 'message'       => 'Created "' . $paper_title . '" in Library with a Summary item'
-                    . ($origin_page_id && $origin_page_id !== $library_id ? ', linked to Sources on this page' : ''),
+                    . ($origin_page_id && $origin_page_id !== $library_id ? ', linked to References on this page' : ''),
                 'debug'         => array('library_id' => $library_id, 'paper_page_id' => $new_page_id, 'item_id' => $item_id, 'origin_page_id' => $origin_page_id),
             );
         }
@@ -3098,8 +3108,200 @@ class WCP_AI_Actions {
                     // lines — just replace the summary paragraph above them.
                     $rest = preg_replace('/^.*?(\n\nSource:)/s', '$1', $item['content'], 1);
                     $item['content'] = $summary . ($rest !== $item['content'] ? $rest : "\n\nSource: {$domain} — {$item['url']}");
+
+                    // Refresh the split fields too — the full-text re-summary is
+                    // strictly richer than the original short-snippet version,
+                    // so the two-item split (item-level Find References) should
+                    // use it rather than the shallower proposal-time content.
+                    $raw = $summaries[0];
+                    $item['summary_content'] = is_array($raw) ? trim(wp_strip_all_tags((string) ($raw['content'] ?? ''))) : '';
+                    $item['summary_relevance'] = is_array($raw) ? trim(wp_strip_all_tags((string) ($raw['relevance'] ?? ''))) : '';
                 }
             }
+        }
+
+        // Find References results become their own Library paper page + Summary
+        // item, the same way import_pdf_reference works — a web reference gets
+        // a real place to live, not just a bullet under a heading.
+        //
+        // Item-level Find References (a specific item triggered the search)
+        // additionally splits the AI summary into two items instead of one:
+        // a general "Summary" (filed only on the Library page) and a second
+        // item — what the source actually says about the topic that prompted
+        // the search — nested as a real subitem of the triggering item. Page-
+        // level Find References keeps the original single-item behaviour
+        // (one item, cross-linked to both the Library page and the project's
+        // References heading via wcp_context), since there's no single
+        // triggering item to nest a topic-item under.
+        if ($item && ($item['source_type'] ?? '') === 'web_search' && !empty($item['title']) && !empty($item['content'])) {
+            $library_id = WCP_Researcher_Mode::instance()->get_library_page_id();
+            if (!$library_id) {
+                return new WP_Error('no_library', 'Researcher mode\'s Library page could not be found. Enable Researcher mode in Settings first.');
+            }
+
+            $paper_title = $item['title'];
+            $domain = !empty($item['url']) ? (wp_parse_url($item['url'], PHP_URL_HOST) ?: $item['url']) : '';
+            $source_line = !empty($item['url']) ? "\n\nSource: {$domain} — {$item['url']}" : '';
+            $source_url_key = !empty($item['url']) ? esc_url_raw($item['url']) : '';
+
+            // Dedup by source URL — the same reference can legitimately turn
+            // up again from a different search (page-level and item-level
+            // searches overlapping, or the same URL found twice), and should
+            // land on the SAME Library page rather than spawning a duplicate.
+            $new_page_id = 0;
+            $page_already_existed = false;
+            if ($source_url_key) {
+                $existing_pages = get_posts(array(
+                    'post_type'      => 'page',
+                    'post_parent'    => $library_id,
+                    'meta_key'       => '_wcp_source_url',
+                    'meta_value'     => $source_url_key,
+                    'posts_per_page' => 1,
+                    'post_status'    => 'any',
+                ));
+                if (!empty($existing_pages)) {
+                    $new_page_id = $existing_pages[0]->ID;
+                    $page_already_existed = true;
+                }
+            }
+
+            if (!$new_page_id) {
+                $new_page_id = wp_insert_post(array(
+                    'post_type'    => 'page',
+                    'post_title'   => sanitize_text_field($paper_title),
+                    'post_content' => '', // empty so the page-template save_post hook applies Library's paper template
+                    'post_status'  => 'publish',
+                    'post_author'  => $user_id,
+                    'post_parent'  => $library_id,
+                ));
+                if (is_wp_error($new_page_id)) {
+                    return $new_page_id;
+                }
+                WCP_Post_Types::mark_creator($new_page_id, 'copilot');
+                if ($source_url_key) {
+                    update_post_meta($new_page_id, '_wcp_source_url', $source_url_key);
+                }
+            }
+
+            $summary_term_id = $this->find_or_create_heading($new_page_id, 'Summary');
+            $created_posts = $page_already_existed ? array() : array($new_page_id);
+
+            // Summary item — created once per page. If the page already
+            // existed, reuse its existing Summary item rather than adding a
+            // second, near-identical one under the same heading.
+            $summary_item_id = 0;
+            if ($page_already_existed && $summary_term_id) {
+                $existing_summary_items = get_posts(array(
+                    'post_type'      => 'post',
+                    'posts_per_page' => 1,
+                    'post_status'    => 'any',
+                    'tax_query'      => array(array('taxonomy' => 'wcp_context', 'field' => 'term_id', 'terms' => $summary_term_id)),
+                ));
+                if (!empty($existing_summary_items)) {
+                    $summary_item_id = $existing_summary_items[0]->ID;
+                }
+            }
+
+            if (!$summary_item_id) {
+                // Falls back to the combined content if the split "relevance"
+                // field is somehow empty, so this never ships a blank item.
+                $summary_body = !empty($item['summary_relevance']) ? $item['summary_relevance'] : $item['content'];
+                $summary_item_id = wp_insert_post(array(
+                    'post_type'    => 'post',
+                    'post_title'   => sanitize_text_field($paper_title),
+                    'post_content' => wp_kses_post($summary_body . $source_line),
+                    'post_status'  => 'publish',
+                    'post_author'  => $user_id,
+                ));
+                if (is_wp_error($summary_item_id)) {
+                    return $summary_item_id;
+                }
+                WCP_Post_Types::mark_creator($summary_item_id, 'copilot');
+                wp_set_post_terms($summary_item_id, array('reference'), 'item_type');
+                if ($summary_term_id) {
+                    wp_set_post_terms($summary_item_id, array($summary_term_id), 'wcp_context');
+                }
+                if ($source_url_key) {
+                    update_post_meta($summary_item_id, '_wcp_source_url', $source_url_key);
+                }
+                update_post_meta($summary_item_id, '_wcp_source_type', 'web_search');
+                $created_posts[] = $summary_item_id;
+            }
+
+            $parent_item_id_for_ref = (int) ($proposal['parent_item_id'] ?? 0);
+
+            if ($parent_item_id_for_ref && !empty($item['summary_content'])) {
+                // Dedup scoped to (triggering item, source URL) — the same
+                // source can still get its own topic item under a DIFFERENT
+                // triggering item (that's a legitimate, separate association),
+                // just not a second one under the same item.
+                $existing_topic_item = false;
+                if ($source_url_key) {
+                    $existing_subitems = get_posts(array(
+                        'post_type'      => 'post',
+                        'post_parent'    => $parent_item_id_for_ref,
+                        'posts_per_page' => 1,
+                        'post_status'    => 'any',
+                        'meta_key'       => '_wcp_source_url',
+                        'meta_value'     => $source_url_key,
+                    ));
+                    $existing_topic_item = !empty($existing_subitems);
+                }
+
+                if (!$existing_topic_item) {
+                    $topic_item_id = wp_insert_post(array(
+                        'post_type'    => 'post',
+                        'post_title'   => sanitize_text_field($paper_title),
+                        'post_content' => wp_kses_post($item['summary_content'] . $source_line),
+                        'post_status'  => 'publish',
+                        'post_author'  => $user_id,
+                        'post_parent'  => $parent_item_id_for_ref,
+                    ));
+                    if (!is_wp_error($topic_item_id)) {
+                        WCP_Post_Types::mark_creator($topic_item_id, 'copilot');
+                        // A 'note', not 'reference' — this item is this
+                        // source's bearing on the specific triggering item,
+                        // not the reference record itself (that's the
+                        // Summary item, on the Library page).
+                        wp_set_post_terms($topic_item_id, array('note'), 'item_type');
+                        $parent_context_ids = wp_get_post_terms($parent_item_id_for_ref, 'wcp_context', array('fields' => 'ids'));
+                        if (!is_wp_error($parent_context_ids) && !empty($parent_context_ids)) {
+                            wp_set_post_terms($topic_item_id, $parent_context_ids, 'wcp_context');
+                        }
+                        if ($source_url_key) {
+                            update_post_meta($topic_item_id, '_wcp_source_url', $source_url_key);
+                        }
+                        update_post_meta($topic_item_id, '_wcp_source_type', 'web_search');
+                        $created_posts[] = $topic_item_id;
+                    }
+                }
+            } elseif ($context_term_id) {
+                // Page-level Find References: original single-item cross-link
+                // behaviour — associate the Summary item with the project's
+                // References heading too (multi-context, not moved).
+                $current_terms = wp_get_post_terms($summary_item_id, 'wcp_context', array('fields' => 'ids'));
+                if (!is_wp_error($current_terms) && !in_array($context_term_id, $current_terms, true)) {
+                    wp_set_post_terms($summary_item_id, array_merge($current_terms, array($context_term_id)), 'wcp_context');
+                }
+            }
+
+            delete_transient('wcp_proposal_' . $proposal_id);
+
+            if (empty($created_posts)) {
+                $message = '"' . $paper_title . '" already exists in Library — nothing new to add.';
+            } elseif ($page_already_existed) {
+                $message = 'Added to the existing "' . $paper_title . '" Library page'
+                    . (in_array($topic_item_id ?? 0, $created_posts, true) ? ', with a topic item under the source' : '.');
+            } else {
+                $message = 'Created "' . $paper_title . '" in Library'
+                    . (count($created_posts) > 2 ? ', with a Summary item and a topic item under the source' : ' with a Summary item');
+            }
+
+            return array(
+                'created_posts' => $created_posts,
+                'message'       => $message,
+                'debug'         => array('library_id' => $library_id, 'paper_page_id' => $new_page_id, 'page_already_existed' => $page_already_existed, 'created_posts' => $created_posts),
+            );
         }
 
         // Debug: log what we found

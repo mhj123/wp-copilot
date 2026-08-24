@@ -24,6 +24,8 @@ class WCP_Taxonomies {
         add_action('init', array($this, 'populate_task_status_terms'), 21);
         add_action('init', array($this, 'populate_spec_terms'), 22);
         add_action('init', array($this, 'populate_source_terms'), 23);
+        add_action('init', array($this, 'populate_reference_terms'), 24);
+        add_action('init', array($this, 'migrate_info_term_to_note'), 25);
     }
 
     public function register_taxonomies() {
@@ -161,7 +163,7 @@ class WCP_Taxonomies {
         }
 
         // Item types
-        $item_types = array('task', 'info', 'learning', 'spec', 'source');
+        $item_types = array('task', 'note', 'learning', 'spec', 'source');
         foreach ($item_types as $type) {
             if (!term_exists($type, 'item_type')) {
                 wp_insert_term($type, 'item_type', array(
@@ -249,5 +251,47 @@ class WCP_Taxonomies {
         }
 
         update_option('wcp_source_terms_created', true);
+    }
+
+    /**
+     * Populate the 'reference' item type. Used by Find References and PDF
+     * import specifically — a reference is a source item that also has a
+     * dedicated Library paper page (see WCP_AI_Actions::execute_proposal()'s
+     * web_search/import_pdf_reference handling). Kept distinct from the
+     * older, more general 'source' type rather than replacing it.
+     */
+    public function populate_reference_terms() {
+        if (get_option('wcp_reference_terms_created')) {
+            return;
+        }
+
+        if (!term_exists('reference', 'item_type')) {
+            wp_insert_term('reference', 'item_type', array('slug' => 'reference'));
+        }
+
+        update_option('wcp_reference_terms_created', true);
+    }
+
+    /**
+     * Rename the 'info' item type to 'note' in place — wp_update_term() keeps
+     * the same term_id, so every existing item already tagged 'info' updates
+     * automatically with no per-item migration needed. New installs never
+     * create 'info' to begin with (populate_default_terms() now registers
+     * 'note' directly), so this is purely for sites that already ran that
+     * migration under the old name.
+     */
+    public function migrate_info_term_to_note() {
+        if (get_option('wcp_info_renamed_to_note')) {
+            return;
+        }
+
+        $term = get_term_by('slug', 'info', 'item_type');
+        if ($term && !is_wp_error($term)) {
+            wp_update_term($term->term_id, 'item_type', array('name' => 'Note', 'slug' => 'note'));
+        } elseif (!term_exists('note', 'item_type')) {
+            wp_insert_term('Note', 'item_type', array('slug' => 'note'));
+        }
+
+        update_option('wcp_info_renamed_to_note', true);
     }
 }

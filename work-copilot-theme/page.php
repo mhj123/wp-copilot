@@ -124,8 +124,11 @@ get_header();
                 <button type="button" class="wcp-filter-btn active" data-filter="all">All items</button>
                 <button type="button" class="wcp-filter-btn" data-filter="tasks">All tasks</button>
                 <button type="button" class="wcp-filter-btn" data-filter="open">Open tasks</button>
-                <button type="button" class="wcp-filter-btn" data-filter="info">All info</button>
+                <button type="button" class="wcp-filter-btn" data-filter="note">All notes</button>
                 <button type="button" class="wcp-filter-btn" data-filter="spec">All specs</button>
+                <?php if (function_exists('wcp_researcher_mode_enabled') && wcp_researcher_mode_enabled()) : ?>
+                <button type="button" class="wcp-filter-btn" data-filter="reference">All references</button>
+                <?php endif; ?>
             </div>
             <button type="button" class="wcp-sort-priority wcp-edit-link" title="Sort by priority">sort by priority</button>
             <button type="button" class="wcp-sort-due-date wcp-edit-link" title="Sort by due date">sort by due date</button>
@@ -302,7 +305,7 @@ get_header();
                 <select name="item_type" class="wcp-inline-select">
                     <option value=""><?php _e('Any type', 'work-copilot-theme'); ?></option>
                     <option value="task"><?php _e('Task', 'work-copilot-theme'); ?></option>
-                    <option value="info"><?php _e('Info', 'work-copilot-theme'); ?></option>
+                    <option value="note"><?php _e('Note', 'work-copilot-theme'); ?></option>
                     <option value="learning"><?php _e('Learning', 'work-copilot-theme'); ?></option>
                     <option value="spec"><?php _e('Spec', 'work-copilot-theme'); ?></option>
                 </select>

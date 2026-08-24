@@ -375,10 +375,12 @@ jQuery(document).ready(function($) {
                 show = type === 'task';
             } else if (filter === 'open') {
                 show = type === 'task' && status !== 'done';
-            } else if (filter === 'info') {
-                show = type === 'info';
+            } else if (filter === 'note') {
+                show = type === 'note';
             } else if (filter === 'spec') {
                 show = type === 'spec';
+            } else if (filter === 'reference') {
+                show = type === 'reference';
             } else {
                 show = true;
             }
@@ -421,6 +423,17 @@ jQuery(document).ready(function($) {
         var $row = $(this).closest('.wcp-item-row');
         var visible = $row.children('.wcp-item-description').is(':visible');
         $row.toggleClass('wcp-desc-open', !visible).toggleClass('wcp-desc-closed', visible);
+    });
+
+    // Subitems toggle — the subitems list is a sibling of the row (rendered
+    // right after it by wcp_theme_render_item_tree()), not nested inside it.
+    $(document).on('click', '.wcp-subitems-toggle', function() {
+        var $btn  = $(this);
+        var $row  = $btn.closest('.wcp-item-row');
+        var $list = $row.next('.wcp-subitems-list');
+        if (!$list.length) { return; }
+        $list.slideToggle(150);
+        $btn.toggleClass('active');
     });
 
     // Actions toggle — hide non-essential row controls

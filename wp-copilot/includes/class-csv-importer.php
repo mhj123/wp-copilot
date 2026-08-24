@@ -26,7 +26,7 @@ class WCP_CSV_Importer {
 
     private static $instance = null;
 
-    private static $valid_item_types   = array('task', 'info', 'learning', 'spec');
+    private static $valid_item_types   = array('task', 'note', 'learning', 'spec');
     private static $valid_task_status  = array('to-do', 'in-progress', 'done');
     private static $valid_spec_status  = array('draft', 'review', 'final');
     private static $valid_priorities   = array('critical', 'high', 'medium', 'low');

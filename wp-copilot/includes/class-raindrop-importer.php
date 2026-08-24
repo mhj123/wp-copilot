@@ -291,8 +291,8 @@ class WCP_Raindrop_Importer {
         update_post_meta($post_id, '_wcp_raindrop_id', $raindrop_id);
         update_post_meta($post_id, '_wcp_source_url', esc_url_raw($raindrop['link'] ?? ''));
 
-        // Assign item_type = info (default for imported bookmarks)
-        wp_set_post_terms($post_id, array('info'), 'item_type');
+        // Assign item_type = note (default for imported bookmarks)
+        wp_set_post_terms($post_id, array('note'), 'item_type');
 
         // Assign wcp_context term matching the collection page
         $context_terms = get_terms(array(
