@@ -176,7 +176,7 @@ The plugin files are in the `wp-copilot/` directory.
 
 ```bash
 # Option 1: Create ZIP for upload
-cd /Users/hardytati/Documents/WPCopilot
+cd /path/to/work-copilot
 zip -r wp-copilot.zip wp-copilot -x "*.DS_Store" -x "__MACOSX"
 
 # Option 2: Copy directly

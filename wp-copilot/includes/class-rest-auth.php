@@ -6,8 +6,6 @@
  * only proves the caller can create content somewhere — it says nothing
  * about the specific object a write endpoint is about to act on. This
  * closes that gap for endpoints that take a caller-supplied ID.
- *
- * See gtm/rest-permission-audit.md, finding F2.
  */
 
 if (!defined('ABSPATH')) {

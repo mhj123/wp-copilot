@@ -16,7 +16,7 @@ Both are ready to install in WordPress.
 
 ```bash
 # Create plugin ZIP
-cd /Users/hardytati/Documents/WPCopilot
+cd /path/to/work-copilot
 zip -r work-copilot.zip wp-copilot -x "*.DS_Store" -x "__MACOSX"
 ```
 
@@ -30,7 +30,7 @@ Then in WordPress:
 
 ```bash
 # Copy to WordPress
-cp -r /Users/hardytati/Documents/WPCopilot/wp-copilot /path/to/wordpress/wp-content/plugins/
+cp -r /path/to/work-copilot/wp-copilot /path/to/wordpress/wp-content/plugins/
 ```
 
 Then in WordPress:
@@ -45,7 +45,7 @@ Then in WordPress:
 ### Create theme ZIP
 
 ```bash
-cd /Users/hardytati/Documents/WPCopilot
+cd /path/to/work-copilot
 zip -r work-copilot-theme.zip work-copilot-theme -x "*.DS_Store" -x "__MACOSX"
 ```
 
@@ -130,7 +130,7 @@ Or use the dashboard:
 ## File Locations
 
 ```
-/Users/hardytati/Documents/WPCopilot/
+work-copilot/
 ├── wp-copilot/              # Plugin (install this)
 ├── work-copilot-theme/      # Theme (install this)
 ├── AI-SETUP-GUIDE.md        # Detailed AI setup
