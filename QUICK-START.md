@@ -1,156 +1,137 @@
-# WP Copilot - Quick Start Guide 🚀
+# WP Copilot — Quick Start Guide
 
-## Your Project is Ready!
+## What you have
 
-You now have:
-- ✅ **WP Copilot Plugin** (with AI enabled)
-- ✅ **WP Copilot Theme** (with sidebar navigation)
+- **WP Copilot** — the plugin. Data model, REST API, AI actions, admin
+  screens.
+- **WP Copilot Theme** — the workspace UI (pages, items, sidebar
+  navigation, the AI assistant panel).
 
-Both are ready to install in WordPress.
+**Both are required today.** The plugin alone activates but has no front-end
+templates of its own — the theme is where pages, items, and the AI widget
+actually render. Install and activate both before you judge whether the
+product works.
 
 ---
 
-## Step 1: Install the Plugin
+## Step 1: Install the plugin
 
 ### Option A: Upload ZIP
 
 ```bash
-# Create plugin ZIP
 cd /path/to/work-copilot
 zip -r work-copilot.zip wp-copilot -x "*.DS_Store" -x "__MACOSX"
 ```
 
-Then in WordPress:
-1. Go to **Plugins → Add New → Upload Plugin**
+In WordPress:
+1. **Plugins → Add New → Upload Plugin**
 2. Choose `work-copilot.zip`
-3. Click **Install Now**
-4. Click **Activate**
+3. **Install Now**, then **Activate**
 
-### Option B: Manual Install
+### Option B: Manual install
 
 ```bash
-# Copy to WordPress
 cp -r /path/to/work-copilot/wp-copilot /path/to/wordpress/wp-content/plugins/
 ```
 
-Then in WordPress:
-1. Go to **Plugins**
-2. Find "WP Copilot"
-3. Click **Activate**
+In WordPress: **Plugins**, find "WP Copilot", **Activate**.
 
 ---
 
-## Step 2: Install the Theme
-
-### Create theme ZIP
+## Step 2: Install the theme
 
 ```bash
 cd /path/to/work-copilot
 zip -r work-copilot-theme.zip work-copilot-theme -x "*.DS_Store" -x "__MACOSX"
 ```
 
-### Install in WordPress
-
-1. Go to **Appearance → Themes → Add New → Upload Theme**
+In WordPress:
+1. **Appearance → Themes → Add New → Upload Theme**
 2. Choose `work-copilot-theme.zip`
-3. Click **Install Now**
-4. Click **Activate**
+3. **Install Now**, then **Activate**
+
+Activating the theme replaces your site's front end with the WP Copilot
+workspace UI. This is a dedicated, single-purpose install — see
+**Requirements & Supported Setup** in `wp-copilot/readme.txt` before pointing
+it at a site you use for anything else.
 
 ---
 
-## Step 3: Enable AI Features (Optional)
+## Step 3: Enable AI features (optional)
 
-### Get Anthropic API Key
+The plugin is fully usable — pages, items, structure, tagging — without an
+API key. AI features are opt-in.
+
+### Get an Anthropic API key
 
 1. Go to https://console.anthropic.com/
-2. Sign up (free credits available)
-3. Navigate to "API Keys"
-4. Click "Create Key"
-5. Copy your API key (starts with `sk-ant-...`)
+2. Sign up, then **API Keys → Create Key**
+3. Copy the key (starts with `sk-ant-...`)
 
-### Configure in WordPress
+### Configure it
 
-1. Go to **WP Copilot → Settings**
+1. **WP Copilot → Settings**
 2. Check **"Enable AI Features"**
-3. Paste your API key
-4. Click **"Save Settings"**
-5. Click **"Test Connection"** to verify
+3. Paste your API key, **Save Settings**
+4. **Test Connection** to verify
 
-**Full guide:** See `wp-copilot/AI-SETUP-GUIDE.md`
-
----
-
-## Step 4: Start Using WP Copilot
-
-### Create Your First Page
-
-1. Go to **Pages → Add New**
-2. Title: "My First Project"
-3. Add description (optional)
-4. Publish
-
-### Add an ItemPost
-
-Visit your page on the frontend and use the **Create New Item** form:
-- Enter title and content
-- Select item type (Task, Info, or Learning)
-- Set priority
-- Click "Create Item"
-
-Or use the dashboard:
-1. Go to **WP Copilot → Dashboard**
-2. Use the quick create form
-
-### View Your Work
-
-- **Sidebar:** See all Pages in hierarchical list
-- **Page view:** See all items for that page
-- **Filters:** Filter by type and priority
+Full detail: `wp-copilot/AI-SETUP-GUIDE.md`.
 
 ---
 
-## Key Features
+## Step 4: Start using it
 
-### Content Organization
-- **Pages** = Contexts (Projects, Themes, People)
-- **Headings** = Sub-contexts (create via Pages → Headings)
-- **ItemPosts** = Atomic notes (Tasks, Info, Learnings)
+### Create your first page
 
-### AI Features (when enabled)
-- **Tag Suggestions** - Auto-suggest types, priorities, tags
-- **Page Chat** - Ask questions about your pages
-- **Coaching** - Generate insights and recommendations
+1. **Pages → Add New**
+2. Title it (e.g. "My First Project"), publish
 
-### Transparency
-- **AI Audit Log** - See all AI interactions
-- **Human-in-the-Loop** - AI never writes without approval
+### Add a note
+
+On the page's front end, use the inline create form: title, content, item
+type (Task / Info / Learning), priority. Or go to **WP Copilot → Dashboard**
+and use the quick-create form there.
+
+### Find your way around
+
+- **Sidebar** — every page, hierarchically
+- **Page view** — every item filed under that page
+- **Filters** — by type and priority
 
 ---
 
-## File Locations
+## What's here
+
+- **Structure** — Pages are contexts (projects, themes, people). Headings add
+  sub-structure under a page. Items are atomic notes — a single task, idea, or
+  observation — reusable across as many pages as you like, as the same note,
+  not a copy.
+- **AI, on request** — tag suggestions, page-scoped chat, generation prompts
+  that produce proposed items. AI never writes to your data on its own: every
+  output is a candidate you accept or dismiss, and every AI action is logged
+  under **WP Copilot → AI Audit Log**.
+
+---
+
+## File locations
 
 ```
 work-copilot/
-├── wp-copilot/              # Plugin (install this)
-├── work-copilot-theme/      # Theme (install this)
-├── AI-SETUP-GUIDE.md        # Detailed AI setup
-├── ENABLE-AI-SUMMARY.md     # What changed to enable AI
+├── wp-copilot/              # Plugin — install this
+├── work-copilot-theme/      # Theme — install this
+├── README.md                # Project overview
+├── ENABLE-AI-SUMMARY.md     # What AI-enabling changed
 └── QUICK-START.md           # This file
 ```
 
 ---
 
-## Need Help?
+## Need help?
 
-### Documentation
-- **Plugin README:** `wp-copilot/README.md`
-- **AI Setup Guide:** `wp-copilot/AI-SETUP-GUIDE.md`
-- **Theme README:** `work-copilot-theme/README.md`
-
-### In WordPress
-- **Settings:** WP Copilot → Settings
-- **AI Audit Log:** WP Copilot → AI Audit Log
-- **Dashboard:** WP Copilot → Dashboard
+- **Project overview:** `README.md`
+- **Plugin details, external services, requirements:** `wp-copilot/readme.txt`
+- **AI setup:** `wp-copilot/AI-SETUP-GUIDE.md`
+- **In WordPress:** WP Copilot → Settings / Dashboard / AI Audit Log
 
 ---
 
@@ -158,12 +139,7 @@ work-copilot/
 
 - [ ] Plugin installed and activated
 - [ ] Theme installed and activated
-- [ ] Created first Page
-- [ ] Created first ItemPost
-- [ ] (Optional) AI configured and tested
-- [ ] Explored the sidebar navigation
-- [ ] Tried filtering items
-
----
-
-**You're ready to go!** Start capturing your work in atomic notes and organizing with Pages. Enable AI when you're ready for smart assistance. 🎉
+- [ ] Created a first Page
+- [ ] Added a first Item
+- [ ] (Optional) AI configured and connection tested
+- [ ] Explored the sidebar and filters
