@@ -115,19 +115,6 @@
             // Model selector
             $(document).on('change', '#wcp-ai-model', (e) => {
                 this.selectedModel = $(e.target).val();
-                const isOpus = this.selectedModel === 'claude-opus-4-8';
-                const $thinking = $('#wcp-ai-thinking');
-                if (isOpus) {
-                    $thinking.removeAttr('disabled');
-                } else {
-                    $thinking.val('0').attr('disabled', 'disabled');
-                    this.thinkingBudget = 0;
-                }
-            });
-
-            // Thinking selector
-            $(document).on('change', '#wcp-ai-thinking', (e) => {
-                this.thinkingBudget = parseInt($(e.target).val(), 10) || 0;
             });
 
             // Save assistant message as item
@@ -321,9 +308,12 @@
                 const $msg = $(e.currentTarget).closest('.wcp-ai-query-confirm');
                 const query = $msg.find('.wcp-ai-query-input').val().trim();
                 if (!query) { return; }
+                const includeRelevance = $msg.find('.wcp-ai-query-relevance').prop('checked');
+                const includeSummary = $msg.find('.wcp-ai-query-summarize').prop('checked');
+                if (!includeRelevance && !includeSummary) { return; }
                 const instruction = $msg.data('instruction');
                 $msg.remove();
-                this.runReferenceSearch(instruction, query);
+                this.runReferenceSearch(instruction, query, includeRelevance, includeSummary);
             });
             $(document).on('click', '.wcp-ai-query-cancel', (e) => {
                 $(e.currentTarget).closest('.wcp-ai-query-confirm').remove();
@@ -1092,6 +1082,19 @@
             $message.append($('<div>').addClass('wcp-ai-message-content').text('Search query for Exa (edit if needed):'));
             $message.append($('<textarea>').addClass('wcp-ai-query-input').attr('rows', 2).val(query));
             $message.append(
+                $('<div>').addClass('wcp-ai-query-options')
+                    .append(
+                        $('<label>').addClass('wcp-ai-query-option')
+                            .append($('<input>').attr({ type: 'checkbox', class: 'wcp-ai-query-relevance' }).prop('checked', true))
+                            .append(' ' + 'Describe relevance')
+                    )
+                    .append(
+                        $('<label>').addClass('wcp-ai-query-option')
+                            .append($('<input>').attr({ type: 'checkbox', class: 'wcp-ai-query-summarize' }))
+                            .append(' ' + 'Summarise content')
+                    )
+            );
+            $message.append(
                 $('<div>').addClass('wcp-ai-query-actions')
                     .append($('<button>').attr('type', 'button').addClass('wcp-btn wcp-btn-primary wcp-btn-sm wcp-ai-query-search').text('Search'))
                     .append(' ')
@@ -1105,13 +1108,20 @@
         /**
          * Find references, step 3: run the actual Exa search with the
          * (possibly edited) query, bypassing re-derivation server-side.
+         *
+         * @param {boolean} includeRelevance Create the short "describe
+         *   relevance" item per finding (the original behaviour).
+         * @param {boolean} includeSummary   Create a second, separate item
+         *   per finding: a faithful long-form summary of its full content.
          */
-        runReferenceSearch: function(instruction, query) {
+        runReferenceSearch: function(instruction, query, includeRelevance, includeSummary) {
             this.showLoading(true, 'Searching for references…');
             const data = {
                 action_type: 'research_find_references',
                 prompt: instruction,
                 query: query,
+                include_relevance: includeRelevance ? '1' : '',
+                include_summary: includeSummary ? '1' : '',
                 page_id: wcpAiWidgetData.pageId,
                 conversation_id: this.conversationId,
                 context_mode: this.contextMode,

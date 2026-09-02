@@ -81,18 +81,12 @@ if (empty($saved_prompts)) {
             </select>
         </div>
 
-        <!-- Model + thinking selector -->
+        <!-- Model selector -->
         <div class="wcp-ai-model-selector">
             <select id="wcp-ai-model">
                 <option value="claude-haiku-4-5-20251001">Haiku 4.5 &mdash; Fast</option>
                 <option value="claude-sonnet-4-6" selected>Sonnet 4.6 &mdash; Balanced</option>
                 <option value="claude-opus-4-8">Opus 4.8 &mdash; Powerful</option>
-            </select>
-            <select id="wcp-ai-thinking" disabled title="<?php _e('Extended thinking is only available with Opus 4.8', 'work-copilot'); ?>">
-                <option value="0"><?php _e('No thinking', 'work-copilot'); ?></option>
-                <option value="1000"><?php _e('Thinking: low', 'work-copilot'); ?></option>
-                <option value="5000"><?php _e('Thinking: medium', 'work-copilot'); ?></option>
-                <option value="10000"><?php _e('Thinking: high', 'work-copilot'); ?></option>
             </select>
         </div>
 

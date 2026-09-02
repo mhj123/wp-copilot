@@ -417,6 +417,16 @@ jQuery(document).ready(function($) {
         $('.wcp-items-section').toggleClass('wcp-show-descriptions', !showing);
     });
 
+    // Per-heading description toggle — same mechanism as the page-level one
+    // above, scoped to just this heading's items via .wcp-show-descriptions
+    // on .wcp-heading-group instead of .wcp-items-section.
+    $(document).on('click', '.wcp-heading-toggle-descriptions', function() {
+        var $btn = $(this);
+        var showing = $btn.hasClass('active');
+        $btn.toggleClass('active', !showing);
+        $btn.closest('.wcp-heading-group').toggleClass('wcp-show-descriptions', !showing);
+    });
+
     // Per-item description toggle — overrides the section-level toggle
     // in both directions (wcp-desc-open / wcp-desc-closed classes).
     $(document).on('click', '.wcp-desc-toggle', function() {
@@ -1134,6 +1144,12 @@ jQuery(document).ready(function($) {
         $('#wcp-page-ai-panel').slideToggle(150);
     });
 
+    // Heading-level AI actions — same panel markup/classes as page-level,
+    // just one per heading, toggled independently.
+    $(document).on('click', '.wcp-heading-ai-btn', function() {
+        $(this).closest('.wcp-heading-group').find('.wcp-heading-ai-panel').slideToggle(150);
+    });
+
     // Export page as Markdown — a real form submit (native file download via
     // Content-Disposition), just triggered from a plain button so it matches
     // the [ai] button's styling/markup instead of a visually-inconsistent
@@ -1142,12 +1158,28 @@ jQuery(document).ready(function($) {
         document.getElementById('wcp-export-md-form').submit();
     });
 
+    // Export a single heading as Markdown — same mechanism, one hidden form
+    // per heading (each carries its own nonce).
+    $(document).on('click', '.wcp-heading-export-md', function() {
+        $(this).closest('.wcp-heading-group').find('.wcp-heading-export-md-form')[0].submit();
+    });
+
     // Chip click reveals a prompt textarea for that action (mirrors the
     // item-level AI panel's "Freeform" reveal).
     var wcpPageAiPlaceholders = {
         generate_structure: 'Describe the headings and items to generate…',
         iterate_items: 'Describe how every item should be rewritten — any format, structure, tone, or example you want applied…',
-        spot_gaps: 'Optional: describe what a complete set should cover, e.g. "This is an SEO plan — suggest missing headings and items" — leave blank to let the AI infer from the page mission.'
+        spot_gaps: 'Optional: describe what a complete set should cover, e.g. "This is an SEO plan — suggest missing headings and items" — leave blank to let the AI infer from the page mission.',
+        brainstorm_subitems: 'Optional: how should each item be riffed on, e.g. "double-click on the items, to expand them out", "brainstorm additional ideas related to this", "turn these pain points into feature ideas" — leave blank to just brainstorm related ideas.'
+    };
+
+    // Heading-scoped wording — no "headings" language since generate_structure
+    // at heading level only ever adds items under this one heading.
+    var wcpHeadingAiPlaceholders = {
+        generate_structure: 'Describe the items to generate under this heading…',
+        iterate_items: 'Describe how every item under this heading should be rewritten — any format, structure, tone, or example you want applied…',
+        spot_gaps: 'Optional: describe what this section should cover — leave blank to let the AI infer from context.',
+        brainstorm_subitems: 'Optional: how should each item in this section be riffed on, e.g. "double-click on the items, to expand them out", "brainstorm additional ideas related to this", "turn these pain points into feature ideas" — leave blank to just brainstorm related ideas.'
     };
 
     $(document).on('click', '.wcp-page-ai-chip', function() {
@@ -1155,12 +1187,13 @@ jQuery(document).ready(function($) {
         var $panel = $chip.closest('.wcp-page-ai-panel');
         var $form  = $panel.find('.wcp-page-ai-prompt-form');
         var action = $chip.data('action');
+        var placeholders = $panel.data('heading-id') ? wcpHeadingAiPlaceholders : wcpPageAiPlaceholders;
 
         $panel.find('.wcp-page-ai-chip').removeClass('active');
         $chip.addClass('active');
         $form.data('action', action).show();
         $form.find('.wcp-page-ai-prompt-input')
-            .attr('placeholder', wcpPageAiPlaceholders[action] || '')
+            .attr('placeholder', placeholders[action] || '')
             .focus();
     });
 
@@ -1180,18 +1213,21 @@ jQuery(document).ready(function($) {
         var $form   = $(this);
         var $panel  = $form.closest('.wcp-page-ai-panel');
         var $result = $panel.find('.wcp-page-ai-result');
-        var action  = $form.data('action');
-        var prompt  = $form.find('.wcp-page-ai-prompt-input').val().trim();
-        var pageId  = $panel.data('page-id');
+        var action    = $form.data('action');
+        var prompt    = $form.find('.wcp-page-ai-prompt-input').val().trim();
+        var pageId    = $panel.data('page-id');
+        var headingId = $panel.data('heading-id');
         if (!action) { return; }
-        // spot_gaps' textarea is an optional instruction — execute_action()
-        // still requires a non-empty prompt, so send a placeholder rather
-        // than blocking submission. iterate_items' instruction is required
-        // (it IS the transformation to apply), so an empty prompt there
-        // just aborts the submit like every other action.
+        // spot_gaps' and brainstorm_subitems' textareas are optional —
+        // execute_action() still requires a non-empty prompt, so fall back to
+        // a default instruction rather than blocking submission. iterate_items'
+        // instruction is required (it IS the transformation to apply), so an
+        // empty prompt there just aborts the submit like every other action.
         if (!prompt) {
             if (action === 'spot_gaps') {
                 prompt = '(no instruction specified)';
+            } else if (action === 'brainstorm_subitems') {
+                prompt = 'Brainstorm related ideas.';
             } else {
                 return;
             }
@@ -1199,15 +1235,20 @@ jQuery(document).ready(function($) {
 
         $result.show().html('<p class="wcp-page-ai-thinking">Thinking…</p>');
 
+        var ajaxData = {
+            action_type: action,
+            prompt: prompt,
+            page_id: pageId,
+            context_mode: headingId ? 'heading' : 'page'
+        };
+        if (headingId) {
+            ajaxData.heading_id = headingId;
+        }
+
         $.ajax({
             url: wcpThemeData.restUrl + '/ai/actions/execute',
             method: 'POST',
-            data: {
-                action_type: action,
-                prompt: prompt,
-                page_id: pageId,
-                context_mode: 'page'
-            },
+            data: ajaxData,
             beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
             success: function(response) {
                 if (!response.success) {
@@ -1217,7 +1258,7 @@ jQuery(document).ready(function($) {
                 var result = response.result || {};
                 if (result.outcome === 'create_structure') {
                     wcpRenderPageStructureProposal($result, result.batch_id, result.plan || {});
-                } else if ((result.outcome === 'spot_gaps' || result.outcome === 'iterate_items') && result.proposals && result.proposals.length) {
+                } else if ((result.outcome === 'spot_gaps' || result.outcome === 'iterate_items' || result.outcome === 'brainstorm_subitems') && result.proposals && result.proposals.length) {
                     $result.hide().empty();
                     wcpRenderBrainstormAfter($('.wcp-brainstorm-after'), $('.wcp-items-section'), result.batch_id, result.proposals);
                 } else {
@@ -1298,6 +1339,12 @@ jQuery(document).ready(function($) {
 
         var html = '<div class="wcp-brainstorm-after-inner"><h3 class="wcp-brainstorm-after-title">Proposed changes</h3>';
 
+        // brainstorm_subitems tags each proposal with parent_title — group
+        // those under a "under <parent>" label (like the structure proposal's
+        // existing_groups) instead of the flat rows spot_gaps/iterate_items use.
+        var parentGroups = {};
+        var parentOrder = [];
+
         proposals.forEach(function(p) {
             if (p.action_type === 'edit_item') {
                 var orig = p.original || {};
@@ -1307,11 +1354,23 @@ jQuery(document).ready(function($) {
                     : esc(next.title);
 
                 html += '<div class="wcp-struct-group">' + row(p.proposal_id, 'rewrite', '', titleHtml) + '</div>';
+            } else if (p.parent_title) {
+                var subIt = p.item || {};
+                if (!parentGroups[p.parent_title]) {
+                    parentGroups[p.parent_title] = [];
+                    parentOrder.push(p.parent_title);
+                }
+                parentGroups[p.parent_title].push(row(p.proposal_id, '+ new', subIt.item_type, esc(subIt.title)));
             } else {
                 // generate-multiple: a new top-level (gap) item.
                 var it = p.item || {};
                 html += '<div class="wcp-struct-group">' + row(p.proposal_id, '+ new', it.item_type, esc(it.title)) + '</div>';
             }
+        });
+
+        parentOrder.forEach(function(parentTitle) {
+            html += '<div class="wcp-struct-group"><div class="wcp-struct-grouplabel">under ' + esc(parentTitle) + '</div>'
+                + parentGroups[parentTitle].join('') + '</div>';
         });
 
         html += '<div class="wcp-struct-actions">'
@@ -2293,60 +2352,64 @@ jQuery(document).ready(function($) {
     });
 
     // ==========================================================================
-    // Subtasks
+    // Subitems (real nested items, any type) — "+ subitem" on every item row
     // ==========================================================================
 
     // Toggle add-form
-    $(document).on('click', '.wcp-subtask-add-btn', function() {
+    $(document).on('click', '.wcp-subitem-add-btn', function() {
         var $section = $(this).closest('.wcp-item-row').find('.wcp-subtask-section');
-        var $form = $section.find('.wcp-subtask-add-form');
+        var $form = $section.find('.wcp-subitem-add-form');
         $form.slideToggle(120, function() {
-            if ($form.is(':visible')) $form.find('.wcp-subtask-input').focus();
+            if ($form.is(':visible')) $form.find('.wcp-subitem-input').focus();
         });
     });
 
-    $(document).on('click', '.wcp-subtask-add-cancel', function() {
-        var $form = $(this).closest('.wcp-subtask-add-form');
+    $(document).on('click', '.wcp-subitem-add-cancel', function() {
+        var $form = $(this).closest('.wcp-subitem-add-form');
         $form.slideUp(120);
-        $form.find('.wcp-subtask-input').val('');
+        $form.find('.wcp-subitem-input').val('');
     });
 
-    // Submit new subtask
-    $(document).on('submit', '.wcp-subtask-add-form', function(e) {
+    // Submit new subitem — a real item (post_parent set), created via the
+    // same /items/create endpoint the page/heading quick-add forms use.
+    // The backend inherits context/tags from the parent when none are given.
+    $(document).on('submit', '.wcp-subitem-add-form', function(e) {
         e.preventDefault();
         var $form   = $(this);
         var itemId  = $form.data('item-id');
-        var title   = $form.find('.wcp-subtask-input').val().trim();
+        var title   = $form.find('.wcp-subitem-input').val().trim();
+        var itemType = $form.find('select[name="item_type"]').val();
         var $submit = $form.find('button[type="submit"]');
 
         if (!title) return;
-        $submit.prop('disabled', true);
+        $submit.prop('disabled', true).text('Adding…');
 
         $.ajax({
-            url: wcpThemeData.restUrl + '/items/' + itemId + '/subtasks',
+            url: wcpThemeData.restUrl + '/items/create',
             method: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify({ title: title }),
+            data: JSON.stringify({ title: title, item_type: itemType, post_parent: itemId }),
             beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
             success: function(response) {
-                if (!response.success) return;
-                var st = response.subtask;
-                var $list = $form.closest('.wcp-subtask-section').find('.wcp-subtask-list');
-                if (!$list.length) {
-                    $list = $('<ul class="wcp-subtask-list">').insertBefore($form);
+                if (response.success) {
+                    location.reload();
+                } else {
+                    alert(response.message || 'Could not add subitem.');
+                    $submit.prop('disabled', false).text('Add');
                 }
-                var $li = $('<li class="wcp-subtask-row" data-subtask-id="' + st.id + '">'
-                    + '<input type="checkbox" class="wcp-subtask-checkbox" data-item-id="' + itemId + '" data-subtask-id="' + st.id + '">'
-                    + '<span class="wcp-subtask-title">' + $('<span>').text(st.title).html() + '</span>'
-                    + '<button type="button" class="wcp-subtask-delete wcp-edit-link" data-item-id="' + itemId + '" data-subtask-id="' + st.id + '">\xd7</button>'
-                    + '</li>');
-                $list.append($li);
-                $form.find('.wcp-subtask-input').val('');
-                $submit.prop('disabled', false);
             },
-            error: function() { $submit.prop('disabled', false); }
+            error: function() {
+                alert('Connection error.');
+                $submit.prop('disabled', false).text('Add');
+            }
         });
     });
+
+    // ==========================================================================
+    // Checklist subtasks (_wcp_subtasks) — toggle/delete only; the manual add
+    // form is retired in favor of "+ subitem" above, but the "Add subtasks"
+    // AI chip (below) still populates this list, so it stays wired up.
+    // ==========================================================================
 
     // Toggle done
     $(document).on('change', '.wcp-subtask-checkbox', function() {

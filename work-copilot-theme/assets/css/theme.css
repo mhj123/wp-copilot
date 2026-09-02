@@ -2783,6 +2783,12 @@ a.wcp-tag:hover {
     display: block;
 }
 
+/* Per-heading counterpart to the section-level toggle above — [desc] on one
+   heading only reveals descriptions for items under that heading. */
+.wcp-heading-group.wcp-show-descriptions .wcp-item-description {
+    display: block;
+}
+
 /* Hermes delegation reports are review text like any other description —
    respect the same show/hide toggle rather than always rendering. The
    status pill, clarification Q&A, and artifact list stay visible regardless
@@ -2795,6 +2801,10 @@ a.wcp-tag:hover {
     display: block;
 }
 
+.wcp-heading-group.wcp-show-descriptions .wcp-delegation-report-text {
+    display: block;
+}
+
 /* Hide non-essential actions when toggle is active */
 .wcp-items-section.wcp-hide-actions .wcp-item-view-link,
 .wcp-items-section.wcp-hide-actions .wcp-item-ai-btn,
@@ -2804,7 +2814,7 @@ a.wcp-tag:hover {
 .wcp-items-section.wcp-hide-actions .wcp-priority-select,
 .wcp-items-section.wcp-hide-actions .wcp-status-select,
 .wcp-items-section.wcp-hide-actions .wcp-due-date-input,
-.wcp-items-section.wcp-hide-actions .wcp-subtask-add-btn,
+.wcp-items-section.wcp-hide-actions .wcp-subitem-add-btn,
 .wcp-items-section.wcp-hide-actions .wcp-item-context-btn,
 .wcp-items-section.wcp-hide-actions .wcp-item-tag-btn,
 .wcp-items-section.wcp-hide-actions .wcp-item-delete {
@@ -3360,14 +3370,14 @@ a.wcp-tag:hover {
     opacity: 1;
 }
 
-.wcp-subtask-add-form {
+.wcp-subitem-add-form {
     display: flex;
     align-items: center;
     gap: 6px;
     margin-top: 4px;
 }
 
-.wcp-subtask-input {
+.wcp-subitem-input {
     flex: 1;
     max-width: 280px;
     font-size: 12px;
@@ -3473,7 +3483,7 @@ a.wcp-tag:hover {
 .wcp-item-row .wcp-item-view-link,
 .wcp-item-row .wcp-item-ai-btn,
 .wcp-item-row .wcp-desc-toggle,
-.wcp-item-row .wcp-subtask-add-btn,
+.wcp-item-row .wcp-subitem-add-btn,
 .wcp-item-row .wcp-item-context-btn,
 .wcp-item-row .wcp-item-tag-btn,
 .wcp-item-row .wcp-item-delete {
@@ -3485,8 +3495,8 @@ a.wcp-tag:hover {
 .wcp-item-row:focus-within .wcp-item-ai-btn,
 .wcp-item-row:hover .wcp-desc-toggle,
 .wcp-item-row:focus-within .wcp-desc-toggle,
-.wcp-item-row:hover .wcp-subtask-add-btn,
-.wcp-item-row:focus-within .wcp-subtask-add-btn,
+.wcp-item-row:hover .wcp-subitem-add-btn,
+.wcp-item-row:focus-within .wcp-subitem-add-btn,
 .wcp-item-row:hover .wcp-item-context-btn,
 .wcp-item-row:focus-within .wcp-item-context-btn,
 .wcp-item-row:hover .wcp-item-tag-btn,
@@ -3532,12 +3542,12 @@ a.wcp-tag:hover {
     display: inline-flex;
 }
 
-/* Pin, priority and subtask controls don't apply to atomic types.
-   The pin toggle stays visible while an item IS pinned so it can
-   still be unpinned. */
+/* Pin and priority don't apply to atomic types — but subitems now do (any
+   type can have subitems), so .wcp-subitem-add-btn is deliberately not
+   listed here. The pin toggle stays visible while an item IS pinned so it
+   can still be unpinned. */
 .wcp-item-row:is([data-item-type="note"], [data-item-type="spec"], [data-item-type="learning"], [data-item-type="reference"]):not(.wcp-pinned) .wcp-pin-toggle,
-.wcp-item-row:is([data-item-type="note"], [data-item-type="spec"], [data-item-type="learning"], [data-item-type="reference"]) .wcp-priority-select,
-.wcp-item-row:is([data-item-type="note"], [data-item-type="spec"], [data-item-type="learning"], [data-item-type="reference"]) .wcp-subtask-add-btn {
+.wcp-item-row:is([data-item-type="note"], [data-item-type="spec"], [data-item-type="learning"], [data-item-type="reference"]) .wcp-priority-select {
     display: none !important;
 }
 

@@ -239,6 +239,18 @@ class WCP_Context_Builder {
                 $context['pages'] = $this->deduplicate_pages($context['pages']);
                 break;
 
+            case 'heading':
+                // Same page hierarchy as 'page' mode, but items are scoped to
+                // one heading only — used by the heading-level AI panel so
+                // actions like iterate/spot-gaps only see that section's items.
+                $context['pages'] = array_reverse($this->collect_parent_contexts($page_id));
+
+                $heading_id = isset($options['heading_id']) ? (int) $options['heading_id'] : 0;
+                if ($options['include_items'] && $heading_id) {
+                    $context['items'] = $this->get_heading_items($heading_id, $options['item_limit']);
+                }
+                break;
+
             case 'page':
             default:
                 // Default: current page + parent hierarchy
@@ -409,6 +421,57 @@ class WCP_Context_Builder {
                     'taxonomy' => 'wcp_context',
                     'field' => 'term_id',
                     'terms' => $term_ids,
+                ),
+            ),
+            'orderby' => 'date',
+            'order' => 'DESC',
+        ));
+
+        $items = array();
+        foreach ($posts as $post) {
+            $items[] = array(
+                'id' => $post->ID,
+                'title' => $post->post_title,
+                'content' => $post->post_content,
+                'date' => $post->post_date,
+            );
+        }
+
+        return $items;
+    }
+
+    /**
+     * Items belonging to one heading only (not the whole page) — the
+     * heading-scoped counterpart to get_page_items(). Headings have no
+     * sub-headings, so unlike get_page_items() there are no descendant
+     * terms to merge in.
+     *
+     * @param int $heading_id The wcp_heading post ID
+     * @param int $limit
+     * @return array
+     */
+    private function get_heading_items($heading_id, $limit = 200) {
+        $terms = get_terms(array(
+            'taxonomy' => 'wcp_context',
+            'hide_empty' => false,
+            'meta_query' => array(
+                array('key' => 'wcp_ref_type', 'value' => 'wcp_heading'),
+                array('key' => 'wcp_ref_id', 'value' => $heading_id),
+            ),
+        ));
+
+        if (empty($terms) || is_wp_error($terms)) {
+            return array();
+        }
+
+        $posts = get_posts(array(
+            'post_type' => 'post',
+            'posts_per_page' => $limit,
+            'tax_query' => array(
+                array(
+                    'taxonomy' => 'wcp_context',
+                    'field' => 'term_id',
+                    'terms' => $terms[0]->term_id,
                 ),
             ),
             'orderby' => 'date',

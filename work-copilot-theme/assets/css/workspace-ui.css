@@ -139,10 +139,17 @@ body.wcp-ai-panel-open.wcp-ai-panel-expanded .wcp-main-content { display: none; 
 .wcp-heading-drag-handle { order: 4; }
 .wcp-heading-collapse-toggle { order: 5; width: 20px; height: 20px; border: 0; border-radius: 5px; background: transparent; color: var(--wcp-text-faint); cursor: pointer; }
 .wcp-heading-collapse-toggle:hover { background: var(--wcp-surface-muted); color: var(--wcp-accent); }
-.wcp-heading-drag-handle, .wcp-heading-duplicate, .wcp-heading-delete { opacity: 0; }
-.wcp-heading-group:hover .wcp-heading-drag-handle, .wcp-heading-group:hover .wcp-heading-duplicate, .wcp-heading-group:hover .wcp-heading-delete { opacity: 1; }
-.wcp-heading-title-simple .wcp-heading-duplicate { order: 6; margin-left: auto; border: 0; background: transparent; color: var(--wcp-text-faint); cursor: pointer; font-size: 11px; }
-.wcp-heading-title-simple .wcp-heading-delete { order: 7; border: 0; background: transparent; color: var(--wcp-text-faint); cursor: pointer; font-size: 11px; }
+.wcp-heading-drag-handle, .wcp-heading-toggle-descriptions, .wcp-heading-ai-btn, .wcp-heading-export-md, .wcp-heading-duplicate, .wcp-heading-delete { opacity: 0; }
+.wcp-heading-group:hover .wcp-heading-drag-handle, .wcp-heading-group:hover .wcp-heading-toggle-descriptions, .wcp-heading-group:hover .wcp-heading-ai-btn, .wcp-heading-group:hover .wcp-heading-export-md, .wcp-heading-group:hover .wcp-heading-duplicate, .wcp-heading-group:hover .wcp-heading-delete { opacity: 1; }
+/* A toggle that's on stays visible even without hovering, so its state is
+   never invisible — unlike the one-shot actions beside it. */
+.wcp-heading-toggle-descriptions.active { opacity: 1; }
+.wcp-heading-title-simple .wcp-heading-toggle-descriptions { order: 6; margin-left: auto; border: 0; background: transparent; color: var(--wcp-text-faint); cursor: pointer; font-size: 11px; }
+.wcp-heading-title-simple .wcp-heading-toggle-descriptions.active { color: var(--wcp-accent); text-decoration: underline; }
+.wcp-heading-title-simple .wcp-heading-ai-btn { order: 7; border: 0; background: transparent; color: var(--wcp-text-faint); cursor: pointer; font-size: 11px; }
+.wcp-heading-title-simple .wcp-heading-export-md { order: 8; border: 0; background: transparent; color: var(--wcp-text-faint); cursor: pointer; font-size: 11px; }
+.wcp-heading-title-simple .wcp-heading-duplicate { order: 9; border: 0; background: transparent; color: var(--wcp-text-faint); cursor: pointer; font-size: 11px; }
+.wcp-heading-title-simple .wcp-heading-delete { order: 10; border: 0; background: transparent; color: var(--wcp-text-faint); cursor: pointer; font-size: 11px; }
 .wcp-goal-group { background: color-mix(in srgb, var(--wcp-accent) 4%, #fff); }
 .wcp-goal-badge { border-radius: 5px; background: var(--wcp-accent); color: #fff; font-size: 9px; font-weight: 800; letter-spacing: .08em; padding: 3px 6px; text-transform: uppercase; }
 .wcp-goal-description { margin: 0; padding: 0 14px 10px 13px; color: var(--wcp-text-muted); font-size: 12px; font-style: italic; }

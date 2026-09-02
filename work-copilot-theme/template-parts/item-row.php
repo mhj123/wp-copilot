@@ -105,7 +105,7 @@ $_reference_icon = $_reference_icons[$_reference_source_type] ?? '📝';
                value="<?php echo esc_attr($_due_date); ?>"
                title="Due date"
                style="<?php echo $is_task ? '' : 'display:none;'; ?>">
-        <button type="button" class="wcp-subtask-add-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">+ subtask</button>
+        <button type="button" class="wcp-subitem-add-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">+ subitem</button>
         <button type="button" class="wcp-item-context-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">+ context</button>
         <button type="button" class="wcp-item-tag-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">+ tag</button>
         <button type="button" class="wcp-item-delete wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">[delete]</button>
@@ -175,10 +175,13 @@ $_reference_icon = $_reference_icons[$_reference_source_type] ?? '📝';
     <?php endif; ?>
 
     <?php
+    // Checklist subtasks (_wcp_subtasks) — plain {title, done} entries, not
+    // real posts. The manual "+ subtask" add action is retired in favor of
+    // "+ subitem" (real nested items, any type) below, but this list stays
+    // displayed/editable since the "Add subtasks" AI chip still populates it.
     $subtasks = json_decode(get_post_meta($item->ID, '_wcp_subtasks', true) ?: '[]', true);
     $has_subtasks = !empty($subtasks);
     ?>
-    <?php if ($has_subtasks || true) : // always render the section so the add-form has a place ?>
     <div class="wcp-subtask-section" data-item-id="<?php echo esc_attr($item->ID); ?>">
         <?php if ($has_subtasks) : ?>
         <ul class="wcp-subtask-list">
@@ -297,11 +300,19 @@ $_reference_icon = $_reference_icons[$_reference_source_type] ?? '📝';
             </form>
         </div>
 
-        <form class="wcp-subtask-add-form" data-item-id="<?php echo esc_attr($item->ID); ?>" style="display:none;">
-            <input type="text" class="wcp-subtask-input" placeholder="Subtask title…" autocomplete="off">
+        <!-- Add subitem: creates a real nested item (any type) via /items/create
+             with post_parent set — same mechanism the [subitems] toggle displays. -->
+        <form class="wcp-subitem-add-form" data-item-id="<?php echo esc_attr($item->ID); ?>" style="display:none;">
+            <input type="text" class="wcp-subitem-input" placeholder="Subitem title…" autocomplete="off">
+            <select name="item_type" class="wcp-inline-select">
+                <option value="task"><?php _e('task', 'work-copilot-theme'); ?></option>
+                <option value="note"><?php _e('note', 'work-copilot-theme'); ?></option>
+                <option value="learning"><?php _e('learning', 'work-copilot-theme'); ?></option>
+                <option value="spec"><?php _e('spec', 'work-copilot-theme'); ?></option>
+                <option value="reference"><?php _e('reference', 'work-copilot-theme'); ?></option>
+            </select>
             <button type="submit" class="wcp-btn wcp-btn-primary wcp-btn-sm">Add</button>
-            <button type="button" class="wcp-subtask-add-cancel wcp-edit-link">cancel</button>
+            <button type="button" class="wcp-subitem-add-cancel wcp-edit-link">cancel</button>
         </form>
     </div>
-    <?php endif; ?>
 </div>

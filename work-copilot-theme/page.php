@@ -157,6 +157,7 @@ get_header();
                 <button type="button" class="wcp-page-ai-chip" data-action="generate_structure">Generate structure</button>
                 <button type="button" class="wcp-page-ai-chip" data-action="iterate_items">Iterate items</button>
                 <button type="button" class="wcp-page-ai-chip" data-action="spot_gaps">Spot gaps</button>
+                <button type="button" class="wcp-page-ai-chip" data-action="brainstorm_subitems">Brainstorm subitems</button>
             </div>
             <form class="wcp-page-ai-prompt-form" style="display:none;">
                 <textarea class="wcp-page-ai-prompt-input wcp-form-control" rows="3" placeholder="Describe the headings and items to generate…"></textarea>
@@ -243,11 +244,46 @@ get_header();
                     <?php endif; ?>
                     <span class="wcp-heading-title-text" data-heading-id="<?php echo esc_attr($heading_id); ?>"><?php echo esc_html($heading->post_title); ?></span>
                     <input class="wcp-heading-title-input" type="text" style="display:none;" value="<?php echo esc_attr($heading->post_title); ?>" data-heading-id="<?php echo esc_attr($heading_id); ?>">
+                    <button type="button" class="wcp-heading-toggle-descriptions wcp-edit-link" data-heading-id="<?php echo esc_attr($heading_id); ?>" title="Toggle descriptions for this section">[desc]</button>
+                    <?php if (get_option('wcp_ai_enabled', false)) : ?>
+                    <button type="button" class="wcp-heading-ai-btn wcp-edit-link" data-heading-id="<?php echo esc_attr($heading_id); ?>" title="AI actions for this section">[ai]</button>
+                    <?php endif; ?>
+                    <button type="button" class="wcp-heading-export-md wcp-edit-link" data-heading-id="<?php echo esc_attr($heading_id); ?>" title="Export this section as Markdown">[export]</button>
                     <button type="button" class="wcp-heading-duplicate wcp-edit-link" data-heading-id="<?php echo esc_attr($heading_id); ?>" title="Duplicate this section, resetting task statuses">[duplicate]</button>
                     <button type="button" class="wcp-heading-delete wcp-edit-link" data-heading-id="<?php echo esc_attr($heading_id); ?>">[delete]</button>
                 </h3>
                 <?php if ($is_goal && !empty($heading->post_content)) : ?>
                     <div class="wcp-goal-description"><?php echo wpautop(esc_html($heading->post_content)); ?></div>
+                <?php endif; ?>
+
+                <form class="wcp-heading-export-md-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:none;" data-heading-id="<?php echo esc_attr($heading_id); ?>">
+                    <input type="hidden" name="action" value="wcp_export_heading_md">
+                    <input type="hidden" name="heading_id" value="<?php echo esc_attr($heading_id); ?>">
+                    <?php wp_nonce_field('wcp_export_heading_md_' . $heading_id); ?>
+                </form>
+
+                <?php if (get_option('wcp_ai_enabled', false)) : ?>
+                <!-- Heading-level AI actions: identical panel/chips to the page-level
+                     one (#wcp-page-ai-panel above), reusing its classes so the shared
+                     jQuery handlers in theme.js apply unchanged — data-heading-id is
+                     what tells those handlers to scope the request to this section
+                     instead of the whole page. -->
+                <div class="wcp-page-ai-panel wcp-heading-ai-panel" style="display:none;" data-page-id="<?php echo esc_attr($page_id); ?>" data-heading-id="<?php echo esc_attr($heading_id); ?>">
+                    <div class="wcp-page-ai-chips">
+                        <button type="button" class="wcp-page-ai-chip" data-action="generate_structure">Generate structure</button>
+                        <button type="button" class="wcp-page-ai-chip" data-action="iterate_items">Iterate items</button>
+                        <button type="button" class="wcp-page-ai-chip" data-action="spot_gaps">Spot gaps</button>
+                <button type="button" class="wcp-page-ai-chip" data-action="brainstorm_subitems">Brainstorm subitems</button>
+                    </div>
+                    <form class="wcp-page-ai-prompt-form" style="display:none;">
+                        <textarea class="wcp-page-ai-prompt-input wcp-form-control" rows="3" placeholder="Describe the items to generate…"></textarea>
+                        <div class="wcp-page-ai-prompt-actions">
+                            <button type="submit" class="wcp-btn wcp-btn-primary wcp-btn-sm">Generate</button>
+                            <button type="button" class="wcp-page-ai-prompt-cancel wcp-edit-link">cancel</button>
+                        </div>
+                    </form>
+                    <div class="wcp-page-ai-result" style="display:none;"></div>
+                </div>
                 <?php endif; ?>
 
                 <div class="wcp-heading-body">

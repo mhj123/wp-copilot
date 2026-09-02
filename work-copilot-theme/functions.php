@@ -219,7 +219,16 @@ function wcp_theme_build_page_nav($parent_id = 0, $current_page_id = 0, $depth =
 }
 
 // Get context term for a page
+// Memoized per request: this is looked up repeatedly for the same page
+// (page.php, get_page_pinned_items(), get_page_only_items()) and each lookup
+// is an unindexed meta_query — caching avoids re-running it every time.
 function wcp_theme_get_page_context_term($page_id) {
+    static $cache = array();
+
+    if (array_key_exists($page_id, $cache)) {
+        return $cache[$page_id];
+    }
+
     $terms = get_terms(array(
         'taxonomy' => 'wcp_context',
         'hide_empty' => false,
@@ -229,7 +238,7 @@ function wcp_theme_get_page_context_term($page_id) {
         ),
     ));
 
-    return !empty($terms) ? $terms[0] : null;
+    return $cache[$page_id] = (!empty($terms) ? $terms[0] : null);
 }
 
 // Get items for a page
@@ -429,7 +438,15 @@ function wcp_theme_get_page_headings($page_id) {
 }
 
 // Get context term for a Heading
+// Memoized per request — see wcp_theme_get_page_context_term() above; same
+// lookup is repeated once per heading across the pinned/page-only/main loops.
 function wcp_theme_get_heading_context_term($heading_id) {
+    static $cache = array();
+
+    if (array_key_exists($heading_id, $cache)) {
+        return $cache[$heading_id];
+    }
+
     $terms = get_terms(array(
         'taxonomy' => 'wcp_context',
         'hide_empty' => false,
@@ -438,7 +455,7 @@ function wcp_theme_get_heading_context_term($heading_id) {
             array('key' => 'wcp_ref_id', 'value' => $heading_id),
         ),
     ));
-    return !empty($terms) ? $terms[0] : null;
+    return $cache[$heading_id] = (!empty($terms) ? $terms[0] : null);
 }
 
 // Get items for a specific Heading
@@ -589,22 +606,52 @@ function wcp_theme_get_page_only_items($page_id) {
 
 /**
  * Render a single item as a Markdown section: title, content/description,
- * and source URL if present. Item content already carries markdown-style
- * formatting where the AI/import flows write it (bullets, **bold**, #
- * headings) so it's used near-verbatim, just trimmed.
+ * source URL if present, and any subitems nested one heading level deeper
+ * (capped at ###### so deep nesting stays valid Markdown). Item content
+ * already carries markdown-style formatting where the AI/import flows write
+ * it (bullets, **bold**, # headings) so it's used near-verbatim, just trimmed.
  */
-function wcp_theme_item_to_markdown($item) {
+function wcp_theme_item_to_markdown($item, $depth = 0, $base_level = 3) {
     $title      = trim($item->post_title);
     $content    = trim($item->post_content);
     $source_url = get_post_meta($item->ID, '_wcp_source_url', true);
+    $level      = min($base_level + $depth, 6);
 
-    $md = "### {$title}\n\n";
+    $md = str_repeat('#', $level) . " {$title}\n\n";
     if ($content !== '') {
         $md .= $content . "\n\n";
     }
     if ($source_url) {
         $md .= "Source: {$source_url}\n\n";
     }
+
+    foreach (wcp_theme_get_item_children($item->ID) as $child) {
+        $md .= wcp_theme_item_to_markdown($child, $depth + 1, $base_level);
+    }
+
+    return $md;
+}
+
+/**
+ * Render one heading's items (+ subitems, via wcp_theme_item_to_markdown's
+ * own recursion) as Markdown, at the given heading level: 2 when nested
+ * under a page export (page is #, heading is ##, items start at ###), 1
+ * when the heading itself is the export's root (heading is #, items start
+ * at ##). Includes the heading's own description too — goal headings carry
+ * one in post_content.
+ */
+function wcp_theme_heading_to_markdown($heading, $level = 2) {
+    $md = str_repeat('#', $level) . " {$heading->post_title}\n\n";
+
+    $heading_content = trim(wp_strip_all_tags(apply_filters('the_content', $heading->post_content)));
+    if ($heading_content !== '') {
+        $md .= $heading_content . "\n\n";
+    }
+
+    foreach (wcp_theme_get_heading_items($heading->ID) as $item) {
+        $md .= wcp_theme_item_to_markdown($item, 0, $level + 1);
+    }
+
     return $md;
 }
 
@@ -631,13 +678,23 @@ function wcp_theme_export_page_to_markdown($page_id) {
     }
 
     foreach (wcp_theme_get_page_headings($page_id) as $heading) {
-        $md .= "## {$heading->post_title}\n\n";
-        foreach (wcp_theme_get_heading_items($heading->ID) as $item) {
-            $md .= wcp_theme_item_to_markdown($item);
-        }
+        $md .= wcp_theme_heading_to_markdown($heading, 2);
     }
 
     return $md;
+}
+
+/**
+ * Export a single heading's own content, items, and subitems to a Markdown
+ * document — the heading-level counterpart to wcp_theme_export_page_to_markdown().
+ */
+function wcp_theme_export_heading_to_markdown($heading_id) {
+    $heading = get_post($heading_id);
+    if (!$heading || $heading->post_type !== 'wcp_heading') {
+        return '';
+    }
+
+    return wcp_theme_heading_to_markdown($heading, 1);
 }
 
 /**
@@ -667,6 +724,32 @@ function wcp_theme_handle_export_page_md() {
     exit;
 }
 add_action('admin_post_wcp_export_page_md', 'wcp_theme_handle_export_page_md');
+
+/**
+ * Serve a single heading's Markdown export as a file download — the
+ * heading-level counterpart to wcp_theme_handle_export_page_md().
+ */
+function wcp_theme_handle_export_heading_md() {
+    $heading_id = isset($_POST['heading_id']) ? (int) $_POST['heading_id'] : 0;
+    $heading    = $heading_id ? get_post($heading_id) : null;
+    if (!$heading || $heading->post_type !== 'wcp_heading') {
+        wp_die(__('Invalid heading.', 'work-copilot-theme'), '', array('response' => 404));
+    }
+    if (!current_user_can('edit_post', $heading_id)) {
+        wp_die(__('You do not have permission to export this section.', 'work-copilot-theme'), '', array('response' => 403));
+    }
+    check_admin_referer('wcp_export_heading_md_' . $heading_id);
+
+    $markdown = wcp_theme_export_heading_to_markdown($heading_id);
+    $filename = sanitize_title($heading->post_title) . '.md';
+
+    nocache_headers();
+    header('Content-Type: text/markdown; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    echo $markdown;
+    exit;
+}
+add_action('admin_post_wcp_export_heading_md', 'wcp_theme_handle_export_heading_md');
 
 // Get breadcrumb trail for a Page
 function wcp_theme_get_page_breadcrumbs($page_id) {

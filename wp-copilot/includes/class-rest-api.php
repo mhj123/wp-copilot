@@ -1278,6 +1278,7 @@ class WCP_REST_API {
         $page_id = (int) $request->get_param('page_id');
         $conversation_id = $request->get_param('conversation_id');
         $context_mode = $request->get_param('context_mode') ?? 'page';
+        $heading_id = (int) $request->get_param('heading_id');
         $selected_pages = $request->get_param('selected_pages') ?? array();
         $model_override  = $request->get_param('model') ?: null;
         $thinking_budget = max( 0, (int) ( $request->get_param('thinking_budget') ?? 0 ) );
@@ -1352,7 +1353,16 @@ class WCP_REST_API {
                 break;
 
             case 'research_find_references':
-                $result = $ai_actions->research_find_references($prompt, $page_id, $conversation_id, $request->get_param('query'));
+                $include_relevance = $request->get_param('include_relevance');
+                $include_summary   = $request->get_param('include_summary');
+                $result = $ai_actions->research_find_references(
+                    $prompt,
+                    $page_id,
+                    $conversation_id,
+                    $request->get_param('query'),
+                    $include_relevance === null ? true : (bool) $include_relevance,
+                    (bool) $include_summary
+                );
                 break;
 
             case 'web_search':
@@ -1372,7 +1382,7 @@ class WCP_REST_API {
                 break;
 
             case 'generate_structure':
-                $result = $ai_actions->generate_structure($prompt, $page_id, $context_mode, $selected_pages, $conversation_id);
+                $result = $ai_actions->generate_structure($prompt, $page_id, $context_mode, $selected_pages, $conversation_id, $heading_id);
                 break;
 
             case 'generate_pages':
@@ -1386,11 +1396,15 @@ class WCP_REST_API {
 
             case 'iterate_items':
                 $item_ids = array_map('intval', (array) ($request->get_param('item_ids') ?: array()));
-                $result = $ai_actions->iterate_items($item_ids, $prompt, $page_id, $context_mode, $selected_pages, $conversation_id);
+                $result = $ai_actions->iterate_items($item_ids, $prompt, $page_id, $context_mode, $selected_pages, $conversation_id, $heading_id);
                 break;
 
             case 'spot_gaps':
-                $result = $ai_actions->spot_gaps($page_id, $prompt, $context_mode, $selected_pages, $conversation_id);
+                $result = $ai_actions->spot_gaps($page_id, $prompt, $context_mode, $selected_pages, $conversation_id, $heading_id);
+                break;
+
+            case 'brainstorm_subitems':
+                $result = $ai_actions->brainstorm_subitems($prompt, $page_id, $context_mode, $selected_pages, $conversation_id, $heading_id);
                 break;
 
             case 'taxonomy_outline':
