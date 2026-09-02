@@ -48,6 +48,26 @@ across everything.
 
 ---
 
+## How it works
+
+<img width="920" alt="Four-step diagram: structure, atomic notes, multi-association, and AI over context — described below" src="docs/img/how-it-works.svg">
+
+1. **Set up the structure.** Build a tree of Pages, sub-pages, and Headings — this is
+   the container, not the content. It defines navigation *and* the boundary the AI
+   reasons within when you scope an action to it.
+2. **Create atomic notes inside it.** Each note is one idea — a task, a note, a
+   learning, a spec — filed under a Heading or Page.
+3. **Associate notes across the structure as needed.** A note isn't locked to where you
+   first put it. Attach the same note to a second Heading or Page and it appears in
+   both — one real record, not a copy, so an edit in one place shows up everywhere it's
+   attached.
+4. **Run AI actions over whatever context you scope to.** Point the AI at the current
+   page, a heading, or a hand-picked set of pages, and ask it to chat over that
+   context, or to generate/suggest structure and items. It reads the scope you gave it
+   and returns proposals — nothing is created, edited, or filed until you accept it.
+
+---
+
 ## AI features
 
 The AI is opt-in, explicit, and reviewable throughout:
