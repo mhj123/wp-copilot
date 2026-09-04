@@ -89,27 +89,28 @@ Full detail: `wp-copilot/AI-SETUP-GUIDE.md`.
 ### Add a note
 
 On the page's front end, use the inline create form: title, content, item
-type (Task / Info / Learning), priority. Or go to **WP Copilot → Dashboard**
-and use the quick-create form there.
+type (Task / Note / Learning / Spec / Reference), priority. Or go to
+**WP Copilot → Dashboard** and use the quick-create form there.
 
 ### Find your way around
 
 - **Sidebar** — every page, hierarchically
-- **Page view** — every item filed under that page
+- **Page view** — every item filed under that page, organised under Headings
 - **Filters** — by type and priority
+
+For a longer, screenshotted walkthrough — creating a Page, adding structure,
+and handing the AI a brief to generate one — see **Features at a glance**
+and **Getting started** in `README.md`.
 
 ---
 
 ## What's here
 
-- **Structure** — Pages are contexts (projects, themes, people). Headings add
-  sub-structure under a page. Items are atomic notes — a single task, idea, or
-  observation — reusable across as many pages as you like, as the same note,
-  not a copy.
-- **AI, on request** — tag suggestions, page-scoped chat, generation prompts
-  that produce proposed items. AI never writes to your data on its own: every
-  output is a candidate you accept or dismiss, and every AI action is logged
-  under **WP Copilot → AI Audit Log**.
+The short version: Pages and Headings are structure, Items are atomic
+notes — reusable across as many Pages as you like, as the same note, not a
+copy — and AI only ever proposes, never writes on its own. For the full
+picture (with screenshots), see **Core concepts** and **AI features** in
+`README.md`.
 
 ---
 
@@ -120,7 +121,6 @@ work-copilot/
 ├── wp-copilot/              # Plugin — install this
 ├── work-copilot-theme/      # Theme — install this
 ├── README.md                # Project overview
-├── ENABLE-AI-SUMMARY.md     # What AI-enabling changed
 └── QUICK-START.md           # This file
 ```
 

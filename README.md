@@ -184,7 +184,8 @@ input context, and output, whether you accept or dismiss the result.
    features).
 4. Start creating Pages and Items — no further setup is required.
 
-See `ENABLE-AI-SUMMARY.md` and `QUICK-START.md` for further setup detail.
+See `QUICK-START.md` for a full walkthrough, or `wp-copilot/AI-SETUP-GUIDE.md` for
+AI-specific setup detail.
 
 **Single-admin installs only.** WP Copilot is designed and tested for one
 Administrator on a dedicated install — not a firm technical restriction, but the
