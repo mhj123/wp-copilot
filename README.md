@@ -103,30 +103,43 @@ The AI is opt-in, explicit, and reviewable throughout:
 
 
 
-## Screenshots
-<img width="1435" height="621" alt="image" src="https://github.com/user-attachments/assets/122e8003-b745-4853-9a5f-5bc64b25af45" />
+## In practice
 
-**AI Assistant** — a chat panel scoped to whatever Page you're on (shown here:
-*Budgeting*), with a row of explicit action chips instead of one open-ended prompt box.
-Nothing the AI does is applied automatically — every action returns a proposal (like
-the "Monthly Budget Review — Session Protocol" heading shown here awaiting
-**Create selected** / **Dismiss**) that you review before it touches your data.
+The screenshots below are all from one worked example — a product manager's Checkout
+Revamp project — so you can see how structure, atomic items, and AI actions connect in
+a single real page rather than four disconnected features.
 
+<img width="1440" alt="A Heading called Requirements, nested under the Checkout Revamp page, showing an item with four subitems and another item carrying a second context pill from a different page" src="docs/img/screenshot-structure-items.jpg" />
 
-<img width="1440" height="557" alt="image" src="https://github.com/user-attachments/assets/60aa7019-60b7-46fd-a86a-2a00de58aa86" />
-
-**Structure view** — Pages and Headings render as a nested hierarchy. This isn't a
-separate menu you maintain: creating, renaming, or reparenting a Page or Heading
-automatically syncs a hidden taxonomy behind it, so the same tree drives navigation,
-AI context-scoping, and filtering everywhere else in the plugin — no manual tagging.
+**Structure down to the atom** — a Heading ("Requirements", nested under the *Checkout
+Revamp* Page) with its own `[ai]` / `[export]` actions, a `spec` item broken into four
+**subitems** so each requirement can move through review independently, and a note
+carrying a second context pill (*Competitive Intel Backlog*) — the same note, filed
+under a completely different Page, not a copy.
 
 
-<img width="1327" height="614" alt="image" src="https://github.com/user-attachments/assets/1f76bb25-26da-4182-9241-f6f5bcfc40e4" />
+<img width="1440" alt="The AI Assistant chat panel answering a question about launch risk, grounded in the specific items on the page" src="docs/img/screenshot-ai-chat.jpg" />
 
-**Recent activity, organised by topic** — items added or edited in the last 7 days,
-grouped by the Page or Heading they belong to rather than dumped into one flat feed.
-Each item carries lightweight taxonomy (type, priority, pinned) shown inline, so what
-changed and where is visible at a glance without opening anything.
+**Chat, grounded in the page** — asking "what's the biggest risk to hitting our Q3
+launch date?" returns an answer reasoned from what's actually on this page — the Apple
+Pay SDK dependency, the QA capacity crunch, the still-open legal question — not a
+generic answer. Any reply can be saved as an item with one click.
+
+
+<img width="1440" alt="A Spot gaps proposal showing new spec and task items suggested from open questions elsewhere on the page" src="docs/img/screenshot-ai-suggest.jpg" />
+
+**Suggest what's missing, not just more of everything** — "Spot gaps" reviews every
+item already on the page and proposes only what's genuinely absent: a spec for
+"definition of done," and two tasks resolving points raised as open questions
+elsewhere on the same page. Each suggestion is reviewed and selectively accepted, never
+applied automatically.
+
+
+<img width="1440" alt="An Improve phrasing proposal showing the original item title and a rewritten version awaiting Accept or Dismiss" src="docs/img/screenshot-ai-improve.jpg" />
+
+**Improve an item, reviewed as a diff** — "Improve phrasing" rewrites a single item's
+title and content and shows the result as an explicit before/after. The original stays
+untouched until you accept it.
 
 Chips available in the chat panel:
 
