@@ -103,11 +103,15 @@ The AI is opt-in, explicit, and reviewable throughout:
 
 
 
-## In practice
+## Features at a glance
 
 The screenshots below are all from one worked example — a product manager's Checkout
 Revamp project — so you can see how structure, atomic items, and AI actions connect in
 a single real page rather than four disconnected features.
+
+Checkout Revamp is itself a **sub-page** nested under a top-level *Projects* Page —
+that nesting is real structure, not a label: it scopes navigation, AI context, and the
+Heading below to just this project.
 
 <img width="1440" alt="A Heading called Requirements, nested under the Checkout Revamp page, showing an item with four subitems and another item carrying a second context pill from a different page" src="docs/img/screenshot-structure-items.jpg" />
 
@@ -189,6 +193,34 @@ standard, site-wide content capabilities rather than per-plugin permissions, so
 running it on a site with other user accounts is unsupported: those accounts may be
 able to reach WP Copilot's functions and content in ways the plugin doesn't attempt
 to isolate. See `wp-copilot/readme.txt` → "Requirements & Supported Setup" for detail.
+
+---
+
+## Getting started
+
+What the first few minutes look like on a brand-new Page — no existing content, and
+the first two steps need no AI at all.
+
+<img width="1440" alt="A brand-new, empty Page showing only the add item, new heading, new goal, new subpage, and dynamic list controls" src="docs/img/screenshot-start-empty-page.jpg" />
+
+**1. Create a Page** — a new Page starts empty on purpose. "+ add item," "+ new
+heading," "+ new goal," "+ new subpage" are the only controls — nothing to configure
+before you can use it.
+
+
+<img width="1440" alt="Adding a Heading called Key Terms and typing a new item into the quick-add form beneath it" src="docs/img/screenshot-start-add-item.jpg" />
+
+**2. Structure it as you go** — add a Heading ("Key Terms"), then an item under it,
+through the same lightweight quick-add form everywhere in WP Copilot. There's no
+separate "new item" screen to learn, and no required fields beyond a title.
+
+
+<img width="1440" alt="A Generate structure proposal turning a one-sentence brief into three new Headings, each with real starter tasks, awaiting review" src="docs/img/screenshot-start-generate-structure.jpg" />
+
+**3. Or hand the AI a brief** — "Generate structure" turned one sentence ("we're
+deciding whether to renew our vendor contract...") into three Headings with sensible
+starter tasks under each. Every item is reviewed and selectively created — nothing
+here is applied blind.
 
 ---
 
