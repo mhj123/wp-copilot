@@ -11,6 +11,15 @@ if (!defined('ABSPATH')) {
 
 class WCP_Conversations_Manager {
 
+    /**
+     * How many past messages an AI call sees (≈ half this many exchanges).
+     * Defined once here because it must be applied in two places that have to
+     * agree: the DB fetch in every AI action, and the slice in
+     * WCP_AI_Client::request_with_conversation(). Raising it costs input
+     * tokens on every AI call — these messages are long.
+     */
+    const AI_HISTORY_LIMIT = 30;
+
     private static $instance = null;
 
     public static function instance() {
@@ -144,12 +153,18 @@ class WCP_Conversations_Manager {
     }
 
     /**
-     * Get conversation messages
+     * Get conversation messages — the most RECENT $limit, in chronological order.
+     *
+     * This selects newest-first and reverses, rather than `ORDER BY timestamp ASC
+     * LIMIT n`. The ASC form returns the OLDEST n messages, which meant every AI
+     * call was permanently pinned to the opening messages of the conversation and
+     * could never see a recent turn once the thread grew past the limit.
+     * $offset therefore pages backwards into older history.
      *
      * @param string $conversation_id The conversation ID
      * @param int $limit Maximum number of messages to return
-     * @param int $offset Offset for pagination
-     * @return array Array of message objects
+     * @param int $offset Offset for pagination, counting back from the newest
+     * @return array Array of message objects, oldest first
      */
     public function get_messages($conversation_id, $limit = 50, $offset = 0) {
         global $wpdb;
@@ -159,12 +174,15 @@ class WCP_Conversations_Manager {
         $messages = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM $table
             WHERE conversation_id = %s
-            ORDER BY timestamp ASC
+            ORDER BY timestamp DESC, message_id DESC
             LIMIT %d OFFSET %d",
             $conversation_id,
             $limit,
             $offset
         ), ARRAY_A);
+
+        // Restore chronological order for callers (UI render + AI history).
+        $messages = array_reverse($messages);
 
         // Decode metadata for each message
         foreach ($messages as &$message) {

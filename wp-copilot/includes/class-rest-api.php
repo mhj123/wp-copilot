@@ -20,6 +20,21 @@ class WCP_REST_API {
 
     private function __construct() {
         add_action('rest_api_init', array($this, 'register_routes'));
+        add_filter('rest_pre_serve_request', array($this, 'disable_caching'), 10, 4);
+    }
+
+    /**
+     * Every route in this namespace is per-user and stateful — conversation
+     * state, per-user items, AI responses. None of it is ever safe for a
+     * shared cache to hold or replay, so say so explicitly rather than relying
+     * on intermediaries inferring it. Defensive hygiene, not a bug fix.
+     */
+    public function disable_caching($served, $result, $request, $server) {
+        if (strpos($request->get_route(), '/work-copilot/v1') === 0) {
+            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+            header('Pragma: no-cache');
+        }
+        return $served;
     }
 
     public function register_routes() {

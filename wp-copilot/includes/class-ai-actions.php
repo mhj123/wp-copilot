@@ -67,7 +67,7 @@ class WCP_AI_Actions {
 
         // Get conversation history
         $conversations_manager = WCP_Conversations_Manager::instance();
-        $messages = $conversations_manager->get_messages($conversation_id, 10);
+        $messages = $conversations_manager->get_messages($conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT);
 
         // Format conversation history for AI
         $conversation_history = array();
@@ -169,7 +169,7 @@ class WCP_AI_Actions {
         $conversation_history = array();
         if ($conversation_id) {
             $conversations_manager = WCP_Conversations_Manager::instance();
-            $messages = $conversations_manager->get_messages($conversation_id, 10);
+            $messages = $conversations_manager->get_messages($conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT);
 
             foreach ($messages as $msg) {
                 $conversation_history[] = array(
@@ -394,7 +394,7 @@ class WCP_AI_Actions {
         $history = array();
         if ($conversation_id) {
             $cm = WCP_Conversations_Manager::instance();
-            foreach ($cm->get_messages($conversation_id, 10) as $msg) {
+            foreach ($cm->get_messages($conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT) as $msg) {
                 $history[] = array('role' => $msg['role'], 'content' => $msg['content']);
             }
         }
@@ -1101,7 +1101,7 @@ class WCP_AI_Actions {
         $conversation_history = array();
         if ($conversation_id) {
             $conversations_manager = WCP_Conversations_Manager::instance();
-            $messages = $conversations_manager->get_messages($conversation_id, 10);
+            $messages = $conversations_manager->get_messages($conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT);
             foreach ($messages as $msg) {
                 $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
             }
@@ -1168,7 +1168,7 @@ class WCP_AI_Actions {
         $conversation_history = array();
         if ($conversation_id) {
             $cm = WCP_Conversations_Manager::instance();
-            foreach ($cm->get_messages($conversation_id, 10) as $msg) {
+            foreach ($cm->get_messages($conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT) as $msg) {
                 $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
             }
         }
@@ -1259,7 +1259,7 @@ class WCP_AI_Actions {
         $conversation_history = array();
         if ($conversation_id) {
             $cm = WCP_Conversations_Manager::instance();
-            foreach ($cm->get_messages($conversation_id, 10) as $msg) {
+            foreach ($cm->get_messages($conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT) as $msg) {
                 $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
             }
         }
@@ -1348,7 +1348,7 @@ class WCP_AI_Actions {
         $conversation_history = array();
         if ($conversation_id) {
             $cm = WCP_Conversations_Manager::instance();
-            foreach ($cm->get_messages($conversation_id, 10) as $msg) {
+            foreach ($cm->get_messages($conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT) as $msg) {
                 $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
             }
         }
@@ -1564,7 +1564,7 @@ class WCP_AI_Actions {
         $conversation_history = array();
         if ($conversation_id) {
             $conversations_manager = WCP_Conversations_Manager::instance();
-            $messages = $conversations_manager->get_messages($conversation_id, 10);
+            $messages = $conversations_manager->get_messages($conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT);
 
             foreach ($messages as $msg) {
                 $conversation_history[] = array(
@@ -1721,7 +1721,7 @@ class WCP_AI_Actions {
         $conversation_history = array();
         if ($conversation_id) {
             $conversations_manager = WCP_Conversations_Manager::instance();
-            $messages = $conversations_manager->get_messages($conversation_id, 10);
+            $messages = $conversations_manager->get_messages($conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT);
             foreach ($messages as $msg) {
                 $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
             }
@@ -1866,7 +1866,7 @@ class WCP_AI_Actions {
         $conversation_history = array();
         if ($conversation_id) {
             $conversations_manager = WCP_Conversations_Manager::instance();
-            $messages = $conversations_manager->get_messages($conversation_id, 10);
+            $messages = $conversations_manager->get_messages($conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT);
             foreach ($messages as $msg) {
                 $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
             }
@@ -2051,7 +2051,7 @@ class WCP_AI_Actions {
         $conversation_history = array();
         if ($conversation_id) {
             $conversations_manager = WCP_Conversations_Manager::instance();
-            $messages = $conversations_manager->get_messages($conversation_id, 10);
+            $messages = $conversations_manager->get_messages($conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT);
             foreach ($messages as $msg) {
                 $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
             }
@@ -2209,7 +2209,7 @@ class WCP_AI_Actions {
         $conversation_history = array();
         if ($conversation_id) {
             $conversations_manager = WCP_Conversations_Manager::instance();
-            $messages = $conversations_manager->get_messages($conversation_id, 10);
+            $messages = $conversations_manager->get_messages($conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT);
             foreach ($messages as $msg) {
                 $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
             }
@@ -2356,7 +2356,7 @@ class WCP_AI_Actions {
         $conversation_history = array();
         if ($conversation_id) {
             $conversations_manager = WCP_Conversations_Manager::instance();
-            $messages = $conversations_manager->get_messages($conversation_id, 10);
+            $messages = $conversations_manager->get_messages($conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT);
             foreach ($messages as $msg) {
                 $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
             }
@@ -2514,7 +2514,7 @@ class WCP_AI_Actions {
         $conversation_history = array();
         if ($conversation_id) {
             $cm = WCP_Conversations_Manager::instance();
-            foreach ($cm->get_messages($conversation_id, 10) as $msg) {
+            foreach ($cm->get_messages($conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT) as $msg) {
                 $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
             }
         }
@@ -2859,7 +2859,7 @@ class WCP_AI_Actions {
         $conversation_history = array();
         if ($conversation_id) {
             $cm = WCP_Conversations_Manager::instance();
-            foreach ($cm->get_messages($conversation_id, 10) as $msg) {
+            foreach ($cm->get_messages($conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT) as $msg) {
                 $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
             }
         }
@@ -3049,7 +3049,7 @@ class WCP_AI_Actions {
         $conversation_history = array();
         if ($conversation_id) {
             $conversations_manager = WCP_Conversations_Manager::instance();
-            $messages = $conversations_manager->get_messages($conversation_id, 10);
+            $messages = $conversations_manager->get_messages($conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT);
             foreach ($messages as $msg) {
                 $conversation_history[] = array('role' => $msg['role'], 'content' => $msg['content']);
             }
@@ -4399,7 +4399,7 @@ class WCP_AI_Actions {
         $conversation_history = array();
         if ( $conversation_id ) {
             $mgr = WCP_Conversations_Manager::instance();
-            foreach ( $mgr->get_messages( $conversation_id, 10 ) as $msg ) {
+            foreach ( $mgr->get_messages( $conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT ) as $msg ) {
                 $conversation_history[] = array( 'role' => $msg['role'], 'content' => $msg['content'] );
             }
         }
@@ -4438,7 +4438,7 @@ class WCP_AI_Actions {
         $conversation_history = array();
         if ( $conversation_id ) {
             $mgr = WCP_Conversations_Manager::instance();
-            foreach ( $mgr->get_messages( $conversation_id, 10 ) as $msg ) {
+            foreach ( $mgr->get_messages( $conversation_id, WCP_Conversations_Manager::AI_HISTORY_LIMIT ) as $msg ) {
                 $conversation_history[] = array( 'role' => $msg['role'], 'content' => $msg['content'] );
             }
         }

@@ -310,9 +310,10 @@ class WCP_AI_Client {
         // Build messages array
         $messages = array();
 
-        // Include conversation history (limit to last 10 turns to avoid token limits)
+        // Include conversation history, capped to bound token usage. Must match
+        // the DB fetch limit used by callers, hence the shared constant.
         // Filter to only include 'user' and 'assistant' roles (Claude API doesn't accept 'system' in messages)
-        $history_limit = 10;
+        $history_limit = WCP_Conversations_Manager::AI_HISTORY_LIMIT;
         $recent_history = array_slice($conversation_history, -$history_limit);
 
         foreach ($recent_history as $msg) {
