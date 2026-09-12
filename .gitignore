@@ -43,6 +43,12 @@ wp-copilot/debug-log.txt
 *.temp
 .claude/
 
+# AI coding-assistant instructions — local tooling config, not product docs.
+# Both spellings: gitignore matching is case-sensitive on Linux.
+claude.md
+CLAUDE.md
+AGENTS.md
+
 # LibreOffice/OpenOffice lock files
 .~lock.*#
 
