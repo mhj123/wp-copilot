@@ -73,9 +73,18 @@ API key. AI features are opt-in.
 1. **WP Copilot → Settings**
 2. Check **"Enable AI Features"**
 3. Paste your API key, **Save Settings**
-4. **Test Connection** to verify
+4. Pick a model — Sonnet is the balanced default; Opus for the most capable,
+   Haiku for the fastest and cheapest
+5. **Test Connection** to verify
 
-Full detail: `wp-copilot/AI-SETUP-GUIDE.md`.
+### If it doesn't work
+
+- **"AI is not configured"** — make sure you clicked **Save Settings** after
+  pasting the key, then use **Test Connection**.
+- **"Connection failed"** — check the key is correct, that your Anthropic
+  account has credits, and that your server can make outbound HTTPS requests.
+- **"Could not parse AI response"** — open **WP Copilot → AI Audit Log** to see
+  the raw request and response for that call.
 
 ---
 
@@ -130,7 +139,6 @@ work-copilot/
 
 - **Project overview:** `README.md`
 - **Plugin details, external services, requirements:** `wp-copilot/readme.txt`
-- **AI setup:** `wp-copilot/AI-SETUP-GUIDE.md`
 - **In WordPress:** WP Copilot → Settings / Dashboard / AI Audit Log
 
 ---

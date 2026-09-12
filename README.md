@@ -184,8 +184,7 @@ input context, and output, whether you accept or dismiss the result.
    features).
 4. Start creating Pages and Items — no further setup is required.
 
-See `QUICK-START.md` for a full walkthrough, or `wp-copilot/AI-SETUP-GUIDE.md` for
-AI-specific setup detail.
+See `QUICK-START.md` for a full walkthrough, including AI setup and troubleshooting.
 
 **Single-admin installs only.** WP Copilot is designed and tested for one
 Administrator on a dedicated install — not a firm technical restriction, but the
@@ -231,6 +230,9 @@ here is applied blind.
 - The AI is only ever called when you explicitly invoke it — nothing is sent on a
   schedule or in the background.
 - AI never mutates your data — it proposes; you decide.
+- Every AI call is logged locally, with its prompt and raw response, under
+  **WP Copilot → AI Audit Log** — so you can always see exactly what was sent and
+  what came back.
 - When you use the AI assistant, the text you type plus a bounded "context pack"
   (titles/content of the Pages, Headings, and Items you're working on) is sent to
   Anthropic's Claude API. Two further integrations are optional and off by default:

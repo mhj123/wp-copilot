@@ -60,5 +60,4 @@ You should assume:
 - The user is technical and values transparency
 - The product will evolve toward RAG and MCP later
 
-Follow the PRD exactly.
 Do not extend scope unless explicitly instructed.
