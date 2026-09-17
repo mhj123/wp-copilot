@@ -225,16 +225,13 @@ class WCP_AI_Actions {
     }
 
     /**
-     * Research chip guard: Build 0 owns the feature flag. Chips must not infer
-     * researcher mode from page title/template shape.
+     * Page-scoped research chip guard. WCP_Researcher_Mode owns the feature flag;
+     * chips must not infer researcher mode from page title/template shape.
      */
     private function require_researcher_mode($page_id) {
-        $enabled = class_exists('WCP_Researcher_Mode')
-            ? (bool) get_option(WCP_Researcher_Mode::OPTION_ACTIVE, false)
-            : (bool) get_option('wcp_researcher_mode_active', false);
-
-        if (!$enabled) {
-            return new WP_Error('researcher_mode_off', 'Researcher mode is off. Enable Researcher mode before using research chips.', array('status' => 403));
+        $active = WCP_Researcher_Mode::require_active();
+        if (is_wp_error($active)) {
+            return $active;
         }
 
         if ($page_id <= 0) {
@@ -881,8 +878,9 @@ class WCP_AI_Actions {
      *   inferred from the item.
      */
     private function guard_find_references_for_item($item_id, $page_id) {
-        if (!class_exists('WCP_Researcher_Mode') || !WCP_Researcher_Mode::is_active()) {
-            return new WP_Error('researcher_mode_off', 'Researcher mode is off. Enable it in Settings first.', array('status' => 403));
+        $active = WCP_Researcher_Mode::require_active();
+        if (is_wp_error($active)) {
+            return $active;
         }
         $item_id = (int) $item_id;
         $item = get_post($item_id);
@@ -979,8 +977,9 @@ class WCP_AI_Actions {
      * Subtopics has produced subitems worth formalising).
      */
     public function convert_item_to_heading($item_id, $page_id) {
-        if (!class_exists('WCP_Researcher_Mode') || !WCP_Researcher_Mode::is_active()) {
-            return new WP_Error('researcher_mode_off', 'Researcher mode is off. Enable it in Settings first.', array('status' => 403));
+        $active = WCP_Researcher_Mode::require_active();
+        if (is_wp_error($active)) {
+            return $active;
         }
         $item_id = (int) $item_id;
         $item = get_post($item_id);

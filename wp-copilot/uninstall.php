@@ -45,9 +45,12 @@ $options = array(
     'wcp_raindrop_last_import',
     'wcp_raindrop_selected_collections',
     'wcp_researcher_library_page_id',
+    // Retired: no longer written (the template version constants were never read
+    // back, so they were removed). Kept here to clean up installs that still
+    // carry the rows from before that change.
     'wcp_researcher_project_template_version',
-    'wcp_researcher_research_root_id',
     'wcp_researcher_template_version',
+    'wcp_researcher_research_root_id',
     'wcp_researcher_mode_active',
     'wcp_saved_prompts',
     'wcp_spec_terms_created',

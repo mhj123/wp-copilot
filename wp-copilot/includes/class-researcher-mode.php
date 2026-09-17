@@ -2,10 +2,16 @@
 /**
  * Researcher Mode provisioning.
  *
- * Build 0 plumbing only: creates/adopts a native Library page and stores a
- * page-template definition on it so child paper pages inherit evidence headings.
- * No research AI actions are wired here; future actions should only check the
- * persistent wcp_researcher_mode_active flag before surfacing/running.
+ * Creates/adopts two native pages and stores a page-template definition on each,
+ * so their children inherit the right structure: a Library page (paper template —
+ * child paper pages get Summary/Findings/Notes headings) and a Research root page
+ * (project template — a References heading plus Description/Objectives/Context
+ * body sections).
+ *
+ * This class owns provisioning and the wcp_researcher_mode_active flag, nothing
+ * more. The research AI actions themselves live in WCP_AI_Actions
+ * (class-ai-actions.php) and gate on require_active() / require_researcher_mode()
+ * before running. Disabling deletes nothing — it only flips the flag.
  */
 
 if (!defined('ABSPATH')) {
@@ -17,10 +23,6 @@ class WCP_Researcher_Mode {
     const OPTION_ACTIVE               = 'wcp_researcher_mode_active';
     const OPTION_LIBRARY_ID           = 'wcp_researcher_library_page_id';
     const OPTION_RESEARCH_ROOT_ID     = 'wcp_researcher_research_root_id';
-    const OPTION_TEMPLATE_VER         = 'wcp_researcher_template_version';
-    const OPTION_PROJECT_TEMPLATE_VER = 'wcp_researcher_project_template_version';
-    const TEMPLATE_VERSION            = '2026-08-build0.1';
-    const PROJECT_TEMPLATE_VERSION    = '2026-08-build0.8';
     const LIBRARY_TITLE               = 'Library';
     const RESEARCH_ROOT_TITLE         = 'Research';
 
@@ -38,7 +40,7 @@ class WCP_Researcher_Mode {
 
     /**
      * Project-page heading contract for pages created under the Research root.
-     * Keep this as the single source of truth for Build 0.5. Description/
+     * Keep this as the single source of truth. Description/
      * Objectives/Context deliberately live as content_blocks (page body
      * sections) in project_template() instead, not as real wcp_heading
      * posts — they're project framing prose, not a growing list that needs
@@ -70,6 +72,24 @@ class WCP_Researcher_Mode {
 
     public static function is_active() {
         return (bool) get_option(self::OPTION_ACTIVE, false);
+    }
+
+    /**
+     * The single researcher-mode gate. Every research action must fail closed
+     * through this before doing anything — callers add their own object/capability
+     * checks on top, which this deliberately does not attempt to cover.
+     *
+     * @return true|WP_Error
+     */
+    public static function require_active() {
+        if (!self::is_active()) {
+            return new WP_Error(
+                'researcher_mode_off',
+                __('Researcher mode is off. Enable it in Settings first.', 'work-copilot'),
+                array('status' => 403)
+            );
+        }
+        return true;
     }
 
     public static function evidence_headings() {
@@ -111,8 +131,6 @@ class WCP_Researcher_Mode {
 
         update_option(self::OPTION_LIBRARY_ID, (int) $library_id, false);
         update_option(self::OPTION_RESEARCH_ROOT_ID, (int) $research_root_id, false);
-        update_option(self::OPTION_TEMPLATE_VER, self::TEMPLATE_VERSION, false);
-        update_option(self::OPTION_PROJECT_TEMPLATE_VER, self::PROJECT_TEMPLATE_VERSION, false);
 
         return array(
             'library_id'            => (int) $library_id,

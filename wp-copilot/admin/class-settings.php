@@ -526,7 +526,7 @@ class WCP_Settings {
     }
 
     public function render_researcher_section() {
-        echo '<p>' . __('Provision shared research scaffolds using native pages and the existing page-template system: Library for paper pages, Research for project pages. Disabling Researcher mode deletes nothing; it only turns off the feature flag future research actions will check.', 'work-copilot') . '</p>';
+        echo '<p>' . __('Provision shared research scaffolds using native pages and the existing page-template system: Library for paper pages, Research for project pages. Disabling Researcher mode deletes nothing; it only turns off the flag the research actions check before running.', 'work-copilot') . '</p>';
     }
 
     public function render_researcher_mode_field() {
@@ -540,7 +540,7 @@ class WCP_Settings {
             <?php _e('Enable Researcher mode and provision the Library/Research scaffolds', 'work-copilot'); ?>
         </label>
         <p class="description">
-            <?php _e('On enable, WP Copilot creates or adopts native “Library” and “Research” pages. Library carries the paper template; Research carries the project template: Context, Objectives, Hypotheses, Findings, Gaps. Re-enabling is idempotent.', 'work-copilot'); ?>
+            <?php _e('On enable, WP Copilot creates or adopts native “Library” and “Research” pages. Library carries the paper template, so each paper page under it gets Summary, Findings and Notes headings. Research carries the project template: a References heading, plus Description, Objectives and Context sections in the page body. Re-enabling is idempotent.', 'work-copilot'); ?>
         </p>
         <?php if ($library_id) : ?>
             <p class="description">

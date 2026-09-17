@@ -1482,13 +1482,6 @@ class WCP_REST_API {
      * Supports both single proposals and batch decisions
      */
     public function decide_proposals($request) {
-        // Debug: Write to file to confirm this code is running
-        file_put_contents(
-            WCP_PLUGIN_DIR . 'debug-log.txt',
-            date('Y-m-d H:i:s') . " - decide_proposals v1.2.1 called\n",
-            FILE_APPEND
-        );
-
         $proposal_id = $request->get_param('proposal_id');
         $batch_id = $request->get_param('batch_id');
         $decision = $request->get_param('decision'); // 'accept' or 'dismiss'
@@ -1505,19 +1498,9 @@ class WCP_REST_API {
             $selected_proposal_ids = array();
         }
 
-        // Debug: Always include received params in response
-        $received_params = array(
-            'api_version' => '1.2.1',
-            'proposal_id' => $proposal_id,
-            'batch_id' => $batch_id,
-            'decision' => $decision,
-            'selected_proposal_ids' => $selected_proposal_ids,
-            'has_batch_id' => !empty($batch_id),
-        );
-
         // Handle batch decisions (multiple proposals)
         if ($batch_id) {
-            return $this->handle_batch_decision($batch_id, $decision, $selected_proposal_ids, $received_params);
+            return $this->handle_batch_decision($batch_id, $decision, $selected_proposal_ids);
         }
 
         // Handle single proposal (legacy support)
@@ -1525,7 +1508,6 @@ class WCP_REST_API {
             return rest_ensure_response(array(
                 'success' => false,
                 'message' => 'Missing required parameters (proposal_id or batch_id, decision)',
-                'debug' => $received_params,
             ));
         }
 
@@ -1538,7 +1520,6 @@ class WCP_REST_API {
                 return rest_ensure_response(array(
                     'success' => false,
                     'message' => $result->get_error_message(),
-                    'debug' => $received_params,
                 ));
             }
 
@@ -1548,7 +1529,6 @@ class WCP_REST_API {
                 'created_posts' => $result['created_posts'] ?? array(),
                 'updated_posts' => $result['updated_posts'] ?? array(),
                 'message' => $result['message'],
-                'debug' => array_merge($received_params, array('result_debug' => $result['debug'] ?? null)),
             ));
         } else if ($decision === 'dismiss') {
             // Just delete the transient
@@ -1558,13 +1538,11 @@ class WCP_REST_API {
                 'success' => true,
                 'decision' => 'dismissed',
                 'message' => 'Proposal dismissed',
-                'debug' => $received_params,
             ));
         } else {
             return rest_ensure_response(array(
                 'success' => false,
                 'message' => 'Invalid decision. Must be "accept" or "dismiss"',
-                'debug' => $received_params,
             ));
         }
     }
@@ -1700,15 +1678,16 @@ class WCP_REST_API {
     /**
      * Handle batch decision for multiple proposals
      */
-    private function handle_batch_decision($batch_id, $decision, $selected_proposal_ids, $received_params = array()) {
+    private function handle_batch_decision($batch_id, $decision, $selected_proposal_ids) {
         // Get batch info
         $batch = get_transient('wcp_batch_' . $batch_id);
 
         if (!$batch) {
+            // Proposal batches are transient-backed with a 1-hour TTL, so the
+            // usual cause here is a review panel left open too long.
             return rest_ensure_response(array(
                 'success' => false,
                 'message' => 'Batch not found or expired',
-                'debug' => array_merge($received_params, array('batch_id_searched' => 'wcp_batch_' . $batch_id)),
             ));
         }
 
@@ -1728,7 +1707,6 @@ class WCP_REST_API {
                 'success' => true,
                 'decision' => 'dismissed',
                 'message' => 'All proposals dismissed',
-                'debug' => $received_params,
             ));
         }
 
@@ -1739,7 +1717,6 @@ class WCP_REST_API {
             }
 
             $errors = array();
-            $proposal_debug = array();
 
             // Accept selected proposals, dismiss unselected
             foreach ($all_proposal_ids as $pid) {
@@ -1757,10 +1734,6 @@ class WCP_REST_API {
                         }
                         if (!empty($result['updated_posts'])) {
                             $updated_posts = array_merge($updated_posts, $result['updated_posts']);
-                        }
-                        // Collect debug info from each proposal
-                        if (isset($result['debug'])) {
-                            $proposal_debug[] = $result['debug'];
                         }
                     }
                 } else {
@@ -1782,6 +1755,13 @@ class WCP_REST_API {
             } else {
                 $message = $created_count . ' item' . ($created_count !== 1 ? 's' : '') . ' created';
             }
+            // Per-proposal failures were previously only visible inside a debug
+            // payload, so a partly-failed batch reported plain success. Surface
+            // them: the count goes in the message, the detail in the response.
+            if (!empty($errors)) {
+                $message .= ', ' . count($errors) . ' failed';
+            }
+
             $response = array(
                 'success' => true,
                 'decision' => 'accepted',
@@ -1790,17 +1770,9 @@ class WCP_REST_API {
                 'message' => $message,
             );
 
-            // Always include debug info for troubleshooting
-            $response['debug'] = array(
-                'api_version' => '1.2.1',
-                'received_params' => $received_params,
-                'batch_proposal_count' => count($all_proposal_ids),
-                'selected_count' => count($selected_proposal_ids),
-                'selected_ids' => $selected_proposal_ids,
-                'all_ids' => $all_proposal_ids,
-                'errors' => $errors,
-                'proposal_results' => $proposal_debug,
-            );
+            if (!empty($errors)) {
+                $response['errors'] = $errors;
+            }
 
             return rest_ensure_response($response);
         }
@@ -2958,8 +2930,12 @@ class WCP_REST_API {
                 ));
 
             case 'suggest_subtopics':
-                if ( ! class_exists('WCP_Researcher_Mode') || ! WCP_Researcher_Mode::is_active() ) {
-                    return new WP_Error( 'researcher_mode_off', 'Researcher mode is off. Enable it in Settings first.', array('status' => 403) );
+                // Kept at this layer: unlike its siblings, this action is handled
+                // inline here rather than delegated to WCP_AI_Actions, so this is
+                // its only researcher-mode gate.
+                $sst_active = WCP_Researcher_Mode::require_active();
+                if ( is_wp_error( $sst_active ) ) {
+                    return $sst_active;
                 }
                 $sys  = "Generate 3–6 concrete research subtopics or sub-questions worth investigating for this item. "
                       . "Each should have:\n"
@@ -2973,6 +2949,17 @@ class WCP_REST_API {
                 if ( is_wp_error($subtopics) || ! is_array($subtopics) ) {
                     return new WP_Error('parse_error', 'Could not parse subtopics', array('status' => 500));
                 }
+                // Audit trail. This action accepts its results straight into the DB
+                // via /items/create rather than the proposal/batch path, so the log
+                // row is the only record of what the model was asked and returned.
+                $sst_page_id = (int) $request->get_param('page_id');
+                WCP_AI_Logger::instance()->log_action( 'suggest_subtopics', array(
+                    'model'           => $resp['model'],
+                    'prompt'          => $item_text,
+                    'input_context'   => array( 'page_id' => $sst_page_id, 'item_id' => $item_id ),
+                    'output'          => $subtopics,
+                    'context_post_id' => $sst_page_id ?: $item_id,
+                ));
                 return rest_ensure_response(array(
                     'success'   => true,
                     'action'    => 'suggest_subtopics',
@@ -2980,9 +2967,7 @@ class WCP_REST_API {
                 ));
 
             case 'find_references_query_preview':
-                if ( ! class_exists('WCP_Researcher_Mode') || ! WCP_Researcher_Mode::is_active() ) {
-                    return new WP_Error( 'researcher_mode_off', 'Researcher mode is off. Enable it in Settings first.', array('status' => 403) );
-                }
+                // Researcher-mode gate lives in guard_find_references_for_item().
                 $friq_result = WCP_AI_Actions::instance()->find_references_for_item_query_preview( $item_id, (int) $request->get_param('page_id') );
                 if ( is_wp_error( $friq_result ) ) {
                     return $friq_result;
@@ -2990,9 +2975,7 @@ class WCP_REST_API {
                 return rest_ensure_response( array_merge( array('success' => true), $friq_result ) );
 
             case 'find_references_for_item':
-                if ( ! class_exists('WCP_Researcher_Mode') || ! WCP_Researcher_Mode::is_active() ) {
-                    return new WP_Error( 'researcher_mode_off', 'Researcher mode is off. Enable it in Settings first.', array('status' => 403) );
-                }
+                // Researcher-mode gate lives in guard_find_references_for_item().
                 $page_id_param = (int) $request->get_param('page_id');
                 $conversation_id_param = $request->get_param('conversation_id');
                 $fri_result = WCP_AI_Actions::instance()->find_references_for_item( $item_id, $page_id_param, $conversation_id_param, $request->get_param('query') );

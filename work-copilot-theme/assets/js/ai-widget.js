@@ -1351,17 +1351,13 @@
          * Show proposals for approval (supports multiple)
          */
         showProposals: function(proposals) {
-            console.log('showProposals called with:', proposals);
-
             if (!proposals || proposals.length === 0) {
-                console.log('No proposals to show');
                 return;
             }
 
             this.currentProposals = proposals;
             this.proposalMode = 'create';
             const $container = $('.wcp-ai-proposals');
-            console.log('Proposal container found:', $container.length > 0);
             $container.empty();
 
             $('.wcp-ai-approval-title').text('Review AI Suggestions');
@@ -1595,9 +1591,6 @@
          */
         acceptProposals: function() {
             const selectedIds = this.getSelectedProposalIds();
-            console.log('Selected IDs:', selectedIds);
-            console.log('Current batch ID:', this.currentBatchId);
-            console.log('Current proposals:', this.currentProposals);
 
             if (selectedIds.length === 0) {
                 alert(this.proposalMode === 'edit' ? 'Please select at least one edit to apply.' : 'Please select at least one item to create.');
@@ -1622,8 +1615,6 @@
                 data.proposal_id = this.currentProposals[0].proposal_id;
             }
 
-            console.log('Sending data:', data);
-
             $.ajax({
                 url: wcpAiWidgetData.restUrl + '/ai/proposals/decide',
                 method: 'POST',
@@ -1640,11 +1631,6 @@
                         const createdCount = response.created_posts ? response.created_posts.length : 0;
                         const updatedCount = response.updated_posts ? response.updated_posts.length : 0;
                         this.appendMessage('system', response.message || 'Done.');
-
-                        // Log debug info if present
-                        if (response.debug) {
-                            console.log('Debug info:', response.debug);
-                        }
 
                         // Optionally reload page to show new/updated items
                         const totalCount = createdCount + updatedCount;
