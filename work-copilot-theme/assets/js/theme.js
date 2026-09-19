@@ -2167,10 +2167,32 @@ jQuery(document).ready(function($) {
 
     // Apply suggested contexts
     $(document).on('click', '.wcp-item-ai-accept-contexts', function() {
-        var $btn = $(this);
+        var $btn   = $(this);
         var itemId = $btn.data('item-id');
-        var ids = $btn.data('ids').toString().split(',').map(Number).filter(Boolean);
-        updateItem(itemId, { contexts: ids });
+        var $row   = $btn.closest('.wcp-item-row');
+
+        var suggested = ($btn.data('ids') || '').toString().split(',').map(Number).filter(Boolean);
+        var existing  = ($row.data('context-ids') || '').toString().split(',').map(Number).filter(Boolean);
+
+        // /items/{id}/update REPLACES the whole context set, so the suggestion
+        // has to be merged with what's already there. Sending only the suggested
+        // id silently detached the item from every page it was already on.
+        var merged = existing.slice();
+        suggested.forEach(function(id) {
+            if (merged.indexOf(id) === -1) { merged.push(id); }
+        });
+
+        if (!suggested.length) { $btn.closest('.wcp-item-ai-panel').slideUp(120); return; }
+
+        updateItem(itemId, { contexts: merged }).done(function() {
+            // Keep the DOM in step with the server: the context picker preselects
+            // from this attribute and caches its tree after the first open, so
+            // without both of these it keeps showing the pre-Apply state.
+            $row.data('context-ids', merged.join(','));
+            $row.attr('data-context-ids', merged.join(','));
+            $row.find('.wcp-item-context-tree').empty();
+        });
+
         $btn.closest('.wcp-item-ai-panel').slideUp(120);
     });
 
