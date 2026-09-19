@@ -371,11 +371,30 @@ class WCP_Embeddings_Client {
      * Fetch a page of embeddings (vectors only) for chunked similarity search.
      * Using LIMIT/OFFSET keeps peak memory proportional to chunk size, not corpus size.
      */
+    /**
+     * @param string|array|null $post_type One type, a list of types, or null for all.
+     */
     private function get_embeddings_chunk( $post_type, $chunk_size, $offset ) {
         global $wpdb;
         $table = $wpdb->prefix . 'wcp_embeddings';
 
-        if ( $post_type ) {
+        if ( is_array( $post_type ) ) {
+            // Scanning several types at once beats one pass per type: the query
+            // embedding is generated once, not per call.
+            $post_type = array_values( array_filter( array_map( 'strval', $post_type ) ) );
+        }
+
+        if ( is_array( $post_type ) && ! empty( $post_type ) ) {
+            $placeholders = implode( ',', array_fill( 0, count( $post_type ), '%s' ) );
+            $results = $wpdb->get_results( $wpdb->prepare(
+                "SELECT post_id, post_type, embedding_vector
+                 FROM $table
+                 WHERE post_type IN ($placeholders)
+                 ORDER BY id ASC
+                 LIMIT %d OFFSET %d",
+                array_merge( $post_type, array( $chunk_size, $offset ) )
+            ) );
+        } elseif ( ! is_array( $post_type ) && $post_type ) {
             $results = $wpdb->get_results( $wpdb->prepare(
                 "SELECT post_id, post_type, embedding_vector
                  FROM $table
@@ -413,6 +432,9 @@ class WCP_Embeddings_Client {
      * Find similar posts using cosine similarity.
      * Processes embeddings in chunks of 200 to keep peak memory bounded regardless
      * of corpus size — avoids loading all vectors into PHP memory simultaneously.
+     */
+    /**
+     * @param string|array|null $post_type One type, a list of types, or null for all.
      */
     public function find_similar_posts( $query_text, $limit = 10, $post_type = null, $exclude_post_ids = array() ) {
         $query_embedding = $this->generate_embedding( $query_text );

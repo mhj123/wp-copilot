@@ -9,6 +9,14 @@ if (!defined('ABSPATH')) {
 
 class WCP_REST_API {
 
+    /**
+     * How many candidates Auto-associate shortlists by embedding similarity
+     * before asking the model to choose. Wide enough that the right page is
+     * almost certainly in the set, small enough that the model can actually
+     * weigh them (the previous behaviour sent the entire corpus).
+     */
+    const SUGGEST_CONTEXTS_SHORTLIST = 30;
+
     private static $instance = null;
 
     public static function instance() {
@@ -2833,6 +2841,101 @@ class WCP_REST_API {
         return rest_ensure_response( array('success' => true) );
     }
 
+    /**
+     * Build the candidate context list for Auto-associate.
+     *
+     * Two things matter for suggestion quality here:
+     *   1. Terms the item already sits in are excluded. Feeding them back in
+     *      just invites the model to re-suggest the page you're already on.
+     *   2. Candidates are described by their full path and type, not a bare
+     *      name. Generic heading names repeat heavily across the corpus
+     *      ("Findings", "Actions"), and a bare name gives the model no way to
+     *      tell a dozen identical labels apart.
+     *
+     * When embeddings are available the list is shortlisted by semantic
+     * similarity first; otherwise it falls back to the whole corpus, which is
+     * what this action always did.
+     *
+     * @return array{lines:string[], term_ids:int[], shortlisted:bool}
+     */
+    private function build_context_candidates( $item, $exclude_term_ids ) {
+        $all_ctxs = WCP_Taxonomy_Sync::get_all_contexts();
+        if ( is_wp_error( $all_ctxs ) || empty( $all_ctxs ) ) {
+            return array( 'lines' => array(), 'term_ids' => array(), 'shortlisted' => false );
+        }
+
+        // Index terms by the post they mirror, so an embedding hit (which is a
+        // post id) can be resolved back to its context term.
+        $by_ref     = array();
+        $describe   = array();
+        $usable_ids = array();
+        foreach ( $all_ctxs as $t ) {
+            if ( in_array( (int) $t->term_id, $exclude_term_ids, true ) ) {
+                continue;
+            }
+            $ref_type = get_term_meta( $t->term_id, 'wcp_ref_type', true );
+            $ref_id   = (int) get_term_meta( $t->term_id, 'wcp_ref_id', true );
+            if ( $ref_id ) {
+                $by_ref[ $ref_id ] = (int) $t->term_id;
+            }
+
+            // Term names are stored HTML-encoded; send the model real text.
+            $path  = get_term_meta( $t->term_id, 'wcp_cached_path', true );
+            $label = html_entity_decode( $path ? $path : $t->name, ENT_QUOTES, 'UTF-8' );
+            $kind  = ( $ref_type === 'page' ) ? 'page' : 'heading';
+
+            $describe[ (int) $t->term_id ] = "- {$label} [{$kind}] (id:{$t->term_id})";
+            $usable_ids[] = (int) $t->term_id;
+        }
+
+        if ( empty( $usable_ids ) ) {
+            return array( 'lines' => array(), 'term_ids' => array(), 'shortlisted' => false );
+        }
+
+        // Semantic shortlist. Any failure here is non-fatal — we just fall
+        // back to offering everything, as before.
+        if ( get_option( 'wcp_embeddings_enabled', false )
+             && WCP_Embeddings_Client::instance()->is_configured() ) {
+
+            $query = $item->post_title;
+            if ( $item->post_content ) {
+                $query .= "\n" . wp_strip_all_tags( $item->post_content );
+            }
+
+            $hits = WCP_Embeddings_Client::instance()->find_similar_posts(
+                $query,
+                self::SUGGEST_CONTEXTS_SHORTLIST,
+                array( 'page', 'wcp_heading' )
+            );
+
+            if ( ! is_wp_error( $hits ) && ! empty( $hits ) ) {
+                $lines = array();
+                $ids   = array();
+                foreach ( $hits as $hit ) {
+                    $pid = isset( $hit['post_id'] ) ? (int) $hit['post_id'] : 0;
+                    if ( ! $pid || ! isset( $by_ref[ $pid ] ) ) {
+                        continue;
+                    }
+                    $tid = $by_ref[ $pid ];
+                    if ( ! isset( $describe[ $tid ] ) ) {
+                        continue;
+                    }
+                    $lines[] = $describe[ $tid ];
+                    $ids[]   = $tid;
+                }
+                if ( ! empty( $ids ) ) {
+                    return array( 'lines' => $lines, 'term_ids' => $ids, 'shortlisted' => true );
+                }
+            }
+        }
+
+        $lines = array();
+        foreach ( $usable_ids as $tid ) {
+            $lines[] = $describe[ $tid ];
+        }
+        return array( 'lines' => $lines, 'term_ids' => $usable_ids, 'shortlisted' => false );
+    }
+
     public function item_ai_action( $request ) {
         $item_id = (int) $request->get_param('item_id');
         $action  = sanitize_key( $request->get_param('action') );
@@ -2901,20 +3004,67 @@ class WCP_REST_API {
                 ));
 
             case 'suggest_contexts':
-                $all_ctxs = WCP_Taxonomy_Sync::get_all_contexts();
-                $ctx_list = implode("\n", array_map(fn($t) => "- {$t->name} (id:{$t->term_id})", $all_ctxs));
-                $sys  = "Given the item below, suggest which pages or headings it should be associated with from this list. "
-                      . "Return ONLY a JSON array of numeric term IDs: [123, 456]. "
-                      . "Available contexts:\n{$ctx_list}";
-                $resp = $ai_client->request_with_conversation( $sys, $item_text, array(), 256 );
+                $current_term_ids = wp_get_post_terms( $item_id, 'wcp_context', array('fields' => 'ids') );
+                $current_term_ids = is_wp_error( $current_term_ids )
+                    ? array()
+                    : array_map( 'intval', $current_term_ids );
+
+                $candidates = $this->build_context_candidates( $item, $current_term_ids );
+                if ( empty( $candidates['lines'] ) ) {
+                    return rest_ensure_response(array(
+                        'success'       => true,
+                        'action'        => 'suggest_contexts',
+                        'context_ids'   => array(),
+                        'context_names' => array(),
+                        'message'       => 'No other pages or headings available to associate with.',
+                    ));
+                }
+
+                $ctx_list = implode( "\n", $candidates['lines'] );
+                $sys  = "You associate a note with the pages or headings it belongs under.\n\n"
+                      . "Choose from the candidates below. Each line is a full path (parent > child), "
+                      . "its type, and its id. Prefer the most specific candidate whose subject genuinely "
+                      . "matches the note — a clear match on the note's own topic beats a loose thematic one. "
+                      . "Suggest 1-3, fewer if only one fits, and return an empty array if none genuinely do. "
+                      . "Do not invent ids; use only ids from this list.\n\n"
+                      . "Return ONLY a JSON array of numeric ids, e.g. [123, 456] or [].\n\n"
+                      . "Candidates:\n{$ctx_list}";
+
+                // The note only — deliberately excludes its current associations,
+                // which would otherwise just get echoed back as suggestions.
+                $assoc_text = "Title: {$item->post_title}"
+                            . ( $item->post_content ? "\nContent: " . wp_strip_all_tags( $item->post_content ) : '' );
+
+                $resp = $ai_client->request_with_conversation( $sys, $assoc_text, array(), 256 );
                 if ( is_wp_error($resp) ) return $resp;
                 $parsed_ids = WCP_AI_Actions::instance()->parse_json_response( $resp['content'] );
                 $ids = array_map('intval', ! is_wp_error($parsed_ids) ? (array) $parsed_ids : array());
-                // Get names for display
+
+                // Keep only ids we actually offered: guards against hallucinated
+                // ids and against re-suggesting something already associated.
+                $ids = array_values( array_intersect( $ids, $candidates['term_ids'] ) );
+
                 $names = array();
-                foreach ( $all_ctxs as $t ) {
-                    if ( in_array($t->term_id, $ids) ) $names[] = $t->name;
+                foreach ( $ids as $tid ) {
+                    $term = get_term( $tid, 'wcp_context' );
+                    if ( $term && ! is_wp_error( $term ) ) {
+                        $names[] = html_entity_decode( $term->name, ENT_QUOTES, 'UTF-8' );
+                    }
                 }
+
+                WCP_AI_Logger::instance()->log_action( 'suggest_contexts', array(
+                    'model'           => $resp['model'],
+                    'prompt'          => $assoc_text,
+                    'input_context'   => array(
+                        'item_id'          => $item_id,
+                        'candidate_count'  => count( $candidates['term_ids'] ),
+                        'shortlisted'      => $candidates['shortlisted'],
+                        'excluded_current' => $current_term_ids,
+                    ),
+                    'output'          => array( 'context_ids' => $ids, 'context_names' => $names ),
+                    'context_post_id' => (int) $request->get_param('page_id') ?: $item_id,
+                ));
+
                 return rest_ensure_response(array(
                     'success'      => true,
                     'action'       => 'suggest_contexts',

@@ -1850,13 +1850,26 @@ jQuery(document).ready(function($) {
                         + '</div>';
                     $result.html(html);
                 } else if (action === 'suggest_contexts') {
-                    var names = r.context_names.map(function(n) { return '<li>' + $('<span>').text(n).html() + '</li>'; }).join('');
-                    $result.html(
-                        '<p style="font-size:12px;margin:0 0 6px;">Suggested associations:</p>'
-                        + '<ul style="margin:0 0 8px;padding-left:16px;font-size:12px;">' + names + '</ul>'
-                        + '<button class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-item-ai-accept-contexts" data-item-id="' + itemId + '" data-ids="' + r.context_ids.join(',') + '">Apply</button>'
-                        + ' <button class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
-                    );
+                    var ctxNames = r.context_names || [];
+                    if (!ctxNames.length) {
+                        // Reachable: the model is told to return nothing rather
+                        // than force a weak match, and pages the item already
+                        // belongs to are no longer offered back.
+                        $result.html(
+                            '<p style="font-size:12px;margin:0 0 8px;">'
+                            + $('<span>').text(r.message || 'No other pages or headings look like a clear match.').html()
+                            + '</p>'
+                            + '<button class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
+                        );
+                    } else {
+                        var names = ctxNames.map(function(n) { return '<li>' + $('<span>').text(n).html() + '</li>'; }).join('');
+                        $result.html(
+                            '<p style="font-size:12px;margin:0 0 6px;">Suggested associations:</p>'
+                            + '<ul style="margin:0 0 8px;padding-left:16px;font-size:12px;">' + names + '</ul>'
+                            + '<button class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-item-ai-accept-contexts" data-item-id="' + itemId + '" data-ids="' + r.context_ids.join(',') + '">Apply</button>'
+                            + ' <button class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
+                        );
+                    }
                 } else if (action === 'suggest_subtopics') {
                     // Reuses the exact action_plan markup/classes (wcp-ap-add-step,
                     // wcp-ap-remove, wcp-ap-accept-items) so those existing handlers
