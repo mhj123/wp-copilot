@@ -3635,3 +3635,81 @@ a.wcp-tag:hover {
     color: #c0392b;
     font-size: 12px;
 }
+
+/* ==========================================================================
+   Quick-jump palette (Cmd/Ctrl+K)
+   Builds on .wcp-modal-overlay / .wcp-modal-box; the modifiers below swap the
+   centred dialog for a top-anchored palette whose list scrolls, not the box.
+   ========================================================================== */
+
+.wcp-jump-overlay {
+    align-items: flex-start;
+    padding-top: 12vh;
+}
+
+.wcp-jump-box {
+    width: 560px;
+    max-width: 92vw;
+    max-height: 60vh;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.wcp-jump-input {
+    width: 100%;
+    box-sizing: border-box;
+    border: none;
+    border-bottom: 1px solid #e6e6e6;
+    border-radius: 0;
+    padding: 16px 20px;
+    font-size: 16px;
+    color: #1a1a1a;
+}
+
+.wcp-jump-input:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+.wcp-jump-results {
+    list-style: none;
+    margin: 0;
+    padding: 6px;
+    overflow-y: auto;
+}
+
+.wcp-jump-result {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 8px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.wcp-jump-result:hover {
+    background: #f4f4f7;
+}
+
+.wcp-jump-result.is-active {
+    background: #ececf6;
+}
+
+.wcp-jump-result-path {
+    font-size: 11px;
+    color: #8a8a94;
+}
+
+.wcp-jump-result-title {
+    font-size: 14px;
+    color: #1a1a1a;
+}
+
+.wcp-jump-empty {
+    margin: 0;
+    padding: 16px 20px;
+    font-size: 13px;
+    color: #8a8a94;
+}

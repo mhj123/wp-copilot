@@ -104,8 +104,14 @@ function wcp_theme_scripts() {
     // Theme JavaScript — filemtime()-versioned, same reasoning as theme.css above.
     wp_enqueue_script('wcp-theme-js', get_template_directory_uri() . '/assets/js/theme.js', array('jquery', 'sortablejs', 'marked'), filemtime(get_template_directory() . '/assets/js/theme.js'), true);
 
+    // Quick-jump palette (Cmd/Ctrl+K). Logged-in only — it navigates the
+    // workspace, so there's no reason to ship the page index to visitors.
+    if (is_user_logged_in()) {
+        wp_enqueue_script('wcp-quick-jump', get_template_directory_uri() . '/assets/js/quick-jump.js', array('wcp-theme-js'), filemtime(get_template_directory() . '/assets/js/quick-jump.js'), true);
+    }
+
     // Localize script with data
-    wp_localize_script('wcp-theme-js', 'wcpThemeData', array(
+    $theme_data = array(
         'restUrl' => rest_url('work-copilot/v1'),
         'delegationRestUrl' => rest_url('wcp-delegation/v1'),
         'nonce' => wp_create_nonce('wp_rest'),
@@ -113,7 +119,15 @@ function wcp_theme_scripts() {
         'adminUrl' => admin_url(),
         'isLoggedIn' => is_user_logged_in(),
         'pageId' => get_queried_object_id(),
-    ));
+    );
+
+    // The whole page list, for instant client-side filtering in the quick-jump
+    // palette — a few KB for ~70 pages, which beats a round trip per keystroke.
+    if (is_user_logged_in()) {
+        $theme_data['jumpPages'] = wcp_theme_get_flat_page_index();
+    }
+
+    wp_localize_script('wcp-theme-js', 'wcpThemeData', $theme_data);
 }
 add_action('wp_enqueue_scripts', 'wcp_theme_scripts');
 
@@ -173,6 +187,57 @@ function wcp_theme_get_page_ancestors($page_id) {
         $p = get_post($p->post_parent);
     }
     return $ancestors;
+}
+
+/**
+ * Flat index of every published page, for the Cmd/Ctrl+K quick-jump palette.
+ *
+ * Deliberately does NOT reuse wcp_theme_get_page_tree() recursively the way
+ * wcp_theme_build_page_nav() does: that issues one query per page, and this runs
+ * on every page load. One query, grouped by parent in memory, then walked
+ * depth-first — so ordering matches the sidebar (parent immediately followed
+ * by its own children, each level sorted by menu_order/title) rather than a
+ * single flat alphabetical sort across every page regardless of parent, which
+ * would interleave a page with its own children in the palette's default view.
+ *
+ * @return array List of array{id:int, title:string, path:string[], url:string}
+ *               where `path` is ancestor titles, root first, excluding the page.
+ */
+function wcp_theme_get_flat_page_index() {
+    $pages = get_posts(array(
+        'post_type'      => 'page',
+        'post_status'    => 'publish',
+        'posts_per_page' => -1,
+        'orderby'        => 'menu_order title',
+        'order'          => 'ASC',
+    ));
+
+    $by_parent = array();
+    foreach ($pages as $page) {
+        $by_parent[(int) $page->post_parent][] = $page;
+    }
+
+    $index = array();
+
+    // Depth-first walk from the roots, mirroring wcp_theme_get_page_tree()'s
+    // per-level ordering without its per-node query.
+    $walk = function ($parent_id, $path, $depth) use (&$walk, &$by_parent, &$index) {
+        if ($depth > 20 || empty($by_parent[$parent_id])) {
+            return; // guards a corrupted post_parent cycle; real nesting never nears this
+        }
+        foreach ($by_parent[$parent_id] as $page) {
+            $index[] = array(
+                'id'    => (int) $page->ID,
+                'title' => $page->post_title,
+                'path'  => $path,
+                'url'   => get_permalink($page->ID),
+            );
+            $walk((int) $page->ID, array_merge($path, array($page->post_title)), $depth + 1);
+        }
+    };
+    $walk(0, array(), 0);
+
+    return $index;
 }
 
 // Recursively build collapsible page navigation.
@@ -413,6 +478,18 @@ function wcp_theme_ai_widget_footer() {
     get_template_part('template-parts/ai-widget');
 }
 add_action('wp_footer', 'wcp_theme_ai_widget_footer');
+
+// Quick-jump palette markup (Cmd/Ctrl+K). Unlike the AI widget this has no
+// feature-flag gate — navigation shouldn't depend on AI settings — and it is
+// wanted on the front page too, so there's no is_front_page() skip.
+function wcp_theme_quick_nav_footer() {
+    if (is_admin() || !is_user_logged_in()) {
+        return;
+    }
+
+    get_template_part('template-parts/quick-nav');
+}
+add_action('wp_footer', 'wcp_theme_quick_nav_footer');
 
 // Add body classes
 function wcp_theme_body_classes($classes) {
