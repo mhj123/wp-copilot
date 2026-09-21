@@ -1,0 +1,76 @@
+/**
+ * Slideshow view — full-screen, read-only presentation overlay.
+ *
+ * A genuinely new visual register (full-bleed, dark, large-type) with no rule
+ * overlap with theme.css's document-editing conventions beyond the
+ * position:fixed;inset:0 structural idiom shared with .wcp-modal-overlay and
+ * .wcp-jump-overlay — this is a fuller takeover than either, so it gets its
+ * own file rather than growing theme.css.
+ */
+
+.wcp-slideshow-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10001; /* one above the previous ceiling, 10000 (.wcp-ai-modal) */
+    background: #14161a;
+    color: #f2f2f2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 6vh 4vw;
+    overflow-y: auto;
+    cursor: default;
+}
+
+.wcp-slide-column {
+    width: 100%;
+    max-width: 900px;
+}
+
+.wcp-slide-title {
+    font-size: clamp(28px, 5vw, 56px);
+    font-weight: 700;
+    line-height: 1.15;
+    margin: 0 0 0.6em;
+    color: #ffffff;
+}
+
+.wcp-slide-body {
+    font-size: clamp(16px, 2vw, 22px);
+    line-height: 1.5;
+    margin: 0 0 1em;
+    opacity: 0.9;
+}
+
+.wcp-slide-body p:first-child { margin-top: 0; }
+.wcp-slide-body p:last-child { margin-bottom: 0; }
+
+.wcp-slide-bullets {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: clamp(16px, 2vw, 24px);
+    line-height: 1.6;
+}
+
+.wcp-slide-bullet {
+    padding: 0.25em 0;
+    /* Discrete rules cover the common shallow depths; the --level custom
+       property (set inline per bullet) keeps arbitrary depth indenting
+       correctly without an open-ended list of CSS rules. */
+    margin-left: calc(var(--level, 0) * 2em);
+}
+
+.wcp-slide-bullet[data-checked="true"]::before  { content: "\2611\a0\a0"; opacity: 0.85; }
+.wcp-slide-bullet[data-checked="false"]::before { content: "\2610\a0\a0"; opacity: 0.85; }
+.wcp-slide-bullet[data-checked="none"]::before  { content: "\2022\a0\a0"; opacity: 0.6; }
+
+.wcp-slide-position {
+    position: fixed;
+    bottom: 24px;
+    right: 32px;
+    font-size: 14px;
+    color: #f2f2f2;
+    opacity: 0.55;
+}

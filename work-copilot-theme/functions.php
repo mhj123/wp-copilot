@@ -110,6 +110,13 @@ function wcp_theme_scripts() {
         wp_enqueue_script('wcp-quick-jump', get_template_directory_uri() . '/assets/js/quick-jump.js', array('wcp-theme-js'), filemtime(get_template_directory() . '/assets/js/quick-jump.js'), true);
     }
 
+    // Slideshow view (page/heading, full-screen presentation). Logged-in
+    // only, same reasoning as quick-jump above.
+    if (is_user_logged_in()) {
+        wp_enqueue_style('wcp-slideshow', get_template_directory_uri() . '/assets/css/slideshow.css', array(), filemtime(get_template_directory() . '/assets/css/slideshow.css'));
+        wp_enqueue_script('wcp-slideshow', get_template_directory_uri() . '/assets/js/slideshow.js', array('wcp-theme-js'), filemtime(get_template_directory() . '/assets/js/slideshow.js'), true);
+    }
+
     // Localize script with data
     $theme_data = array(
         'restUrl' => rest_url('work-copilot/v1'),
@@ -827,6 +834,147 @@ function wcp_theme_handle_export_heading_md() {
     exit;
 }
 add_action('admin_post_wcp_export_heading_md', 'wcp_theme_handle_export_heading_md');
+
+/**
+ * Slideshow view — data builders.
+ *
+ * Produce a plain, serializable slide array for the read-only slideshow overlay:
+ * array{title:string, body:string|null, bullets:array{text,level,checked}[]}[]
+ *
+ * Deliberately additive: reuses the existing wcp_theme_get_* query functions so
+ * the slideshow's content scope (done/pinned filtering) matches the live page
+ * exactly, and builds no new content model. `body` stays raw, unrendered
+ * Markdown — the client renders it via marked.js, same as everywhere else item
+ * descriptions are shown.
+ */
+
+/**
+ * True/false for a task item's done state, null for anything else. Factored
+ * out of item-row.php's inline $is_task/$is_done computation (lines 9-10) so
+ * the slideshow can apply the same rule while walking items fresh, without
+ * needing pre-fetched term arrays. item-row.php is left untouched.
+ */
+function wcp_theme_item_checked_state($item) {
+    $types = wp_get_post_terms($item->ID, 'item_type', array('fields' => 'slugs'));
+    if (is_wp_error($types) || empty($types) || $types[0] !== 'task') {
+        return null;
+    }
+    $statuses = wp_get_post_terms($item->ID, 'task_status', array('fields' => 'slugs'));
+    return !is_wp_error($statuses) && !empty($statuses) && $statuses[0] === 'done';
+}
+
+/**
+ * Flatten an item's checklist (_wcp_subtasks) and real subitems into one
+ * ordered, leveled bullet list.
+ *
+ * Rule: an item's own checklist entries are emitted first (their stored JSON
+ * order — already the display order in item-row.php), then each direct
+ * subitem, immediately followed by that subitem's own bullets one level
+ * deeper. This is the same walk-then-recurse shape wcp_theme_render_item_tree()
+ * already uses everywhere, just building a flat array with an explicit level
+ * instead of nested HTML — so a checklist entry and a subitem both read as one
+ * indent step under the item they belong to, checklist first.
+ *
+ * @param WP_Post $item
+ * @param int     $level
+ * @return array{text:string, level:int, checked:bool|null}[]
+ */
+function wcp_theme_item_to_slide_bullets($item, $level = 0) {
+    $bullets = array();
+
+    $subtasks = json_decode(get_post_meta($item->ID, '_wcp_subtasks', true) ?: '[]', true);
+    if (is_array($subtasks)) {
+        foreach ($subtasks as $entry) {
+            $bullets[] = array(
+                'text'    => isset($entry['title']) ? $entry['title'] : '',
+                'level'   => $level,
+                'checked' => !empty($entry['done']),
+            );
+        }
+    }
+
+    foreach (wcp_theme_get_item_children($item->ID) as $child) {
+        $bullets[] = array(
+            'text'    => $child->post_title,
+            'level'   => $level,
+            'checked' => wcp_theme_item_checked_state($child),
+        );
+        $bullets = array_merge($bullets, wcp_theme_item_to_slide_bullets($child, $level + 1));
+    }
+
+    return $bullets;
+}
+
+/**
+ * One slide for a single item — used by the heading-level deck, where each
+ * item directly under the heading becomes its own slide.
+ */
+function wcp_theme_item_to_slide($item) {
+    return array(
+        'title'   => $item->post_title,
+        'body'    => trim($item->post_content) !== '' ? $item->post_content : null,
+        'bullets' => wcp_theme_item_to_slide_bullets($item, 0),
+    );
+}
+
+/**
+ * Page-level slideshow: an optional lead-in slide for page-only items (items
+ * with no heading — otherwise silently missing from the deck), followed by
+ * one slide per heading.
+ */
+function wcp_theme_get_page_slideshow_data($page_id) {
+    $slides = array();
+
+    $page_only_items = wcp_theme_get_page_only_items($page_id);
+    if (!empty($page_only_items)) {
+        $bullets = array();
+        foreach ($page_only_items as $item) {
+            $bullets[] = array(
+                'text'    => $item->post_title,
+                'level'   => 0,
+                'checked' => wcp_theme_item_checked_state($item),
+            );
+            $bullets = array_merge($bullets, wcp_theme_item_to_slide_bullets($item, 1));
+        }
+        $page = get_post($page_id);
+        $slides[] = array(
+            'title'   => $page ? $page->post_title : '',
+            'body'    => null,
+            'bullets' => $bullets,
+        );
+    }
+
+    foreach (wcp_theme_get_page_headings($page_id) as $heading) {
+        $bullets = array();
+        foreach (wcp_theme_get_heading_items($heading->ID) as $item) {
+            $bullets[] = array(
+                'text'    => $item->post_title,
+                'level'   => 0,
+                'checked' => wcp_theme_item_checked_state($item),
+            );
+            $bullets = array_merge($bullets, wcp_theme_item_to_slide_bullets($item, 1));
+        }
+        $slides[] = array(
+            'title'   => $heading->post_title,
+            'body'    => null,
+            'bullets' => $bullets,
+        );
+    }
+
+    return $slides;
+}
+
+/**
+ * Heading-level slideshow: one slide per item directly under the heading,
+ * each carrying its own description and its own subitems/checklist.
+ */
+function wcp_theme_get_heading_slideshow_data($heading_id) {
+    $slides = array();
+    foreach (wcp_theme_get_heading_items($heading_id) as $item) {
+        $slides[] = wcp_theme_item_to_slide($item);
+    }
+    return $slides;
+}
 
 // Get breadcrumb trail for a Page
 function wcp_theme_get_page_breadcrumbs($page_id) {
