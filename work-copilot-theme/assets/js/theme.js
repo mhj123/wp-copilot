@@ -1625,6 +1625,31 @@ jQuery(document).ready(function($) {
         );
     }
 
+    // "Coach me" step 2: render the items/tasks extracted from the (possibly
+    // edited) coaching text as a checkbox list, same shape as wcpRenderFriResults
+    // above — a proposal batch the user reviews before anything is created.
+    function wcpRenderCoachItems($result, r) {
+        var proposals = r.proposals || [];
+        if (!proposals.length) {
+            $result.html('<em style="color:#888;font-size:12px;">No actionable items found in that feedback.</em>');
+            return;
+        }
+        var rows = proposals.map(function(p) {
+            var it = p.item || {};
+            return '<li style="margin-bottom:4px;"><label>'
+                + '<input type="checkbox" class="wcp-coach-cb" checked data-proposal-id="' + p.proposal_id + '"> '
+                + '<strong>' + $('<span>').text(it.title || '').html() + '</strong>'
+                + ' <span style="color:#888;">(' + $('<span>').text(it.item_type || 'task').html() + ')</span>'
+                + '</label></li>';
+        }).join('');
+        $result.html(
+            '<p style="font-size:12px;margin:0 0 6px;color:#555;">' + $('<span>').text(r.message || 'Proposed items').html() + '</p>'
+            + '<ul class="wcp-coach-list" style="margin:0 0 8px;padding-left:16px;font-size:12px;list-style:none;">' + rows + '</ul>'
+            + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-coach-accept-items" data-batch-id="' + r.batch_id + '">Add selected</button>'
+            + ' <button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
+        );
+    }
+
     $(document).on('click', '.wcp-item-ai-btn', function() {
         var $row   = $(this).closest('.wcp-item-row');
         var $panel = $row.find('.wcp-item-ai-panel');
@@ -1806,7 +1831,7 @@ jQuery(document).ready(function($) {
         $result.show().html('<em style="color:#aaa;font-size:12px;">Thinking…</em>');
 
         var requestPayload = { action: action };
-        if (action === 'find_references_for_item') {
+        if (action === 'find_references_for_item' || action === 'coach_item') {
             requestPayload.page_id = $panel.data('page-id');
         }
 
@@ -1892,6 +1917,18 @@ jQuery(document).ready(function($) {
                         + '<button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
                         + '</div>';
                     $result.html(html2);
+                } else if (action === 'coach_item') {
+                    // Plain, editable text — not a preview. The user edits raw
+                    // Markdown here; nothing is created until "Add as items".
+                    $result.html(
+                        '<textarea class="wcp-coach-feedback" rows="7" style="width:100%;box-sizing:border-box;font-size:13px;">'
+                        + $('<span>').text(r.feedback || '').html()
+                        + '</textarea>'
+                        + '<div style="margin-top:6px;">'
+                        + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-coach-add-items" data-item-id="' + itemId + '" data-page-id="' + $panel.data('page-id') + '">Add as items</button>'
+                        + ' <button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
+                        + '</div>'
+                    );
                 }
             },
             error: function() { $result.html('<em style="color:#c0392b;">Connection error</em>'); }
@@ -2015,6 +2052,72 @@ jQuery(document).ready(function($) {
                 } else {
                     $btn.prop('disabled', false).text('Add selected');
                     alert(response.message || 'Could not add references.');
+                }
+            },
+            error: function() {
+                $btn.prop('disabled', false).text('Add selected');
+                alert('Connection error.');
+            }
+        });
+    });
+
+    // Coach me — step 2: send the (possibly edited) coaching text back to be
+    // turned into a proposal batch, rendered via wcpRenderCoachItems above.
+    $(document).on('click', '.wcp-coach-add-items', function() {
+        var $btn    = $(this);
+        var itemId  = $btn.data('item-id');
+        var pageId  = $btn.data('page-id');
+        var $result = $btn.closest('.wcp-item-ai-result');
+        var feedback = $result.find('.wcp-coach-feedback').val().trim();
+        if (!feedback) return;
+
+        $btn.prop('disabled', true).text('Thinking…');
+        $.ajax({
+            url: wcpThemeData.restUrl + '/items/' + itemId + '/ai',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ action: 'coach_item_to_items', feedback: feedback, page_id: pageId }),
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(r) {
+                if (r.success) {
+                    wcpRenderCoachItems($result, r);
+                } else {
+                    $btn.prop('disabled', false).text('Add as items');
+                    alert(r.message || 'Could not extract items from that feedback.');
+                }
+            },
+            error: function(xhr) {
+                $btn.prop('disabled', false).text('Add as items');
+                var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Connection error.';
+                alert(msg);
+            }
+        });
+    });
+
+    // Coach me — accept selected proposed items. Same /ai/proposals/decide
+    // contract as .wcp-fri-accept above.
+    $(document).on('click', '.wcp-coach-accept-items', function() {
+        var $btn = $(this);
+        var batchId = $btn.data('batch-id');
+        var selectedIds = $btn.closest('.wcp-item-ai-result').find('.wcp-coach-cb:checked').map(function() {
+            return $(this).data('proposal-id');
+        }).get();
+        if (!selectedIds.length) return;
+
+        $btn.prop('disabled', true).text('Adding…');
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/ai/proposals/decide',
+            method: 'POST',
+            data: { batch_id: batchId, decision: 'accept', selected_proposal_ids: selectedIds },
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(response) {
+                if (response.success) {
+                    $btn.closest('.wcp-item-ai-panel').slideUp(120);
+                    location.reload();
+                } else {
+                    $btn.prop('disabled', false).text('Add selected');
+                    alert(response.message || 'Could not add items.');
                 }
             },
             error: function() {

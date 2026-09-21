@@ -404,6 +404,18 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // Slideshow view (read-only presentation data for the frontend overlay)
+        register_rest_route($namespace, '/pages/(?P<page_id>\d+)/slideshow', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'get_page_slideshow'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+        register_rest_route($namespace, '/headings/(?P<heading_id>\d+)/slideshow', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'get_heading_slideshow'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
         // Tools: Bulk sync all pages/headings to wcp_context taxonomy
         register_rest_route($namespace, '/taxonomy/sync-all', array(
             'methods'             => 'POST',
@@ -2970,6 +2982,131 @@ class WCP_REST_API {
                     'proposal' => ! is_wp_error($parsed) ? $parsed : array('title' => $resp['content'], 'content' => ''),
                 ));
 
+            case 'coach_item':
+                $co_page_id = (int) $request->get_param('page_id');
+                $co_mission = WCP_Mission_Loader::instance()->get_mission_context( $co_page_id );
+
+                if ( ! empty( $co_mission['global'] ) || ! empty( $co_mission['page'] ) ) {
+                    $co_mission_block = "Global mission (the site's overall soul/mission):\n"
+                        . ( $co_mission['global'] ?: '(none set)' ) . "\n\n"
+                        . "Page-level mission/objectives (this page's own, or its nearest ancestor's if it doesn't set one):\n"
+                        . ( $co_mission['page'] ?: '(none set)' );
+                } else {
+                    $co_mission_block = "No mission is set for this site or any relevant page. "
+                        . "Coach on general product-sense / best-practice grounds instead, and say plainly "
+                        . "in your opening line that no mission was available so this is generic feedback.";
+                }
+
+                $sys  = "You coach the user on a single knowledge/work item in light of their stated mission.\n\n"
+                      . "{$co_mission_block}\n\n"
+                      . "Given the item below, write two short parts as plain prose (Markdown ok, no JSON):\n"
+                      . "1. One or two sentences naming which part of the mission (if any) is actually relevant "
+                      . "to this specific item — do not restate the whole mission.\n"
+                      . "2. Concrete, specific coaching on how to reframe, sharpen, or execute this item better "
+                      . "in light of that — not generic advice. If no mission was available, open by saying so, "
+                      . "then coach on general best-practice/product-sense grounds.\n\n"
+                      . "Return only the coaching text itself — it will be shown to the user as editable plain text.";
+                $resp = $ai_client->request_with_conversation( $sys, $item_text, array(), 700 );
+                if ( is_wp_error($resp) ) return $resp;
+
+                WCP_AI_Logger::instance()->log_action( 'coach_item', array(
+                    'model'           => $resp['model'],
+                    'prompt'          => $item_text,
+                    'input_context'   => array(
+                        'item_id'          => $item_id,
+                        'page_id'          => $co_page_id,
+                        'had_global_mission' => ! empty( $co_mission['global'] ),
+                        'had_page_mission'   => ! empty( $co_mission['page'] ),
+                    ),
+                    'output'          => $resp['content'],
+                    'context_post_id' => $co_page_id ?: $item_id,
+                ));
+
+                return rest_ensure_response(array(
+                    'success'  => true,
+                    'action'   => 'coach_item',
+                    'feedback' => $resp['content'],
+                ));
+
+            case 'coach_item_to_items':
+                $cti_feedback = sanitize_textarea_field( $request->get_param('feedback') );
+                if ( $cti_feedback === '' ) {
+                    return new WP_Error( 'missing_feedback', 'Coaching feedback is required', array('status' => 400) );
+                }
+                $cti_page_id = (int) $request->get_param('page_id');
+
+                $sys  = "Turn the user's coaching feedback into concrete follow-up items and tasks for the item "
+                      . "titled \"{$item->post_title}\". Extract only genuinely actionable or noteworthy points — "
+                      . "do not pad the list. Return ONLY a valid JSON array, no text before or after:\n"
+                      . '[{"title":"...","content":"...","item_type":"task|info|learning|spec"}]' . "\n\n"
+                      . "Use \"task\" for something to do, \"info\"/\"learning\" for something to note or remember, "
+                      . "\"spec\" for a requirement. 'content' must be at least a short one-sentence rationale or "
+                      . "detail — never an empty string. Start with [ and end with ].";
+                $usr  = "Coaching feedback:\n{$cti_feedback}";
+                $resp = $ai_client->request_with_conversation( $sys, $usr, array(), 1024 );
+                if ( is_wp_error($resp) ) return $resp;
+
+                $items = WCP_AI_Actions::instance()->parse_json_response( $resp['content'] );
+                if ( is_wp_error($items) || ! is_array($items) ) {
+                    return new WP_Error('parse_error', 'Could not parse items from the coaching feedback', array('status' => 500));
+                }
+
+                $proposals = array();
+                $batch_id  = wp_generate_uuid4();
+                foreach ( $items as $index => $entry ) {
+                    if ( empty( $entry['title'] ) ) { continue; }
+                    // execute_proposal() silently skips (no error surfaced) any
+                    // proposal whose item content is empty — never let that happen.
+                    $cti_content = isset( $entry['content'] ) ? trim( $entry['content'] ) : '';
+                    if ( $cti_content === '' ) { $cti_content = $entry['title']; }
+
+                    $proposal_id = wp_generate_uuid4();
+                    $proposal = array(
+                        'proposal_id'     => $proposal_id,
+                        'batch_id'        => $batch_id,
+                        'index'           => $index,
+                        'action_type'     => 'coach_item_to_items',
+                        // Top-level, not nested under 'item' — this is the key
+                        // execute_proposal() actually reads to nest the created
+                        // post as a subitem of the item that produced it.
+                        'parent_item_id'  => $item_id,
+                        'item'            => array(
+                            'title'     => $entry['title'],
+                            'content'   => $cti_content,
+                            'item_type' => isset( $entry['item_type'] ) ? $entry['item_type'] : 'task',
+                        ),
+                        'page_id'         => $cti_page_id,
+                        'created_at'      => current_time('mysql'),
+                    );
+                    set_transient( 'wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS );
+                    $proposals[] = $proposal;
+                }
+
+                if ( empty( $proposals ) ) {
+                    return new WP_Error('no_items', 'No actionable items were found in that feedback', array('status' => 500));
+                }
+
+                set_transient( 'wcp_batch_' . $batch_id, array(
+                    'proposal_ids' => array_column( $proposals, 'proposal_id' ),
+                    'page_id'      => $cti_page_id,
+                ), HOUR_IN_SECONDS );
+
+                WCP_AI_Logger::instance()->log_action( 'coach_item_to_items', array(
+                    'model'           => $resp['model'],
+                    'prompt'          => $cti_feedback,
+                    'input_context'   => array( 'item_id' => $item_id, 'page_id' => $cti_page_id ),
+                    'output'          => $items,
+                    'context_post_id' => $cti_page_id ?: $item_id,
+                ));
+
+                return rest_ensure_response(array(
+                    'success'   => true,
+                    'action'    => 'coach_item_to_items',
+                    'message'   => count( $proposals ) . ' item' . ( count( $proposals ) !== 1 ? 's' : '' ) . ' proposed',
+                    'proposals' => $proposals,
+                    'batch_id'  => $batch_id,
+                ));
+
             case 'freeform':
                 $user_prompt = sanitize_textarea_field( $request->get_param('prompt') );
                 if ( $user_prompt === '' ) {
@@ -3588,6 +3725,51 @@ class WCP_REST_API {
             'success' => true,
             'html'    => $html,
             'count'   => count($items),
+        ));
+    }
+
+    /**
+     * Slideshow data for a Page: an optional lead-in slide for page-only
+     * items, then one slide per Heading. Built by the theme
+     * (wcp_theme_get_page_slideshow_data) — same cross-plugin-calls-theme
+     * pattern as get_dynamic_listing_items() above.
+     */
+    public function get_page_slideshow( $request ) {
+        $page_id = (int) $request->get_param('page_id');
+
+        $page = get_post( $page_id );
+        if ( ! $page || $page->post_type !== 'page' ) {
+            return new WP_Error( 'not_found', 'Page not found', array( 'status' => 404 ) );
+        }
+
+        $auth = WCP_REST_Auth::require_object( $page_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
+
+        return rest_ensure_response(array(
+            'slides' => wcp_theme_get_page_slideshow_data( $page_id ),
+        ));
+    }
+
+    /**
+     * Slideshow data for a Heading: one slide per item directly under it.
+     */
+    public function get_heading_slideshow( $request ) {
+        $heading_id = (int) $request->get_param('heading_id');
+
+        $heading = get_post( $heading_id );
+        if ( ! $heading || $heading->post_type !== 'wcp_heading' ) {
+            return new WP_Error( 'not_found', 'Heading not found', array( 'status' => 404 ) );
+        }
+
+        $auth = WCP_REST_Auth::require_object( $heading_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
+
+        return rest_ensure_response(array(
+            'slides' => wcp_theme_get_heading_slideshow_data( $heading_id ),
         ));
     }
 
