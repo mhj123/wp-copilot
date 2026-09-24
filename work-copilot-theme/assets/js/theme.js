@@ -359,33 +359,79 @@ jQuery(document).ready(function($) {
         });
     });
 
-    // Item filtering — All items / All tasks / Open tasks
-    $(document).on('click', '.wcp-filter-btn', function() {
-        var $btn = $(this);
-        var filter = $btn.data('filter');
-        $btn.siblings('.wcp-filter-btn').removeClass('active');
-        $btn.addClass('active');
+    // Item filtering — All items / All tasks / Open tasks, combined (AND) with
+    // an optional tag filter from the [tags] panel. Both dimensions route
+    // through this one pass so a type filter and a tag filter narrow the page
+    // together rather than one silently overriding the other.
+    function applyPageFilters() {
+        var typeFilter = $('.wcp-filter-btn.active').data('filter');
+        var tagFilter  = $('.wcp-page-tag-filter.active').data('tag'); // undefined = no tag selected
 
         $('.wcp-item-row').each(function() {
             var $row = $(this);
             var type   = $row.data('item-type');
             var status = $row.data('task-status');
-            var show;
-            if (filter === 'tasks') {
-                show = type === 'task';
-            } else if (filter === 'open') {
-                show = type === 'task' && status !== 'done';
-            } else if (filter === 'note') {
-                show = type === 'note';
-            } else if (filter === 'spec') {
-                show = type === 'spec';
-            } else if (filter === 'reference') {
-                show = type === 'reference';
+
+            var typeShow;
+            if (typeFilter === 'tasks') {
+                typeShow = type === 'task';
+            } else if (typeFilter === 'open') {
+                typeShow = type === 'task' && status !== 'done';
+            } else if (typeFilter === 'note') {
+                typeShow = type === 'note';
+            } else if (typeFilter === 'spec') {
+                typeShow = type === 'spec';
+            } else if (typeFilter === 'reference') {
+                typeShow = type === 'reference';
             } else {
-                show = true;
+                typeShow = true;
             }
-            $row.toggle(show);
+
+            var tagShow = true;
+            if (tagFilter) {
+                // Exact match against the row's tag list, not substring —
+                // "SEO" must not match "SEO/GEO".
+                var rowTags = ($row.data('tags') || '').toString().split(',');
+                tagShow = rowTags.indexOf(tagFilter) !== -1;
+            }
+
+            $row.toggle(typeShow && tagShow);
         });
+
+        // A heading with nothing left visible under the current filter
+        // combination hides too, rather than sitting empty.
+        $('.wcp-heading-group').each(function() {
+            var $group = $(this);
+            var anyVisible = $group.find('.wcp-item-row').filter(function() {
+                return $(this).is(':visible');
+            }).length > 0;
+            $group.toggle(anyVisible);
+        });
+    }
+
+    $(document).on('click', '.wcp-filter-btn', function() {
+        var $btn = $(this);
+        $btn.siblings('.wcp-filter-btn').removeClass('active');
+        $btn.addClass('active');
+        applyPageFilters();
+    });
+
+    // [tags] panel — toggle the pill list, same idiom as #wcp-page-ai-btn.
+    $(document).on('click', '#wcp-toggle-tags', function() {
+        $('#wcp-page-tags-panel').slideToggle(150);
+    });
+
+    // Clicking a tag pill filters the page to it; clicking the already-active
+    // one deselects (standard toggle-filter expectation), showing all tags
+    // for the current type filter again.
+    $(document).on('click', '.wcp-page-tag-filter', function() {
+        var $pill = $(this);
+        var wasActive = $pill.hasClass('active');
+        $('.wcp-page-tag-filter').removeClass('active');
+        if (!wasActive) {
+            $pill.addClass('active');
+        }
+        applyPageFilters();
     });
 
     // Done tasks are hidden from the frontend UI — once a task is marked done,

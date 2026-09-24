@@ -906,6 +906,64 @@ function wcp_theme_item_to_slide_bullets($item, $level = 0) {
 }
 
 /**
+ * Recursively tally an item's own post_tag terms, plus every subitem's,
+ * into $counts by name. Mirrors wcp_theme_item_to_slide_bullets()'s walk
+ * (wcp_theme_get_item_children() recursion) but collects tags instead of
+ * bullets.
+ */
+function wcp_theme_tally_item_tags($item, &$counts) {
+    $tags = wp_get_post_terms($item->ID, 'post_tag', array('fields' => 'names'));
+    if (!is_wp_error($tags)) {
+        foreach ($tags as $tag) {
+            $counts[$tag] = isset($counts[$tag]) ? $counts[$tag] + 1 : 1;
+        }
+    }
+    foreach (wcp_theme_get_item_children($item->ID) as $child) {
+        wcp_theme_tally_item_tags($child, $counts);
+    }
+}
+
+/**
+ * Every distinct post_tag used by any item actually rendered on this page —
+ * page-level items, every heading's items, pinned items, and their subitems
+ * to any depth — with a count of how many items carry each.
+ *
+ * wcp_theme_get_page_only_items()/wcp_theme_get_heading_items() both exclude
+ * pinned items (rendered in their own section elsewhere on the page, via
+ * wcp_theme_get_page_pinned_items()) — walking only those two would silently
+ * omit any tag that exists solely on a pinned item, so pinned items are
+ * walked too. Done items stay excluded: they're genuinely not rendered
+ * anywhere on the page.
+ *
+ * @return array{name:string, count:int}[] sorted by name
+ */
+function wcp_theme_get_page_all_tags($page_id) {
+    $counts = array();
+
+    foreach (wcp_theme_get_page_only_items($page_id) as $item) {
+        wcp_theme_tally_item_tags($item, $counts);
+    }
+
+    foreach (wcp_theme_get_page_headings($page_id) as $heading) {
+        foreach (wcp_theme_get_heading_items($heading->ID) as $item) {
+            wcp_theme_tally_item_tags($item, $counts);
+        }
+    }
+
+    foreach (wcp_theme_get_page_pinned_items($page_id) as $item) {
+        wcp_theme_tally_item_tags($item, $counts);
+    }
+
+    ksort($counts, SORT_NATURAL | SORT_FLAG_CASE);
+
+    $tags = array();
+    foreach ($counts as $name => $count) {
+        $tags[] = array('name' => $name, 'count' => $count);
+    }
+    return $tags;
+}
+
+/**
  * One slide for a single item — used by the heading-level deck, where each
  * item directly under the heading becomes its own slide.
  */

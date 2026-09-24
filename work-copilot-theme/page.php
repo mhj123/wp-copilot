@@ -143,8 +143,25 @@ get_header();
                 <?php wp_nonce_field('wcp_export_page_md_' . $page_id); ?>
             </form>
             <button type="button" id="wcp-btn-page-slideshow" class="wcp-edit-link" data-page-id="<?php echo esc_attr($page_id); ?>" title="View this page as a slideshow">[slides]</button>
+            <button type="button" id="wcp-toggle-tags" class="wcp-edit-link" title="Show tags used on this page">[tags]</button>
             <?php if (get_option('wcp_ai_enabled', false)) : ?>
             <button type="button" id="wcp-page-ai-btn" class="wcp-edit-link" title="AI actions">[ai]</button>
+            <?php endif; ?>
+        </div>
+
+        <?php $wcp_page_all_tags = wcp_theme_get_page_all_tags($page_id); ?>
+        <!-- Page-level tag filter panel: every tag used by any item rendered on
+             this page (page-level, heading, pinned — subitems included), each
+             clickable to narrow the page to just items carrying it. Combines
+             (AND) with the type filter above via the same applyPageFilters()
+             pass in theme.js. -->
+        <div id="wcp-page-tags-panel" style="display:none;">
+            <?php if (empty($wcp_page_all_tags)) : ?>
+                <p class="wcp-page-tags-empty">No tags used on this page.</p>
+            <?php else : ?>
+                <?php foreach ($wcp_page_all_tags as $wcp_tag) : ?>
+                    <button type="button" class="wcp-pill wcp-pill-tag wcp-page-tag-filter" data-tag="<?php echo esc_attr($wcp_tag['name']); ?>"><?php echo esc_html($wcp_tag['name']); ?> (<?php echo (int) $wcp_tag['count']; ?>)</button>
+                <?php endforeach; ?>
             <?php endif; ?>
         </div>
 

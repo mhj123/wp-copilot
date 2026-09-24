@@ -2737,6 +2737,37 @@ a.wcp-tag:hover {
     color: #fff;
 }
 
+#wcp-page-tags-panel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 0;
+}
+
+.wcp-page-tags-empty {
+    font-size: 12px;
+    color: #999;
+    margin: 8px 0;
+}
+
+/* .wcp-pill-tag is normally an <a>; this is a <button>, so it needs its own
+   reset on top of the shared pill look. */
+.wcp-page-tag-filter {
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.wcp-page-tag-filter:hover {
+    background: #e0e0e0;
+    color: #222;
+}
+
+.wcp-page-tag-filter.active {
+    background: #222;
+    color: #fff;
+}
+
 .wcp-toggle-descriptions {
     font-size: 13px;
     color: #999;
