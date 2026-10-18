@@ -61,3 +61,6 @@ deploy.sh
 
 # Local design notes
 ROADMAP.md
+
+# Local working docs (docs/img is tracked: README images)
+docs/notes/
