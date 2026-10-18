@@ -1431,6 +1431,9 @@
                                     .val(proposal.proposal_id)
                             ),
                         $('<h5>').text(item.title),
+                        proposal.target_heading_title ? $('<div>')
+                            .addClass('wcp-ai-proposal-meta')
+                            .append($('<strong>').text('Under heading: '), document.createTextNode(proposal.target_heading_title)) : '',
                         item.url ? $('<a>')
                             .addClass('wcp-ai-proposal-source')
                             .attr({ href: item.url, target: '_blank', rel: 'noopener' })

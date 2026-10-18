@@ -1632,6 +1632,27 @@ class WCP_AI_Actions {
         // Build user message with context
         $user_message = $prompt_builder->build_user_message($prompt, $context_data);
 
+        // Heading routing: tell the AI which headings exist on this page so
+        // items can be placed under one when the user asks. Only headings in
+        // this map are honoured on the way back (the AI never invents targets).
+        $heading_map = array();
+        if ($page_id && get_post_type($page_id) === 'page') {
+            $page_headings = get_posts(array('post_type' => 'wcp_heading', 'post_status' => 'publish', 'posts_per_page' => -1,
+                'orderby' => 'menu_order', 'order' => 'ASC',
+                'meta_query' => array(array('key' => '_wcp_parent_type', 'value' => 'page'), array('key' => '_wcp_parent_id', 'value' => $page_id))));
+            foreach ($page_headings as $h) {
+                $tid = $this->heading_context_term_id($h->ID);
+                if ($tid) {
+                    $heading_map[strtolower(trim($h->post_title))] = array('term_id' => (int) $tid, 'title' => $h->post_title);
+                }
+            }
+        }
+        if (!empty($heading_map)) {
+            $titles = array_map(function ($h) { return '"' . $h['title'] . '"'; }, array_values($heading_map));
+            $user_message .= "\n\nHEADINGS ON THIS PAGE: " . implode(', ', $titles) . ".\n"
+                . "If the user asks for items under a particular heading, add a \"heading\" field to each of those items "
+                . "containing that heading's exact title from the list above. Omit \"heading\" if no heading was requested.";
+        }
 
         // Get conversation history if provided
         $conversation_history = array();
@@ -1714,6 +1735,13 @@ class WCP_AI_Actions {
                 'page_id' => $page_id,
                 'created_at' => current_time('mysql')
             );
+
+            // Resolve the requested heading against this page's real headings.
+            $wanted = isset($item['heading']) ? strtolower(trim((string) $item['heading'])) : '';
+            if ($wanted !== '' && isset($heading_map[$wanted])) {
+                $proposal['target_term_id'] = $heading_map[$wanted]['term_id'];
+                $proposal['target_heading_title'] = $heading_map[$wanted]['title'];
+            }
 
             // Store proposal in transient (expires in 1 hour)
             set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
@@ -3366,6 +3394,13 @@ class WCP_AI_Actions {
                 $context_term_id = $target_heading_term_id;
                 $debug_info['target_heading'] = $proposal['target_heading'];
             }
+        }
+
+        // Exact heading chosen at proposal time (generate_items): a term id
+        // validated against the page's headings when the proposal was built.
+        if (!empty($proposal['target_term_id'])) {
+            $context_term_id = (int) $proposal['target_term_id'];
+            $debug_info['target_term_id'] = $context_term_id;
         }
 
         // Check if this is a memory proposal
