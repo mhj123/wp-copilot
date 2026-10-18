@@ -1393,3 +1393,21 @@ body.admin-bar .wcp-ai-widget.closed {
     font-size: 13px;
     color: #666;
 }
+
+/* Proposed description under a proposal row (Iterate / Spot gaps / Brainstorm) */
+.wcp-struct-content {
+    margin: 4px 0 2px 22px;
+    padding: 6px 8px;
+    border-left: 3px solid #cfd8e6;
+    background: #f7f9fc;
+    border-radius: 0 4px 4px 0;
+    font-size: 13px;
+    line-height: 1.45;
+    max-height: 240px;
+    overflow-y: auto;
+}
+.wcp-struct-content > :first-child { margin-top: 0; }
+.wcp-struct-content > :last-child { margin-bottom: 0; }
+.wcp-struct-prev { margin: 2px 0 2px 22px; font-size: 12px; color: #777; }
+.wcp-struct-prev summary { cursor: pointer; }
+.wcp-struct-prev div { margin-top: 4px; padding: 4px 8px; border-left: 3px solid #e3e3e3; max-height: 160px; overflow-y: auto; }

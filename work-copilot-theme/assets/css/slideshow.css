@@ -17,7 +17,9 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    /* No justify-content:center — in a scrolling flex container it clips the top of
+       overflowing content. The column's auto margins centre short slides instead and
+       let tall ones start at the top and scroll. */
     padding: 6vh 4vw;
     overflow-y: auto;
     cursor: default;
@@ -26,6 +28,7 @@
 .wcp-slide-column {
     width: 100%;
     max-width: 900px;
+    margin: auto 0;
 }
 
 .wcp-slide-title {
@@ -74,3 +77,50 @@
     color: #f2f2f2;
     opacity: 0.55;
 }
+
+.wcp-slide-kicker {
+    font-size: clamp(13px, 1.4vw, 16px);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.55;
+    margin: 0 0 0.6em;
+}
+
+.wcp-slide-empty {
+    font-size: clamp(16px, 2vw, 22px);
+    font-style: italic;
+    opacity: 0.4;
+}
+
+.wcp-slide-toggle {
+    position: fixed;
+    bottom: 20px;
+    right: 120px;
+    background: transparent;
+    border: 1px solid rgba(242, 242, 242, 0.3);
+    border-radius: 14px;
+    color: #f2f2f2;
+    opacity: 0.7;
+    font-size: 12px;
+    padding: 3px 12px;
+    cursor: pointer;
+}
+
+.wcp-slide-toggle:hover { opacity: 1; }
+
+.wcp-slide-export {
+    position: fixed;
+    bottom: 20px;
+    right: 250px;
+    background: transparent;
+    border: 1px solid rgba(242, 242, 242, 0.3);
+    border-radius: 14px;
+    color: #f2f2f2;
+    opacity: 0.7;
+    font-size: 12px;
+    padding: 3px 12px;
+    cursor: pointer;
+}
+
+.wcp-slide-export:hover:not(:disabled) { opacity: 1; }
+.wcp-slide-export:disabled { cursor: wait; }

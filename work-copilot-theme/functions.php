@@ -117,8 +117,14 @@ function wcp_theme_scripts() {
         wp_enqueue_script('wcp-slideshow', get_template_directory_uri() . '/assets/js/slideshow.js', array('wcp-theme-js'), filemtime(get_template_directory() . '/assets/js/slideshow.js'), true);
     }
 
+    // PptxGenJS (slideshow "Export .pptx"): ~470KB, so it is NOT enqueued — slideshow.js
+    // loads it on demand from this URL the first time the user exports. MIT licensed,
+    // see assets/js/vendor/pptxgenjs.LICENSE.txt.
+    $pptx_url = get_template_directory_uri() . '/assets/js/vendor/pptxgen.bundle.js';
+
     // Localize script with data
     $theme_data = array(
+        'pptxUrl' => $pptx_url,
         'restUrl' => rest_url('work-copilot/v1'),
         'delegationRestUrl' => rest_url('wcp-delegation/v1'),
         'nonce' => wp_create_nonce('wp_rest'),
@@ -1010,6 +1016,24 @@ function wcp_theme_item_to_slide($item) {
 }
 
 /**
+ * Item-level slides for a page deck: one slide for EVERY item (even empty ones,
+ * flagged `empty` so the viewer can show a "to fill in" placeholder), tagged
+ * kind=item so the viewer's "Item slides" toggle can filter them client-side.
+ * $kicker is the heading/page title shown above the item title.
+ */
+function wcp_theme_items_to_detail_slides($items, $kicker) {
+    $slides = array();
+    foreach ($items as $item) {
+        $slide = wcp_theme_item_to_slide($item);
+        $slide['kind']   = 'item';
+        $slide['kicker'] = $kicker;
+        $slide['empty']  = $slide['body'] === null && empty($slide['bullets']);
+        $slides[] = $slide;
+    }
+    return $slides;
+}
+
+/**
  * Page-level slideshow: an optional lead-in slide for page-only items (items
  * with no heading — otherwise silently missing from the deck), followed by
  * one slide per heading.
@@ -1030,15 +1054,18 @@ function wcp_theme_get_page_slideshow_data($page_id) {
         }
         $page = get_post($page_id);
         $slides[] = array(
+            'kind'    => 'heading',
             'title'   => $page ? $page->post_title : '',
             'body'    => null,
             'bullets' => $bullets,
         );
+        $slides = array_merge($slides, wcp_theme_items_to_detail_slides($page_only_items, $page ? $page->post_title : ''));
     }
 
     foreach (wcp_theme_get_page_headings($page_id) as $heading) {
         $bullets = array();
-        foreach (wcp_theme_get_heading_items($heading->ID) as $item) {
+        $heading_items = wcp_theme_get_heading_items($heading->ID);
+        foreach ($heading_items as $item) {
             $bullets[] = array(
                 'text'    => $item->post_title,
                 'level'   => 0,
@@ -1047,10 +1074,12 @@ function wcp_theme_get_page_slideshow_data($page_id) {
             $bullets = array_merge($bullets, wcp_theme_item_to_slide_bullets($item, 1));
         }
         $slides[] = array(
+            'kind'    => 'heading',
             'title'   => $heading->post_title,
             'body'    => null,
             'bullets' => $bullets,
         );
+        $slides = array_merge($slides, wcp_theme_items_to_detail_slides($heading_items, $heading->post_title));
     }
 
     return $slides;

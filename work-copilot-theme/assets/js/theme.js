@@ -1486,6 +1486,16 @@ jQuery(document).ready(function($) {
                 + titleHtml + '</label>';
         };
 
+        // Proposed description text per proposal — rendered as Markdown after the HTML is
+        // inserted (via wcpRenderMarkdown, like every other description), not string-concatenated.
+        var contents = {};
+        var contentBlock = function(proposalId, content, origContent) {
+            content = (content || '').trim();
+            if (!content) { return ''; }
+            contents[proposalId] = { next: content, prev: (origContent || '').trim() };
+            return '<div class="wcp-struct-content" data-pid="' + esc(proposalId) + '"></div>';
+        };
+
         var html = '<div class="wcp-brainstorm-after-inner"><h3 class="wcp-brainstorm-after-title">Proposed changes</h3>';
 
         // brainstorm_subitems tags each proposal with parent_title — group
@@ -1502,18 +1512,20 @@ jQuery(document).ready(function($) {
                     ? '<s>' + esc(orig.title) + '</s> → <strong>' + esc(next.title) + '</strong>'
                     : esc(next.title);
 
-                html += '<div class="wcp-struct-group">' + row(p.proposal_id, 'rewrite', '', titleHtml) + '</div>';
+                html += '<div class="wcp-struct-group">' + row(p.proposal_id, 'rewrite', '', titleHtml)
+                    + contentBlock(p.proposal_id, next.content, orig.content) + '</div>';
             } else if (p.parent_title) {
                 var subIt = p.item || {};
                 if (!parentGroups[p.parent_title]) {
                     parentGroups[p.parent_title] = [];
                     parentOrder.push(p.parent_title);
                 }
-                parentGroups[p.parent_title].push(row(p.proposal_id, '+ new', subIt.item_type, esc(subIt.title)));
+                parentGroups[p.parent_title].push(row(p.proposal_id, '+ new', subIt.item_type, esc(subIt.title)) + contentBlock(p.proposal_id, subIt.content));
             } else {
                 // generate-multiple: a new top-level (gap) item.
                 var it = p.item || {};
-                html += '<div class="wcp-struct-group">' + row(p.proposal_id, '+ new', it.item_type, esc(it.title)) + '</div>';
+                html += '<div class="wcp-struct-group">' + row(p.proposal_id, '+ new', it.item_type, esc(it.title))
+                    + contentBlock(p.proposal_id, it.content) + '</div>';
             }
         });
 
@@ -1528,6 +1540,17 @@ jQuery(document).ready(function($) {
             + '</div></div>';
 
         $after.attr('data-batch-id', batchId).html(html).show();
+        $after.find('.wcp-struct-content').each(function() {
+            var c = contents[$(this).data('pid')];
+            if (!c) { return; }
+            wcpRenderMarkdown($(this), c.next);
+            // Show the replaced description too (collapsed) so it's clear what accepting overwrites.
+            if (c.prev && c.prev !== c.next) {
+                var $d = $('<details class="wcp-struct-prev"><summary>Current description</summary><div></div></details>');
+                wcpRenderMarkdown($d.find('div'), c.prev);
+                $(this).after($d);
+            }
+        });
         $section.addClass('wcp-brainstorm-active');
     }
 

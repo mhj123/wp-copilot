@@ -295,9 +295,43 @@ class WCP_Recap {
             $headings[] = array_merge(array('(page level)'), $page_level);
         }
 
+        // Direct sub-pages (items roll up from deeper pages/headings) → latest-activity and most-content lists.
+        $subs = array();
+        $children = get_posts(array(
+            'post_type' => 'page', 'post_status' => 'publish', 'post_parent' => $page->ID,
+            'posts_per_page' => 100, 'orderby' => 'menu_order title', 'order' => 'ASC',
+        ));
+        foreach ($children as $child) {
+            $ctid = $this->context_term_id('page', $child->ID);
+            if (!$ctid) {
+                continue;
+            }
+            list($n, $ts) = $this->term_activity($ctid, true);
+            if ($n > 0) {
+                $subs[] = array('name' => $child->post_title, 'url' => get_permalink($child->ID), 'items' => $n, 'ts' => $ts);
+            }
+        }
+        list($own_n, $own_ts) = $this->term_activity($term_id, false);
+        if ($own_n > 0 && $subs) { // only meaningful alongside sub-pages
+            $subs[] = array('name' => '(this page)', 'url' => get_permalink($page->ID), 'items' => $own_n, 'ts' => $own_ts);
+        }
+        $by_recent = $subs; usort($by_recent, function ($a, $b) { return $b['ts'] <=> $a['ts']; });
+        $by_items  = $subs; usort($by_items,  function ($a, $b) { return $b['items'] <=> $a['items']; });
+        $recent_subs = array(); $top_subs = array();
+        foreach (array_slice($by_recent, 0, 3) as $x) {
+            $recent_subs[] = array($x['name'], $x['url'], human_time_diff($x['ts'], $now) . ' ago');
+        }
+        foreach (array_slice($by_items, 0, 3) as $x) {
+            $top_subs[] = array($x['name'], $x['url'], $x['items']);
+        }
+        $descendants = get_pages(array('child_of' => $page->ID, 'post_status' => 'publish', 'number' => 0));
+
         return array(
             'page_id'     => $page->ID,
             'name'        => $page->post_title,
+            'subpages'    => is_array($descendants) ? count($descendants) : 0,
+            'recent_subs' => $recent_subs,
+            'top_subs'    => $top_subs,
             'url'         => get_permalink($page->ID),
             'items'       => count($item_ids),
             'words'       => $words,
@@ -312,6 +346,16 @@ class WCP_Recap {
             'content_excerpt' => mb_substr(wp_strip_all_tags($page->post_content), 0, 200),
             'recent_items'    => array_slice($recent, 0, 6),
         );
+    }
+
+    /** [item count, latest modified timestamp] for one context term (cheap: one query, newest item only). */
+    private function term_activity($term_id, $include_children) {
+        $q = new WP_Query(array(
+            'post_type' => 'post', 'post_status' => 'publish', 'posts_per_page' => 1,
+            'orderby' => 'modified', 'order' => 'DESC', 'no_found_rows' => false,
+            'tax_query' => array(array('taxonomy' => 'wcp_context', 'field' => 'term_id', 'terms' => $term_id, 'include_children' => $include_children)),
+        ));
+        return array((int) $q->found_posts, $q->have_posts() ? strtotime($q->posts[0]->post_modified) : 0);
     }
 
     /** [item count, word count] for one term; optionally excluding descendant terms. */
@@ -373,6 +417,9 @@ class WCP_Recap {
             if ($a['content_excerpt'] !== '') {
                 $line .= "\n  Page text: {$a['content_excerpt']}";
             }
+            if (!empty($a['recent_subs'])) {
+                $line .= "\n  Recently active sub-pages: " . implode('; ', array_map(function ($r) { return "{$r[0]} ({$r[2]})"; }, $a['recent_subs']));
+            }
             $hs = array();
             foreach ($a['headings'] as $h) {
                 $hs[] = "{$h[0]} ({$h[1]} items, {$h[2]} words)";
@@ -393,7 +440,7 @@ class WCP_Recap {
              . "Return ONLY a JSON object: {"
              . "\"summary\": \"3-5 sentences on where the content is concentrated and what has been happening\", "
              . "\"areas\": [{\"page_id\": <id from the list>, \"about\": \"one sentence on what this page seems to be about\", "
-             . "\"latest\": \"short description of its latest activity, or empty if none\"}], "
+             . "\"latest\": \"short description of its latest activity (name the sub-pages involved if given), or empty if none\"}], "
              . "\"highlights\": [{\"text\": \"a notable recent change\", \"when\": \"e.g. 3 days ago\"}] (3-6, most recent first), "
              . "\"suggestions\": [{\"title\": \"...\", \"why\": \"...\", \"evidence\": \"the specific data points this rests on\", "
              . "\"page_id\": <id from the list>}] (3-5; prefer thin/stale areas, empty headings, and neglected dependencies)}. "

@@ -70,6 +70,10 @@ svg text { fill:var(--muted); font-size:10px; }
 .pcard .meta { color:var(--muted); font-size:12px; }
 .pcard .latest { margin-top:auto; border-top:1px solid var(--line); padding-top:8px; font-size:12px; }
 .pcard .latest b { display:block; color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
+.pcard .subs { margin:4px 0 0; padding-left:16px; }
+.pcard .subs li { margin:1px 0; }
+.pcard .subs span { color:var(--muted); }
+.pcard .latest + .latest { margin-top:0; border-top:0; padding-top:0; }
 .pcard a { color:var(--accent); text-decoration:none; font-size:12px; }
 .linkbtn { border:1px solid var(--line); background:var(--card); color:var(--accent); border-radius:6px; padding:5px 14px; cursor:pointer; font:inherit; font-size:12px; }
 .note { font-size:12px; color:var(--muted); margin-top:6px; }
@@ -225,6 +229,9 @@ document.addEventListener("mousemove", (e) => {
 });
 
 // Top-level page cards: 6 by default (two rows of 3), "Show all" reveals the rest.
+const subLink = (x) => x[1] ? `<a href="${esc(x[1])}">${esc(x[0])}</a>` : esc(x[0]);
+const subList = (list, note) => (list && list.length)
+  ? `<ul class="subs">${list.map(x => `<li>${subLink(x)} <span>· ${esc(note(x))}</span></li>`).join("")}</ul>` : "";
 let showAll = false;
 function renderPages() {
   const list = [...DATA.areas].sort((a,b) => b.items-a.items);
@@ -232,8 +239,9 @@ function renderPages() {
   $("#pages").innerHTML = shown.map(a => `<div class="pcard">
     <h3><span>${esc(a.name)}</span>${a.flag?`<span class="tag ${a.flag}">${a.flag}</span>`:""}</h3>
     <p class="about">${esc(a.about)}</p>
-    <div class="meta">${a.headings.length} headings · ${fmt(a.items)} items · ${fmt(a.words)} words</div>
-    <div class="latest"><b>Latest activity · ${esc(a.when)}</b>${esc(a.latest)}</div>
+    <div class="meta">${fmt(a.subpages||0)} subpage${a.subpages===1?"":"s"} · ${a.headings.length} headings · ${fmt(a.items)} items · ${fmt(a.words)} words</div>
+    <div class="latest"><b>Latest activity · ${esc(a.when)}</b>${esc(a.latest)}${subList(a.recent_subs, (x) => x[2])}</div>
+    ${(a.top_subs||[]).length ? `<div class="latest"><b>Most content</b>${subList(a.top_subs, (x) => fmt(x[2]) + " items")}</div>` : ""}
     ${a.url?`<a href="${esc(a.url)}">Open page →</a>`:""}</div>`).join("");
   const btn = $("#showAll");
   btn.style.display = list.length > 6 ? "" : "none";

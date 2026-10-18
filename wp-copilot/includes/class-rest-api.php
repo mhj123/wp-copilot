@@ -3868,6 +3868,7 @@ class WCP_REST_API {
         }
 
         return rest_ensure_response(array(
+            'title'  => $page->post_title,
             'slides' => wcp_theme_get_page_slideshow_data( $page_id ),
         ));
     }
@@ -3889,6 +3890,7 @@ class WCP_REST_API {
         }
 
         return rest_ensure_response(array(
+            'title'  => $heading->post_title,
             'slides' => wcp_theme_get_heading_slideshow_data( $heading_id ),
         ));
     }
