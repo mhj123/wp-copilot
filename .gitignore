@@ -58,3 +58,6 @@ scripts/
 __pycache__/
 *.py[cod]
 deploy.sh
+
+# Local design notes
+ROADMAP.md

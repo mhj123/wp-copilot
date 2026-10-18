@@ -146,7 +146,7 @@ get_header();
                 <button type="button" class="wcp-item-ai-chip" data-action="action_plan_from_context">Action plan from context</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="improve_phrasing">Improve phrasing</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="coach_item">Coach me</button>
-                <button type="button" class="wcp-item-ai-chip" data-action="freeform">Freeform…</button>
+                <button type="button" class="wcp-item-ai-chip" data-action="freeform">Brainstorm description…</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="suggest_subtasks">Add subtasks</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="suggest_contexts">Auto-associate</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="to_goal">Convert to goal</button>

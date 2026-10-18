@@ -1380,3 +1380,16 @@ body.admin-bar .wcp-ai-widget.closed {
     display: flex;
     gap: 8px;
 }
+
+/* Intent router suggestions */
+.wcp-ai-intent-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.wcp-ai-intent-reason {
+    font-size: 13px;
+    color: #666;
+}

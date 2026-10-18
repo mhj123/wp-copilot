@@ -388,6 +388,39 @@ body.wcp-ai-panel-open.wcp-ai-panel-expanded .wcp-main-content {
     color: #c0392b;
 }
 
+/* Inline editors for page content + AI mission */
+.wcp-inline-edit-placeholder {
+    font-style: italic;
+    cursor: text;
+}
+
+.wcp-inline-edit-btn {
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.wcp-inline-edit:hover .wcp-inline-edit-btn {
+    opacity: 1;
+}
+
+.wcp-inline-edit-textarea {
+    width: 100%;
+    font-size: 14px;
+    line-height: 1.7;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.wcp-inline-edit-status {
+    font-size: 13px;
+    color: #c0392b;
+}
+
+.wcp-page-mission-box .wcp-inline-edit-display {
+    font-size: 14px;
+    line-height: 1.7;
+}
+
 /* Legacy page template styles (kept for backward compatibility) */
 .wcp-page-article {
     background: #fff;
@@ -3744,3 +3777,52 @@ a.wcp-tag:hover {
     font-size: 13px;
     color: #8a8a94;
 }
+
+/* Researcher-mode writing mode */
+.wcp-writing-hidden { display: none !important; }
+
+.wcp-writing-paragraph {
+    margin: 6px 0 2px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    user-select: text;
+}
+
+.wcp-phrase {
+    background: #fff3b0;
+    border-radius: 3px;
+    padding: 0 2px;
+}
+
+.wcp-writing-detached {
+    font-size: 12px;
+    color: #888;
+}
+
+.wcp-phrase-detached { font-style: italic; }
+
+.wcp-writing-toggle.active { background: #fff3b0; border-radius: 3px; }
+
+.wcp-writing-hint { font-size: 11px; color: #999; }
+
+.wcp-phrase-fab {
+    position: absolute;
+    z-index: 10000;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.wcp-writing-wrap {
+    flex: 0 0 calc(100% - 29px);
+    margin-left: 19px;
+}
+
+/* Recap tab */
+.wcp-recap-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.wcp-recap-status { font-size: 12px; color: #666; }
+.wcp-recap-frame { width: 100%; border: 1px solid #e5e7eb; border-radius: 10px; min-height: 400px; display: block; background: #fff; }
+.wcp-recap-list-title { margin: 24px 0 8px; font-size: 14px; }
+.wcp-recap-list { list-style: none; margin: 0; padding: 0; }
+.wcp-recap-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 10px; border-bottom: 1px solid #eee; }
+.wcp-recap-list li.active { background: #eef4fb; }
+.wcp-recap-open { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font: inherit; color: inherit; display: flex; gap: 12px; flex-wrap: wrap; }
+.wcp-recap-open span { color: #777; font-size: 12px; }

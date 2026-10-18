@@ -337,6 +337,16 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
+        // Recaps (saved corpus snapshots)
+        register_rest_route($namespace, '/recaps', array(
+            array('methods' => 'GET',  'callback' => array(WCP_Recap::instance(), 'rest_list'),   'permission_callback' => array($this, 'check_permission')),
+            array('methods' => 'POST', 'callback' => array(WCP_Recap::instance(), 'rest_create'), 'permission_callback' => array($this, 'check_permission')),
+        ));
+        register_rest_route($namespace, '/recaps/(?P<id>\d+)', array(
+            array('methods' => 'GET',    'callback' => array(WCP_Recap::instance(), 'rest_get'),    'permission_callback' => array($this, 'check_permission')),
+            array('methods' => 'DELETE', 'callback' => array(WCP_Recap::instance(), 'rest_delete'), 'permission_callback' => array($this, 'check_permission')),
+        ));
+
         // Calendar import
         register_rest_route($namespace, '/calendar/import', array(
             'methods'             => 'POST',
@@ -362,6 +372,18 @@ class WCP_REST_API {
                 'permission_callback' => array($this, 'check_permission'),
             ));
         }
+
+        // Page content + AI mission: direct human edits from the front end
+        register_rest_route($namespace, '/pages/(?P<page_id>\d+)/content', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'save_page_content'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+        register_rest_route($namespace, '/pages/(?P<page_id>\d+)/mission', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'save_page_mission'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
 
         // Page notes
         register_rest_route($namespace, '/pages/(?P<page_id>\d+)/notes', array(
@@ -1462,6 +1484,15 @@ class WCP_REST_API {
                 $result = $ai_actions->append_page_content($prompt, $page_id, $context_mode, $selected_pages);
                 break;
 
+            case 'route_intent':
+                // Suggestion only. If routing fails or finds nothing better, fall
+                // back to plain chat so the user's prompt is never blocked.
+                $result = $ai_actions->route_intent($prompt, $page_id, (bool) $request->get_param('embedded'));
+                if (is_wp_error($result) || (isset($result['outcome']) && $result['outcome'] === 'intent_none')) {
+                    $result = $ai_actions->chat_qa($prompt, $page_id, $context_mode, $selected_pages, $conversation_id);
+                }
+                break;
+
             case 'fetch_posts':
                 $result = $ai_actions->fetch_posts_auto($prompt, $page_id, $conversation_id);
                 break;
@@ -1482,6 +1513,20 @@ class WCP_REST_API {
                     'success' => false,
                     'message' => 'Unknown action type: ' . $action_type,
                 ));
+        }
+
+        // The model sometimes answers a structured action in plain prose (e.g. it
+        // lacks the context to do the task and says so). That is a reply, not a
+        // failure: show it as a chat message. It is display-only — nothing is
+        // written to the database, so the human-in-the-loop guardrail is unchanged.
+        if (is_wp_error($result) && $result->get_error_code() === 'no_json') {
+            $err_data = $result->get_error_data();
+            if (is_array($err_data) && !empty($err_data['raw'])) {
+                $result = array(
+                    'outcome' => 'chat',
+                    'message' => $err_data['raw'],
+                );
+            }
         }
 
         if (is_wp_error($result)) {
@@ -2539,6 +2584,23 @@ class WCP_REST_API {
             wp_update_post($updated);
         }
 
+        // Researcher-mode writing mode: render this top-level item as a prose
+        // paragraph whose phrases can be highlighted for Find References.
+        $writing_mode = $request->get_param('writing_mode');
+        if ($writing_mode !== null) {
+            if (rest_sanitize_boolean($writing_mode)) {
+                if (!class_exists('WCP_Researcher_Mode') || !WCP_Researcher_Mode::is_active()) {
+                    return new WP_Error('researcher_mode_off', 'Writing mode needs Researcher mode.', array('status' => 403));
+                }
+                if ($post->post_parent) {
+                    return new WP_Error('is_subitem', 'Writing mode is only available on top-level items.', array('status' => 400));
+                }
+                update_post_meta($item_id, '_wcp_writing_mode', '1');
+            } else {
+                delete_post_meta($item_id, '_wcp_writing_mode');
+            }
+        }
+
         $item_type = $request->get_param('item_type');
         if ($item_type !== null) {
             $terms = $item_type ? array(sanitize_key($item_type)) : array();
@@ -3108,23 +3170,31 @@ class WCP_REST_API {
                 ));
 
             case 'freeform':
+                // "Brainstorm description": output is the new description ONLY (plain
+                // Markdown, not JSON — long output used to get truncated mid-JSON and
+                // shown raw). AI guardrail: proposal only; the title is never touched
+                // and nothing is saved until the user accepts.
                 $user_prompt = sanitize_textarea_field( $request->get_param('prompt') );
                 if ( $user_prompt === '' ) {
                     return new WP_Error( 'missing_prompt', 'A prompt is required', array('status' => 400) );
                 }
-                $sys  = "You are editing a single knowledge/work item. Apply the user's instruction to it "
-                      . "(most often rephrasing or rewriting). Return ONLY a JSON object: {\"title\": \"...\", \"content\": \"...\"}. "
-                      . "Preserve the item's meaning unless the instruction says otherwise. Keep 'content' an empty string "
-                      . "if the item had no content and the instruction does not call for any. "
-                      . "'content' may use Markdown (bullet lists with -, **bold**, headings with #) where it improves clarity — it will be rendered, not shown as raw text.";
+                $sys  = "You are helping the user brainstorm the DESCRIPTION of a single knowledge/work item. "
+                      . "Follow the user's instruction, using the item's title, current description and context as input. "
+                      . "Return ONLY the new description as Markdown (bullet lists with -, **bold**, headings with ##) — "
+                      . "no JSON, no code fences, no preamble, and do not repeat the title. "
+                      . "It will REPLACE the current description, so carry over anything from it worth keeping.";
                 $usr  = "User instruction: {$user_prompt}\n\n{$item_text}";
-                $resp = $ai_client->request_with_conversation( $sys, $usr, array(), 512 );
+                $resp = $ai_client->request_with_conversation( $sys, $usr, array(), 4096, 90 );
                 if ( is_wp_error($resp) ) return $resp;
-                $parsed = WCP_AI_Actions::instance()->parse_json_response( $resp['content'] );
+                if ( ( $resp['stop_reason'] ?? null ) === 'max_tokens' ) {
+                    return new WP_Error( 'response_truncated', 'The AI response was cut off. Try a narrower request.', array('status' => 500) );
+                }
+                $desc = trim( $resp['content'] );
+                $desc = preg_replace( '/^```(?:markdown|md)?\s*\n(.*)\n```$/s', '$1', $desc );
                 return rest_ensure_response(array(
                     'success'  => true,
                     'action'   => 'freeform',
-                    'proposal' => ( ! is_wp_error($parsed) && is_array($parsed) ) ? $parsed : array('title' => $resp['content'], 'content' => ''),
+                    'proposal' => array( 'content' => trim( $desc ) ),
                 ));
 
             case 'suggest_subtasks':
@@ -3255,7 +3325,7 @@ class WCP_REST_API {
 
             case 'find_references_query_preview':
                 // Researcher-mode gate lives in guard_find_references_for_item().
-                $friq_result = WCP_AI_Actions::instance()->find_references_for_item_query_preview( $item_id, (int) $request->get_param('page_id') );
+                $friq_result = WCP_AI_Actions::instance()->find_references_for_item_query_preview( $item_id, (int) $request->get_param('page_id'), (string) $request->get_param('phrase') );
                 if ( is_wp_error( $friq_result ) ) {
                     return $friq_result;
                 }
@@ -3265,7 +3335,7 @@ class WCP_REST_API {
                 // Researcher-mode gate lives in guard_find_references_for_item().
                 $page_id_param = (int) $request->get_param('page_id');
                 $conversation_id_param = $request->get_param('conversation_id');
-                $fri_result = WCP_AI_Actions::instance()->find_references_for_item( $item_id, $page_id_param, $conversation_id_param, $request->get_param('query') );
+                $fri_result = WCP_AI_Actions::instance()->find_references_for_item( $item_id, $page_id_param, $conversation_id_param, $request->get_param('query'), (string) $request->get_param('phrase'), (int) $request->get_param('phrase_start') );
                 if ( is_wp_error( $fri_result ) ) {
                     return $fri_result;
                 }
@@ -3618,6 +3688,56 @@ class WCP_REST_API {
         $notes = wp_kses_post( $request->get_param('notes') ?: '' );
         update_post_meta($page_id, '_wcp_page_notes', $notes);
         return rest_ensure_response(array('success' => true, 'notes' => $notes));
+    }
+
+    /**
+     * POST /work-copilot/v1/pages/{page_id}/content
+     *
+     * Replaces the page's post_content with text the user typed. This is a
+     * direct human edit, not an AI proposal (AI content still goes through
+     * content/accept).
+     */
+    public function save_page_content( $request ) {
+        $page_id = (int) $request->get_param('page_id');
+        $page    = get_post($page_id);
+        if ( ! $page || $page->post_type !== 'page' ) {
+            return new WP_Error('not_found', 'Page not found', array('status' => 404));
+        }
+        $auth = WCP_REST_Auth::require_object( $page_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
+        $content = wp_kses_post( (string) $request->get_param('content') );
+        $result  = wp_update_post( array( 'ID' => $page_id, 'post_content' => $content ), true );
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        }
+        return rest_ensure_response( array(
+            'success' => true,
+            'content' => $content,
+            'html'    => apply_filters( 'the_content', $content ),
+        ) );
+    }
+
+    /**
+     * POST /work-copilot/v1/pages/{page_id}/mission
+     *
+     * Replaces the page's AI mission (the append endpoint is the AI-assisted
+     * path). Saved only on an explicit user Save.
+     */
+    public function save_page_mission( $request ) {
+        $page_id = (int) $request->get_param('page_id');
+        $page    = get_post($page_id);
+        if ( ! $page || $page->post_type !== 'page' ) {
+            return new WP_Error('not_found', 'Page not found', array('status' => 404));
+        }
+        $auth = WCP_REST_Auth::require_object( $page_id, 'edit_post' );
+        if ( is_wp_error( $auth ) ) {
+            return $auth;
+        }
+        $mission = trim( sanitize_textarea_field( (string) $request->get_param('mission') ) );
+        update_post_meta( $page_id, '_wcp_ai_page_mission', $mission );
+        return rest_ensure_response( array( 'success' => true, 'mission' => $mission ) );
     }
 
     // ------------------------------------------------------------------

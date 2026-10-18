@@ -127,6 +127,7 @@ if (empty($saved_prompts)) {
             <?php else : ?>
             <button type="button" class="wcp-ai-action-chip wcp-ai-action-chip--onboard" data-action="onboard"><?php _e('Onboard', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="web_search"><?php _e('Web search', 'work-copilot'); ?></button>
+            <button type="button" class="wcp-ai-action-chip" data-action="generate_items"><?php _e('Generate items', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="generate_structure"><?php _e('Generate structure', 'work-copilot'); ?></button>
             <button type="button" class="wcp-ai-action-chip" data-action="import_document"><?php _e('Import document', 'work-copilot'); ?></button>
             <input type="file" id="wcp-ai-document-upload" accept=".md,text/markdown" style="display:none;">

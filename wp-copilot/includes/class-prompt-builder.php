@@ -179,12 +179,14 @@ MD;
             'generate-structure' => "You add headings and/or items to the CURRENT PAGE based on the user's request. "
                 . "You are given the page's existing structure, including each existing heading's id and the items already under it. "
                 . "You may create new headings, new items, or both, and place each new item under a NEW heading, an EXISTING heading (by its id), or at PAGE level. "
-                . "Do exactly what the user asks — headings only, items only, or a mix — and do not duplicate existing items.\n\n"
+                . "Do exactly what the user asks — headings only, items only, or a mix — and do not duplicate existing items. "
+                . "If the user names a heading, put the items under THAT existing heading (use its id) — never create a new heading with the same or a similar title. "
+                . "Otherwise place each item under the heading whose topic it best fits.\n\n"
                 . "IMPORTANT: Respond with ONLY a valid JSON object. No text before or after. Format:\n"
                 . '{"headings":[{"ref":"h1","title":"Heading title"}],"items":[{"title":"Item title","content":"Detail or empty","item_type":"task","target":{"type":"new","ref":"h1"}}]}' . "\n\n"
                 . "Rules: item_type is one of task|info|learning|spec. target.type is one of: "
                 . "\"new\" (also give \"ref\" matching a heading in your headings list), "
-                . "\"existing\" (also give \"id\" = an existing heading id from the structure), or "
+                . "\"existing\" (also give \"id\" = an existing heading id from the structure, and \"title\" = that heading's title), or "
                 . "\"page\" (page level). Use an empty headings array if creating no new headings. "
                 . "Start your response with { and end with }.",
 
@@ -244,6 +246,16 @@ MD;
                 . "Valid task_status values: to-do, in-progress, done. "
                 . "Express dates as absolute Y-m-d strings. Format:\n"
                 . '{"date_from":null,"date_to":null,"item_type":null,"task_status":null,"parent_page_id":null,"limit":10}'
+                . "\n\nStart your response with { and end with }.",
+
+            // Intent routing: pick which assistant action(s) best serve a free-text request.
+            // The allowed action menu is supplied in the user message (it varies by context).
+            'route_intent' => "You route the user's request to the assistant action that best serves it. "
+                . "You are given a menu of actions (id: description) and the user's request. "
+                . "Choose at most 2 actions from the menu, best first. Only use ids from the menu. "
+                . "If the request is simply a question or conversation that plain chat answers well, return no suggestions.\n\n"
+                . "IMPORTANT: Respond with ONLY a valid JSON object. No text before or after. Format:\n"
+                . '{"suggestions":[{"action":"<menu id>","reason":"<one short sentence why>"}]}'
                 . "\n\nStart your response with { and end with }.",
 
             // Goal planning: understand the goal and propose action items

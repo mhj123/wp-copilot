@@ -73,17 +73,66 @@ get_header();
     </nav>
     <?php endif; ?>
 
-    <!-- Page Content (only show if there is content) -->
-    <?php if (get_the_content()) : ?>
-    <div class="wcp-page-content-box" data-section="page-content" data-page-id="<?php echo esc_attr(get_the_ID()); ?>">
+    <!-- Page Content — click [edit] to change it in place (logged-in editors); read-only box only when there is content -->
+    <?php
+    $_can_edit_page = current_user_can('edit_post', $page_id);
+    $_raw_content   = get_post_field('post_content', $page_id);
+    $_page_mission  = get_post_meta($page_id, '_wcp_ai_page_mission', true);
+    ?>
+    <?php if ($_raw_content || $_can_edit_page) : ?>
+    <div class="wcp-page-content-box wcp-inline-edit" data-section="page-content" data-field="content" data-page-id="<?php echo esc_attr($page_id); ?>">
         <div class="wcp-section-header">
             <span class="wcp-section-label">Page content</span>
+            <?php if ($_raw_content) : ?>
             <button type="button" class="wcp-toggle-section wcp-edit-link"
                     data-section="page-content"
-                    data-page-id="<?php echo esc_attr(get_the_ID()); ?>">hide</button>
+                    data-page-id="<?php echo esc_attr($page_id); ?>">hide</button>
+            <?php endif; ?>
+            <?php if ($_can_edit_page) : ?><button type="button" class="wcp-inline-edit-btn wcp-edit-link">[edit]</button><?php endif; ?>
         </div>
         <div class="wcp-section-body">
-            <?php the_content(); ?>
+            <div class="wcp-inline-edit-display<?php echo $_raw_content ? '' : ' wcp-page-notes-empty'; ?>">
+                <?php
+                if ($_raw_content) {
+                    echo apply_filters('the_content', $_raw_content);
+                } else {
+                    echo '<span class="wcp-inline-edit-placeholder">Add page content…</span>';
+                }
+                ?>
+            </div>
+            <?php if ($_can_edit_page) : ?>
+            <div class="wcp-inline-edit-editor" style="display:none;">
+                <textarea class="wcp-inline-edit-textarea wcp-form-control" rows="10"><?php echo esc_textarea($_raw_content); ?></textarea>
+                <div class="wcp-page-notes-actions">
+                    <button type="button" class="wcp-inline-edit-save wcp-btn wcp-btn-primary wcp-btn-sm">Save</button>
+                    <button type="button" class="wcp-inline-edit-cancel wcp-edit-link">cancel</button>
+                    <span class="wcp-inline-edit-status"></span>
+                </div>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($_can_edit_page) : ?>
+    <!-- AI mission: private steering text for the AI on this page; editors only -->
+    <div class="wcp-page-content-box wcp-inline-edit wcp-page-mission-box" data-section="page-mission" data-field="mission" data-page-id="<?php echo esc_attr($page_id); ?>">
+        <div class="wcp-section-header">
+            <span class="wcp-section-label">AI mission</span>
+            <button type="button" class="wcp-inline-edit-btn wcp-edit-link">[edit]</button>
+        </div>
+        <div class="wcp-section-body">
+            <div class="wcp-inline-edit-display<?php echo $_page_mission ? '' : ' wcp-page-notes-empty'; ?>">
+                <?php echo $_page_mission ? nl2br(esc_html($_page_mission)) : '<span class="wcp-inline-edit-placeholder">Set an AI mission for this page…</span>'; ?>
+            </div>
+            <div class="wcp-inline-edit-editor" style="display:none;">
+                <textarea class="wcp-inline-edit-textarea wcp-form-control" rows="5"><?php echo esc_textarea($_page_mission); ?></textarea>
+                <div class="wcp-page-notes-actions">
+                    <button type="button" class="wcp-inline-edit-save wcp-btn wcp-btn-primary wcp-btn-sm">Save</button>
+                    <button type="button" class="wcp-inline-edit-cancel wcp-edit-link">cancel</button>
+                    <span class="wcp-inline-edit-status"></span>
+                </div>
+            </div>
         </div>
     </div>
     <?php endif; ?>

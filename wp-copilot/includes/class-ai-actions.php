@@ -435,7 +435,7 @@ class WCP_AI_Actions {
         );
     }
 
-    private function research_create_item_proposals($items, $page_id, $conversation_id, $action_type, $target_heading = '', $parent_item_id = 0) {
+    private function research_create_item_proposals($items, $page_id, $conversation_id, $action_type, $target_heading = '', $parent_item_id = 0, $phrase = '', $phrase_start = 0) {
         $proposals = array();
         $batch_id = wp_generate_uuid4();
         foreach ($items as $index => $item) {
@@ -459,6 +459,13 @@ class WCP_AI_Actions {
                 // triggered the search — not filed under a heading. Takes
                 // priority over target_heading if both were somehow set.
                 $proposal['parent_item_id'] = (int) $parent_item_id;
+            }
+            if ($phrase !== '') {
+                // Writing-mode paragraph: the references are "about" this highlighted
+                // phrase. Carried on the proposal only — the phrase item itself is not
+                // created until the user accepts a reference (see execute_proposal).
+                $proposal['phrase'] = $phrase;
+                $proposal['phrase_start'] = (int) $phrase_start;
             }
             set_transient('wcp_proposal_' . $proposal_id, $proposal, HOUR_IN_SECONDS);
             $proposals[] = $proposal;
@@ -903,15 +910,81 @@ class WCP_AI_Actions {
     }
 
     /**
+     * Find or create the phrase item for a writing-mode paragraph: a child of the
+     * paragraph (contained-in), de-duplicated by its exact text. Called only from
+     * the accept path, so highlighting/searching never writes anything.
+     *
+     * @return int Phrase item ID (0 on failure).
+     */
+    private function find_or_create_phrase_item($paragraph_id, $phrase, $phrase_start, $user_id) {
+        $existing = get_posts(array(
+            'post_type'      => 'post',
+            'post_parent'    => $paragraph_id,
+            'posts_per_page' => 1,
+            'post_status'    => 'any',
+            'fields'         => 'ids',
+            'meta_query'     => array(
+                array('key' => '_wcp_rel', 'value' => 'contained_in'),
+                array('key' => '_wcp_anchor_text', 'value' => $phrase),
+            ),
+        ));
+        if (!empty($existing)) { return (int) $existing[0]; }
+
+        $phrase_id = wp_insert_post(array(
+            'post_type'   => 'post',
+            'post_title'  => $phrase,
+            'post_status' => 'publish',
+            'post_author' => $user_id,
+            'post_parent' => $paragraph_id,
+        ));
+        if (is_wp_error($phrase_id) || !$phrase_id) { return 0; }
+
+        WCP_Post_Types::mark_creator($phrase_id, 'copilot');
+        wp_set_post_terms($phrase_id, array('note'), 'item_type');
+        $context_ids = wp_get_post_terms($paragraph_id, 'wcp_context', array('fields' => 'ids'));
+        if (!is_wp_error($context_ids) && !empty($context_ids)) {
+            wp_set_post_terms($phrase_id, $context_ids, 'wcp_context');
+        }
+        update_post_meta($phrase_id, '_wcp_rel', 'contained_in');
+        update_post_meta($phrase_id, '_wcp_anchor_text', $phrase);
+        update_post_meta($phrase_id, '_wcp_anchor_start', max(0, (int) $phrase_start));
+        return (int) $phrase_id;
+    }
+
+    /**
+     * Validate a highlighted phrase against its paragraph: it must literally
+     * occur in the item's text, so a client can't attach arbitrary text.
+     *
+     * @return string The cleaned phrase, or '' if absent/not in the paragraph.
+     */
+    private function clean_item_phrase($item, $phrase) {
+        $phrase = trim(sanitize_text_field((string) $phrase));
+        if ($phrase === '' || mb_strlen($phrase) > 300) { return ''; }
+        $haystack = $item->post_title . "\n" . wp_strip_all_tags($item->post_content);
+        return mb_stripos($haystack, $phrase) !== false ? $phrase : '';
+    }
+
+    /**
+     * Search instruction for an item: its title/content, or — when a phrase was
+     * highlighted in a writing-mode paragraph — the phrase, with the paragraph
+     * as surrounding context.
+     */
+    private function item_reference_instruction($item, $phrase) {
+        $body = $item->post_title . ($item->post_content ? "\n" . wp_strip_all_tags($item->post_content) : '');
+        if ($phrase === '') { return $body; }
+        return "Find references about this phrase: \"{$phrase}\"\n\nIt appears in this paragraph (context only):\n" . $body;
+    }
+
+    /**
      * Derive-only counterpart to find_references_for_item(): computes the
      * Exa query from the item's own title/content without searching, so the
      * caller can show it for review/editing first.
      */
-    public function find_references_for_item_query_preview($item_id, $page_id) {
+    public function find_references_for_item_query_preview($item_id, $page_id, $phrase = '') {
         $item = $this->guard_find_references_for_item($item_id, $page_id);
         if (is_wp_error($item)) { return $item; }
 
-        $instruction = $item->post_title . ($item->post_content ? "\n" . wp_strip_all_tags($item->post_content) : '');
+        $instruction = $this->item_reference_instruction($item, $this->clean_item_phrase($item, $phrase));
         $atoms = $this->research_space_atoms($page_id);
         $query = $this->research_derive_search_query($instruction, $page_id, $atoms);
         return array('query' => $query);
@@ -922,7 +995,7 @@ class WCP_AI_Actions {
      *   derived query before confirming), used verbatim instead of deriving
      *   a fresh one from the item's own title/content.
      */
-    public function find_references_for_item($item_id, $page_id, $conversation_id = null, $query_override = null) {
+    public function find_references_for_item($item_id, $page_id, $conversation_id = null, $query_override = null, $phrase = '', $phrase_start = 0) {
         $item = $this->guard_find_references_for_item($item_id, $page_id);
         if (is_wp_error($item)) { return $item; }
         $item_id = (int) $item_id;
@@ -932,11 +1005,12 @@ class WCP_AI_Actions {
             return new WP_Error('not_configured', 'Exa API key not configured. Add one in WP Copilot → Settings.');
         }
 
+        $phrase = $this->clean_item_phrase($item, $phrase);
         $query_override = trim((string) $query_override);
         if ($query_override !== '') {
             $query = $query_override;
         } else {
-            $instruction = $item->post_title . ($item->post_content ? "\n" . wp_strip_all_tags($item->post_content) : '');
+            $instruction = $this->item_reference_instruction($item, $phrase);
             $atoms = $this->research_space_atoms($page_id);
             $query = $this->research_derive_search_query($instruction, $page_id, $atoms);
         }
@@ -946,12 +1020,12 @@ class WCP_AI_Actions {
 
         $items = $this->research_findings_to_items($findings, $query);
 
-        list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, 'find_references_for_item', '', $item_id);
+        list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, 'find_references_for_item', '', $item_id, $phrase, $phrase_start);
 
         WCP_AI_Logger::instance()->log_action('find_references_for_item', array(
             'model' => 'exa-web-search',
             'prompt' => $item->post_title,
-            'input_context' => array('page_id' => $page_id, 'item_id' => $item_id, 'source' => 'Exa web search', 'derived_query' => $query),
+            'input_context' => array('page_id' => $page_id, 'item_id' => $item_id, 'source' => 'Exa web search', 'derived_query' => $query, 'phrase' => $phrase),
             'output' => $items,
             'context_post_id' => $page_id,
         ));
@@ -1851,7 +1925,24 @@ class WCP_AI_Actions {
             $items_listing .= "ID {$it['id']}: \"{$it['title']}\" — " . ($content !== '' ? $content : '(no description)') . "\n";
         }
 
-        $sys = "You are helping the user edit the title and/or description of one or more existing items. "
+        // Headings on this page — lets the AI propose moving items under one.
+        $heading_titles = array();
+        if ($page_id) {
+            $heading_posts = get_posts(array(
+                'post_type' => 'wcp_heading', 'post_status' => 'publish', 'posts_per_page' => -1,
+                'orderby' => 'menu_order', 'order' => 'ASC',
+                'meta_query' => array(
+                    array('key' => '_wcp_parent_type', 'value' => 'page'),
+                    array('key' => '_wcp_parent_id', 'value' => (int) $page_id),
+                ),
+            ));
+            foreach ($heading_posts as $hp) {
+                $heading_titles[] = $hp->post_title;
+            }
+        }
+
+        $sys = "You are helping the user edit the title and/or description of one or more existing items, "
+             . "and/or move them under a different heading. "
              . "Below is a list of candidate items, each with its ID, current title, and current description. "
              . "Decide which item(s) the user's instruction refers to and propose a new title and description for "
              . "each. Only include items the instruction clearly refers to — do not touch items it doesn't mention. "
@@ -1860,7 +1951,15 @@ class WCP_AI_Actions {
              . "the instruction doesn't ask you to change. Content may be an empty string if the item should end up "
              . "with no description. Content may use Markdown (bullet lists with -, **bold**, headings with #) "
              . "where it improves clarity — it will be rendered, not shown as raw text.";
-        $usr = "User instruction: {$prompt}\n\nCandidate items:\n{$items_listing}";
+        if (!empty($heading_titles)) {
+            // Moving is an optional extra key; title/content stay unchanged for a pure move.
+            $sys .= " If the user asks to move item(s) under a heading, add \"move_to_heading\": \"<exact heading title "
+                  . "from the Page headings list>\" to that item's object (keeping its existing title and content). "
+                  . "Omit move_to_heading for items that aren't being moved.";
+        }
+        $usr = "User instruction: {$prompt}\n\n"
+             . (!empty($heading_titles) ? "Page headings:\n- " . implode("\n- ", $heading_titles) . "\n\n" : '')
+             . "Candidate items:\n{$items_listing}";
 
         $conversation_history = array();
         if ($conversation_id) {
@@ -1911,11 +2010,27 @@ class WCP_AI_Actions {
             }
             $original = $by_id[$item_id];
 
+            // Optional move: resolve the heading by title among THIS page's headings only
+            // (don't guess — an unknown title means no move is proposed).
+            $move_to = null;
+            if (!empty($edit['move_to_heading']) && $page_id) {
+                $target_heading_id = $this->find_child_heading_by_title($page_id, (string) $edit['move_to_heading']);
+                $target_term_id    = $target_heading_id ? $this->heading_context_term_id($target_heading_id) : 0;
+                if ($target_term_id) {
+                    $move_to = array(
+                        'heading_id' => $target_heading_id,
+                        'term_id'    => $target_term_id,
+                        'title'      => get_the_title($target_heading_id),
+                    );
+                }
+            }
+
             $proposal_id = wp_generate_uuid4();
             $proposal = array(
                 'proposal_id'     => $proposal_id,
                 'batch_id'        => $batch_id,
                 'index'           => $index,
+                'move_to'         => $move_to,
                 'action_type'     => 'edit_item',
                 'item_id'         => $item_id,
                 'original'        => array('title' => $original['title'], 'content' => $original['content']),
@@ -2596,6 +2711,18 @@ class WCP_AI_Actions {
         $batch_id         = wp_generate_uuid4();
         $valid_item_types = array('task', 'note', 'learning', 'spec', 'source');
 
+        // Existing headings by lowercase title → term id, so a target the model names by title
+        // (or a "new" heading that duplicates an existing one) still lands under the real heading
+        // instead of a duplicate heading or silently falling back to page level.
+        $existing_by_title = array();
+        foreach ($valid_heading_terms as $vtid) {
+            $vterm = get_term((int) $vtid, 'wcp_context');
+            if ($vterm && !is_wp_error($vterm)) {
+                $existing_by_title[strtolower(trim(html_entity_decode($vterm->name)))] = (int) $vtid;
+            }
+        }
+        $ref_existing = array(); // new-heading ref → existing term id it duplicates
+
         // New headings → proposals + ref map for the plan tree.
         $headings   = array();
         $ref_titles = array();
@@ -2604,6 +2731,11 @@ class WCP_AI_Actions {
             $ref   = isset($h['ref'])   ? sanitize_text_field($h['ref'])   : '';
             if ($title === '' || $ref === '') {
                 continue;
+            }
+            $dup_key = strtolower(trim($title));
+            if (isset($existing_by_title[$dup_key])) {
+                $ref_existing[$ref] = $existing_by_title[$dup_key];
+                continue; // heading already exists — don't propose a duplicate
             }
             $pid  = wp_generate_uuid4();
             set_transient('wcp_proposal_' . $pid, array(
@@ -2636,8 +2768,12 @@ class WCP_AI_Actions {
                 $resolved = array('type' => 'page');
                 if ($ttype === 'new' && !empty($target['ref']) && isset($ref_titles[$target['ref']])) {
                     $resolved = array('type' => 'new', 'ref' => sanitize_text_field($target['ref']));
+                } elseif ($ttype === 'new' && !empty($target['ref']) && isset($ref_existing[$target['ref']])) {
+                    $resolved = array('type' => 'existing', 'id' => $ref_existing[$target['ref']]);
                 } elseif ($ttype === 'existing' && !empty($target['id']) && in_array((int) $target['id'], $valid_heading_terms, true)) {
                     $resolved = array('type' => 'existing', 'id' => (int) $target['id']);
+                } elseif (!empty($target['title']) && isset($existing_by_title[strtolower(trim($target['title']))])) {
+                    $resolved = array('type' => 'existing', 'id' => $existing_by_title[strtolower(trim($target['title']))]);
                 }
             }
 
@@ -3436,6 +3572,23 @@ class WCP_AI_Actions {
                 return $updated;
             }
 
+            // Move under a heading: swap the item's heading context term(s) for the
+            // target's, keeping any page-level/other terms. Only runs once accepted.
+            if (!empty($proposal['move_to']['term_id'])) {
+                $target_term = (int) $proposal['move_to']['term_id'];
+                $current     = wp_get_post_terms($item_id, 'wcp_context');
+                $keep        = array();
+                if (!is_wp_error($current)) {
+                    foreach ($current as $t) {
+                        if (get_term_meta($t->term_id, 'wcp_ref_type', true) !== 'wcp_heading') {
+                            $keep[] = (int) $t->term_id;
+                        }
+                    }
+                }
+                $keep[] = $target_term;
+                wp_set_post_terms($item_id, array_values(array_unique($keep)), 'wcp_context');
+            }
+
             delete_transient('wcp_proposal_' . $proposal_id);
 
             return array(
@@ -3609,15 +3762,31 @@ class WCP_AI_Actions {
                 // triggering item (that's a legitimate, separate association),
                 // just not a second one under the same item.
                 $existing_topic_item = false;
+
+                // Writing-mode phrase: find-or-create the phrase item here, at accept
+                // time (never at highlight/search time), as a child of the paragraph.
+                $phrase_item_id = 0;
+                $phrase_text = trim((string) ($proposal['phrase'] ?? ''));
+                if ($phrase_text !== '') {
+                    $phrase_item_id = $this->find_or_create_phrase_item($parent_item_id_for_ref, $phrase_text, (int) ($proposal['phrase_start'] ?? 0), $user_id);
+                }
+
                 if ($source_url_key) {
-                    $existing_subitems = get_posts(array(
+                    // With a phrase, the same source may attach to a different phrase
+                    // of the same paragraph, so dedup keys on (paragraph, URL, phrase).
+                    $dedup_args = array(
                         'post_type'      => 'post',
                         'post_parent'    => $parent_item_id_for_ref,
                         'posts_per_page' => 1,
                         'post_status'    => 'any',
-                        'meta_key'       => '_wcp_source_url',
-                        'meta_value'     => $source_url_key,
-                    ));
+                        'meta_query'     => array(
+                            array('key' => '_wcp_source_url', 'value' => $source_url_key),
+                            $phrase_item_id
+                                ? array('key' => '_wcp_rel_target', 'value' => $phrase_item_id)
+                                : array('key' => '_wcp_rel_target', 'compare' => 'NOT EXISTS'),
+                        ),
+                    );
+                    $existing_subitems = get_posts($dedup_args);
                     $existing_topic_item = !empty($existing_subitems);
                 }
 
@@ -3645,6 +3814,11 @@ class WCP_AI_Actions {
                             update_post_meta($topic_item_id, '_wcp_source_url', $source_url_key);
                         }
                         update_post_meta($topic_item_id, '_wcp_source_type', 'web_search');
+                        if ($phrase_item_id) {
+                            // Relationship: this source is "an article about" the phrase.
+                            update_post_meta($topic_item_id, '_wcp_rel', 'about');
+                            update_post_meta($topic_item_id, '_wcp_rel_target', $phrase_item_id);
+                        }
                         $created_posts[] = $topic_item_id;
                     }
                 }
@@ -3827,7 +4001,7 @@ class WCP_AI_Actions {
         $json_start_object = strpos($response, '{');
 
         if ($json_start_array === false && $json_start_object === false) {
-            return new WP_Error('no_json', 'No JSON found in response. Raw: ' . substr($original, 0, 200));
+            return new WP_Error('no_json', 'No JSON found in response. Raw: ' . substr($original, 0, 200), array('raw' => $original));
         }
 
         // Determine if we're looking for array or object
@@ -4271,6 +4445,109 @@ class WCP_AI_Actions {
             'proposal_id' => $proposal_id,
             'content'     => $response['content'],
             'action_id'   => $action_id,
+        );
+    }
+
+    /**
+     * Actions the intent router may suggest, with the chip label shown to the user.
+     * Deliberately excludes anything that cannot run from a bare typed prompt
+     * (file imports, modals, onboarding, and actions needing item_ids/heading_id).
+     *
+     * @param bool $embedded True for the site-level (homepage) widget.
+     * @return array id => array('label' => string, 'desc' => string)
+     */
+    private function route_intent_menu( $embedded ) {
+        if ( $embedded ) {
+            return array(
+                'web_search'          => array( 'label' => 'Web search', 'desc' => 'Search the web for current information and answer.' ),
+                'taxonomy_outline'    => array( 'label' => 'Taxonomy outline', 'desc' => 'Outline the whole corpus structure.' ),
+                'mission_priorities'  => array( 'label' => '5 things for my mission', 'desc' => 'Pick the most important things to work on against the mission.' ),
+                'weekly_summary'      => array( 'label' => 'What happened this week', 'desc' => 'Summarise the last 7 days of activity.' ),
+            );
+        }
+
+        $menu = array(
+            'web_search'         => array( 'label' => 'Web search', 'desc' => 'Search the web for current information and answer.' ),
+            'generate_items'     => array( 'label' => 'Generate items', 'desc' => 'Draft new items (tasks, notes) on this page as proposals to accept.' ),
+            'generate_structure' => array( 'label' => 'Generate structure', 'desc' => 'Draft headings and items together for this page.' ),
+            'generate_pages'     => array( 'label' => 'Create sub-pages', 'desc' => 'Draft new sub-pages under this page.' ),
+            'rewrite_content'    => array( 'label' => 'Edit page', 'desc' => "Rewrite this page's own content." ),
+            'append_content'     => array( 'label' => 'Append to page', 'desc' => "Draft text to add to this page's content." ),
+            'edit_items'         => array( 'label' => 'Edit items', 'desc' => 'Review and rework existing items on this page.' ),
+            'fetch_posts'        => array( 'label' => 'Fetch posts', 'desc' => 'Query the database by criteria (date range, item type, task status, e.g. recent incomplete tasks) and answer from the matching posts.' ),
+            'fetch_structure'    => array( 'label' => 'Fetch structure', 'desc' => 'Answer questions about the page/heading structure.' ),
+        );
+
+        if ( class_exists( 'WCP_Researcher_Mode' ) && WCP_Researcher_Mode::is_active() ) {
+            $menu['research_list_references'] = array( 'label' => 'List refs/claims', 'desc' => 'List the references and claims on this research page.' );
+            $menu['research_suggest_topics']  = array( 'label' => 'Suggest topics', 'desc' => 'Suggest sub-topics or sub-questions for this research space.' );
+            $menu['research_identify_gaps']   = array( 'label' => 'Identify gaps', 'desc' => 'Identify gaps in the research headings and items.' );
+            $menu['research_find_references'] = array( 'label' => 'Find references', 'desc' => 'Search for new references to support this research.' );
+        }
+
+        if ( class_exists( 'WCPD_Delegation_Manager' ) && get_option( 'wcpd_enabled' ) === '1' ) {
+            $menu['agent_review'] = array( 'label' => 'Agent review', 'desc' => 'Hand the context to the Hermes agent for review.' );
+        }
+
+        return $menu;
+    }
+
+    /**
+     * Intent router: suggest which action(s) best serve a free-text prompt sent with
+     * no chip selected. GUARDRAIL: suggestion only — nothing runs and nothing is
+     * written until the user clicks a suggested action.
+     *
+     * @return array|WP_Error {outcome:'intent_suggestion'|'intent_none', ...}
+     */
+    public function route_intent( $prompt, $page_id, $embedded = false ) {
+        if ( ! get_current_user_id() ) return new WP_Error( 'auth_error', 'User not authenticated' );
+
+        $menu = $this->route_intent_menu( $embedded );
+
+        $menu_text = '';
+        foreach ( $menu as $id => $entry ) {
+            $menu_text .= "- {$id}: {$entry['desc']}\n";
+        }
+
+        $system_prompt = WCP_Prompt_Builder::instance()->build_system_prompt( 'route_intent', $page_id );
+        $user_message  = "Action menu:\n{$menu_text}\nUser request: {$prompt}";
+
+        $response = WCP_AI_Client::instance()->request_with_conversation( $system_prompt, $user_message, array(), 256 );
+        if ( is_wp_error( $response ) ) return $response;
+
+        $parsed = $this->parse_json_response( $response['content'] );
+        if ( is_wp_error( $parsed ) ) return $parsed;
+
+        // Keep only ids that are actually in the menu offered for this context.
+        $suggestions = array();
+        foreach ( (array) ( $parsed['suggestions'] ?? array() ) as $s ) {
+            $id = is_array( $s ) ? ( $s['action'] ?? '' ) : '';
+            if ( ! isset( $menu[ $id ] ) || isset( $suggestions[ $id ] ) ) continue;
+            $suggestions[ $id ] = array(
+                'action' => $id,
+                'label'  => $menu[ $id ]['label'],
+                'reason' => sanitize_text_field( (string) ( $s['reason'] ?? '' ) ),
+            );
+            if ( count( $suggestions ) >= 2 ) break;
+        }
+        $suggestions = array_values( $suggestions );
+
+        WCP_AI_Logger::instance()->log_action( 'route_intent', array(
+            'model'           => $response['model'] ?? '',
+            'prompt'          => $prompt,
+            'input_context'   => array( 'page_id' => $page_id, 'embedded' => (bool) $embedded, 'menu' => array_keys( $menu ) ),
+            'output'          => $suggestions,
+            'context_post_id' => $page_id,
+        ) );
+
+        if ( empty( $suggestions ) ) {
+            return array( 'outcome' => 'intent_none' );
+        }
+
+        return array(
+            'outcome'     => 'intent_suggestion',
+            'prompt'      => $prompt,
+            'suggestions' => $suggestions,
         );
     }
 

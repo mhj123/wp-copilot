@@ -575,6 +575,40 @@ function wcp_theme_get_item_children( $item_id ) {
     ) );
 }
 
+// Phrase items of a writing-mode paragraph: children linked 'contained_in',
+// each with the count of references saved 'about' it.
+function wcp_theme_get_item_phrases( $item_id ) {
+    $phrases = array();
+    $children = get_posts( array(
+        'post_type'      => 'post',
+        'post_status'    => 'publish',
+        'post_parent'    => (int) $item_id,
+        'posts_per_page' => -1,
+        'meta_key'       => '_wcp_rel',
+        'meta_value'     => 'contained_in',
+    ) );
+    foreach ( $children as $child ) {
+        $refs = get_posts( array(
+            'post_type'      => 'post',
+            'post_status'    => 'publish',
+            'post_parent'    => (int) $item_id,
+            'posts_per_page' => -1,
+            'fields'         => 'ids',
+            'meta_query'     => array(
+                array( 'key' => '_wcp_rel', 'value' => 'about' ),
+                array( 'key' => '_wcp_rel_target', 'value' => $child->ID ),
+            ),
+        ) );
+        $phrases[] = array(
+            'id'    => $child->ID,
+            'text'  => (string) get_post_meta( $child->ID, '_wcp_anchor_text', true ),
+            'start' => (int) get_post_meta( $child->ID, '_wcp_anchor_start', true ),
+            'refs'  => count( $refs ),
+        );
+    }
+    return $phrases;
+}
+
 // Render an item row and recursively render its children beneath it.
 // $filter_context_ids: context term IDs that are already implied by the
 // current page/heading and should be hidden from the context pill display.

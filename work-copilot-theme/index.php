@@ -261,6 +261,9 @@ foreach ($cal_events as $ev) {
             <button type="button" class="wcp-dash-tab" data-tab="chat" role="tab">Chat</button>
             <?php endif; ?>
             <button type="button" class="wcp-dash-tab" data-tab="activity" role="tab">Recent activity</button>
+            <?php if (current_user_can('edit_posts') && post_type_exists('wcp_recap')) : ?>
+            <button type="button" class="wcp-dash-tab" data-tab="recap" role="tab">Recap</button>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -326,6 +329,19 @@ foreach ($cal_events as $ev) {
             <?php endif; ?>
         </div>
     </div>
+
+    <?php if (current_user_can('edit_posts') && post_type_exists('wcp_recap')) : ?>
+    <!-- Recap tab panel: saved corpus snapshots, rendered in a sandboxed iframe -->
+    <div id="wcp-dash-panel-recap" class="wcp-dash-panel" style="display:none;">
+        <div class="wcp-recap-bar">
+            <button type="button" class="wcp-btn wcp-btn-primary" id="wcp-recap-generate">Generate new recap</button>
+            <span class="wcp-recap-status" id="wcp-recap-status"></span>
+        </div>
+        <div id="wcp-recap-viewer" class="wcp-recap-viewer"></div>
+        <h3 class="wcp-recap-list-title">Previous recaps</h3>
+        <ul id="wcp-recap-list" class="wcp-recap-list"><li class="wcp-dash-empty">Loading&hellip;</li></ul>
+    </div>
+    <?php endif; ?>
 
     <!-- Structure tab panel -->
     <div id="wcp-dash-panel-structure" class="wcp-dash-panel" style="display:none;">

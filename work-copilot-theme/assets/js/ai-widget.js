@@ -911,20 +911,27 @@
         /**
          * Send message to AI
          */
-        sendMessage: function() {
+        sendMessage: function(opts) {
+            opts = opts || {};
             const prompt = $('#wcp-ai-prompt').val().trim();
 
             if (!prompt) {
                 return;
             }
 
+            // No chip selected (and not a re-send from a suggestion): ask the
+            // router which action fits. Suggestion only — the user picks.
+            const route = !opts.skipRoute && this.currentAction === 'chat' && prompt.split(/\s+/).length >= 3;
+
             // Clear input and show loading
             $('#wcp-ai-prompt').val('');
-            this.showLoading(true, this.buildLoadingMessage(this.currentAction));
+            this.showLoading(true, this.buildLoadingMessage(route ? 'route_intent' : this.currentAction));
             $('.wcp-ai-send-btn').prop('disabled', true);
 
-            // Append user message immediately
-            this.appendMessage('user', prompt);
+            // Append user message immediately (not again on a suggestion re-send)
+            if (!opts.skipEcho) {
+                this.appendMessage('user', prompt);
+            }
 
             // Agent review — hand the selected context to Hermes instead of the
             // in-app AI. Hermes replies asynchronously; its feedback lands in
@@ -947,7 +954,8 @@
 
             // Build request data
             const data = {
-                action_type: this.currentAction,
+                action_type: route ? 'route_intent' : this.currentAction,
+                embedded: wcpAiWidgetData.embedded ? 1 : 0,
                 prompt: prompt,
                 page_id: wcpAiWidgetData.pageId,
                 conversation_id: this.conversationId,
@@ -1069,6 +1077,46 @@
                     this.showError('Connection error: ' + xhr.statusText);
                 }
             });
+        },
+
+        /**
+         * Intent router result: offer the suggested action(s) as buttons. Nothing
+         * runs until the user clicks; clicking re-sends the stored prompt as if
+         * the matching chip had been selected.
+         */
+        showIntentSuggestions: function(result) {
+            const self = this;
+            const prompt = result.prompt;
+            const $message = $('<div>').addClass('wcp-ai-message wcp-ai-message-assistant wcp-ai-intent-suggestions');
+            $message.append($('<div>').addClass('wcp-ai-message-content').text('This looks like a job for:'));
+
+            const rerun = function(action) {
+                $message.remove();
+                self.currentAction = action;
+                $('.wcp-ai-action-chip').removeClass('active')
+                    .filter('[data-action="' + action + '"]').addClass('active');
+                $('#wcp-ai-prompt').val(prompt);
+                self.sendMessage({ skipRoute: true, skipEcho: true });
+            };
+
+            const $list = $('<div>').addClass('wcp-ai-intent-options');
+            (result.suggestions || []).forEach(function(s) {
+                $list.append(
+                    $('<div>').addClass('wcp-ai-intent-option')
+                        .append($('<button>').attr('type', 'button').addClass('wcp-btn wcp-btn-primary wcp-btn-sm').text(s.label)
+                            .on('click', function() { rerun(s.action); }))
+                        .append($('<span>').addClass('wcp-ai-intent-reason').text(' ' + (s.reason || '')))
+                );
+            });
+            $list.append(
+                $('<div>').addClass('wcp-ai-intent-option')
+                    .append($('<button>').attr('type', 'button').addClass('wcp-edit-link').text('Just answer as chat')
+                        .on('click', function() { rerun('chat_qa'); }))
+            );
+            $message.append($list);
+
+            $('.wcp-ai-messages').append($message);
+            this.scrollToBottom();
         },
 
         /**
@@ -1285,6 +1333,10 @@
                 }
                 return;
             }
+            if (result.outcome === 'intent_suggestion') {
+                this.showIntentSuggestions(result);
+                return;
+            }
             if (result.outcome === 'chat') {
                 this.appendMessage('assistant', result.message);
                 // Automatic memory extraction disabled — it fired unprompted after
@@ -1440,6 +1492,12 @@
                                     .val(proposal.proposal_id)
                             )
                     );
+
+                if (proposal.move_to && proposal.move_to.title) {
+                    $proposalCard.append(
+                        $('<div>').addClass('wcp-ai-proposal-content').text('Move under heading: ' + proposal.move_to.title)
+                    );
+                }
 
                 if (titleChanged) {
                     $proposalCard.append(
@@ -1758,7 +1816,8 @@
             spot_gaps: 'Reading items to spot gaps',
             fetch_posts: 'Fetching posts',
             fetch_structure: 'Reading page structure',
-            auto: 'Figuring out the best way to help'
+            auto: 'Figuring out the best way to help',
+            route_intent: 'Working out the best way to help'
         },
 
         // Per-action_type item cap, mirroring the server-side constants in

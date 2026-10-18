@@ -144,6 +144,7 @@ jQuery(document).ready(function($) {
 
     // ── Dashboard / Structure tab switching ──────────────────────────
     var structureLoaded = false;
+    var recapLoaded = false;
 
     function switchDashTab(tab) {
         $('.wcp-dash-tab').removeClass('active');
@@ -155,7 +156,103 @@ jQuery(document).ready(function($) {
             structureLoaded = true;
             loadStructureTree();
         }
+        if (tab === 'recap' && !recapLoaded && wcpThemeData.isLoggedIn) {
+            recapLoaded = true;
+            loadRecapList(true);
+        }
     }
+
+    // ── Recap tab ────────────────────────────────────────────────────
+    // Recaps render inside a sandboxed iframe (scripts only, no same-origin) so the
+    // snapshot's own styles/JS can't touch the theme. The iframe reports its height
+    // via postMessage — the only channel a sandboxed frame has.
+    function recapAjax(method, path, data) {
+        return $.ajax({
+            url: wcpThemeData.restUrl + path,
+            method: method,
+            contentType: 'application/json',
+            data: data ? JSON.stringify(data) : undefined,
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); }
+        });
+    }
+
+    function recapError(xhr) {
+        return (xhr && xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Connection error';
+    }
+
+    function showRecap(id) {
+        var $viewer = $('#wcp-recap-viewer');
+        $viewer.html('<p class="wcp-dash-empty">Loading&hellip;</p>');
+        recapAjax('GET', '/recaps/' + id).done(function(r) {
+            var iframe = document.createElement('iframe');
+            iframe.className = 'wcp-recap-frame';
+            iframe.setAttribute('sandbox', 'allow-scripts allow-top-navigation-by-user-activation');
+            iframe.srcdoc = r.html;
+            $viewer.empty().append(iframe);
+            $('#wcp-recap-list li').removeClass('active').filter('[data-id="' + id + '"]').addClass('active');
+        }).fail(function(xhr) {
+            $viewer.html('<p class="wcp-dash-empty" style="color:#c0392b;"></p>').find('p').text(recapError(xhr));
+        });
+    }
+
+    window.addEventListener('message', function(e) {
+        var frame = $('.wcp-recap-frame')[0];
+        if (!frame || e.source !== frame.contentWindow) return;
+        var h = e.data && parseInt(e.data.wcpRecapHeight, 10);
+        if (h > 0) frame.style.height = h + 'px';
+    });
+
+    function loadRecapList(openLatest) {
+        var $list = $('#wcp-recap-list');
+        recapAjax('GET', '/recaps').done(function(r) {
+            var recaps = r.recaps || [];
+            if (!recaps.length) {
+                $list.html('<li class="wcp-dash-empty">No recaps yet — generate one above.</li>');
+                if (openLatest) $('#wcp-recap-viewer').empty();
+                return;
+            }
+            $list.empty();
+            recaps.forEach(function(rc) {
+                var t = rc.totals;
+                var meta = t ? t.pages + ' pages · ' + t.items + ' items · ' + t.words.toLocaleString() + ' words' : '';
+                var $li = $('<li>').attr('data-id', rc.id);
+                $('<button type="button" class="wcp-recap-open">').attr('data-id', rc.id)
+                    .append($('<strong>').text(rc.date))
+                    .append($('<span>').text(meta + (rc.ai_used ? '' : ' · stats only'))).appendTo($li);
+                $('<button type="button" class="wcp-edit-link wcp-recap-delete">').attr('data-id', rc.id).text('delete').appendTo($li);
+                $list.append($li);
+            });
+            if (openLatest) showRecap(recaps[0].id);
+        }).fail(function(xhr) {
+            $list.html('<li class="wcp-dash-empty" style="color:#c0392b;"></li>').find('li').text(recapError(xhr));
+        });
+    }
+
+    $(document).on('click', '#wcp-recap-generate', function() {
+        var $btn = $(this), $status = $('#wcp-recap-status');
+        $btn.prop('disabled', true).text('Generating…');
+        $status.text('This can take up to a minute.').css('color', '');
+        recapAjax('POST', '/recaps', {}).done(function(r) {
+            $status.text(r.ai_error ? 'Saved with statistics only: ' + r.ai_error : '').css('color', r.ai_error ? '#a15f10' : '');
+            loadRecapList(false);
+            showRecap(r.id);
+        }).fail(function(xhr) {
+            $status.text(recapError(xhr)).css('color', '#c0392b');
+        }).always(function() {
+            $btn.prop('disabled', false).text('Generate new recap');
+        });
+    });
+
+    $(document).on('click', '.wcp-recap-open', function() { showRecap($(this).data('id')); });
+
+    $(document).on('click', '.wcp-recap-delete', function() {
+        var id = $(this).data('id');
+        if (!window.confirm('Delete this recap?')) return;
+        recapAjax('DELETE', '/recaps/' + id).done(function() {
+            if ($('#wcp-recap-list li.active').attr('data-id') == id) $('#wcp-recap-viewer').empty();
+            loadRecapList(false);
+        });
+    });
 
     if ($('.wcp-dash-tab').length) {
         // Restore last-used tab
@@ -599,6 +696,9 @@ jQuery(document).ready(function($) {
 
     // Inline item description edit — click description to edit
     $(document).on('click', '.wcp-item-description', function() {
+        // Highlighting text ends in a click; that must not open the editor.
+        var sel = window.getSelection();
+        if (sel && !sel.isCollapsed && $.trim(sel.toString()) !== '') { return; }
         var $span  = $(this);
         var itemId = $span.data('item-id');
         var text   = String($span.data('raw') || '');
@@ -914,6 +1014,7 @@ jQuery(document).ready(function($) {
             $input.val($title.text()).hide();
             $row.removeClass('wcp-editing-title');
             $title.show();
+            $row.trigger('wcp:title-saved');
         } else if (e.which === 221 && (e.ctrlKey || e.metaKey)) {
             // Ctrl+] or Cmd+] — indent
             e.preventDefault();
@@ -973,6 +1074,7 @@ jQuery(document).ready(function($) {
             $input.val($title.text()).hide();
             $row.removeClass('wcp-editing-title');
             $title.show();
+            $row.trigger('wcp:title-saved');
             if (viaEnter) { wcpOpenQuickAddForRow($row); }
             return;
         }
@@ -987,6 +1089,7 @@ jQuery(document).ready(function($) {
                 $input.hide();
                 $row.removeClass('wcp-editing-title');
                 $title.show();
+                $row.trigger('wcp:title-saved');
                 if (viaEnter) { wcpOpenQuickAddForRow($row); }
             });
     });
@@ -1643,6 +1746,35 @@ jQuery(document).ready(function($) {
         );
     }
 
+    // "Brainstorm description": show the proposed description rendered as Markdown;
+    // Accept overwrites the item's existing description (nothing saved before that).
+    function wcpRenderDescProposal($result, itemId, content) {
+        $result.html(
+            '<div class="wcp-item-ai-proposal wcp-desc-proposal-preview"></div>'
+            + '<div style="margin-top:6px;">'
+            + '<button class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-desc-ai-accept" data-item-id="' + itemId + '">Accept (replaces description)</button>'
+            + ' <button class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
+            + '</div>'
+        );
+        var $preview = $result.find('.wcp-desc-proposal-preview');
+        $preview.data('raw', content);
+        wcpRenderMarkdown($preview, content);
+    }
+
+    $(document).on('click', '.wcp-desc-ai-accept', function() {
+        var $btn    = $(this);
+        var id      = $btn.data('item-id');
+        var content = $btn.closest('.wcp-item-ai-result').find('.wcp-desc-proposal-preview').data('raw') || '';
+        updateItem(id, { content: content });
+        var $desc = $btn.closest('.wcp-item-row').find('.wcp-item-description').first();
+        if ($desc.length) {
+            $desc.attr('data-raw', content).data('raw', content)
+                 .toggleClass('wcp-item-description-empty', !content);
+            wcpRenderMarkdown($desc, content);
+        }
+        $btn.closest('.wcp-item-ai-panel').slideUp(120);
+    });
+
     // Shared by the "Search" button below (after query edit/confirm) — the
     // find_references_for_item chip no longer calls the actual search
     // directly, so this rendering can't stay inline in the generic chip
@@ -1833,12 +1965,20 @@ jQuery(document).ready(function($) {
             // first and let the user review/edit it — the derived query can
             // read quite differently from the item text it came from — before
             // any search actually runs.
+            // A highlighted phrase from a writing-mode paragraph (set just before
+            // this chip is triggered) scopes the search to that phrase only.
+            var fri = { phrase: '', start: 0 };
+            if ($panel.data('phrase-fresh')) {
+                fri.phrase = $panel.data('phrase') || '';
+                fri.start  = $panel.data('phrase-start') || 0;
+                $panel.removeData('phrase-fresh');
+            }
             $result.show().html('<em style="color:#aaa;font-size:12px;">Deriving search query…</em>');
             $.ajax({
                 url: wcpThemeData.restUrl + '/items/' + itemId + '/ai',
                 method: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify({ action: 'find_references_query_preview', page_id: $panel.data('page-id') }),
+                data: JSON.stringify({ action: 'find_references_query_preview', page_id: $panel.data('page-id'), phrase: fri.phrase, phrase_start: fri.start }),
                 beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
                 success: function(r) {
                     if (!r.success) { $result.html('<em style="color:#c0392b;">' + (r.message || 'Error') + '</em>'); return; }
@@ -1850,6 +1990,10 @@ jQuery(document).ready(function($) {
                         + ' <button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Cancel</button>'
                         + '</div>'
                     );
+                    $result.find('.wcp-fri-search').data({ phrase: fri.phrase, start: fri.start });
+                    if (fri.phrase) {
+                        $result.prepend($('<p style="font-size:12px;margin:0 0 6px;color:#555;">').append('About: ').append($('<strong>').text('“' + fri.phrase + '”')));
+                    }
                     $result.find('.wcp-fri-query-input').focus();
                 },
                 error: function(xhr) {
@@ -1864,7 +2008,7 @@ jQuery(document).ready(function($) {
             // Collect a freeform instruction first, then run on demand.
             $result.show().html(
                 '<div class="wcp-item-ai-freeform">'
-                + '<textarea class="wcp-freeform-prompt" rows="2" placeholder="Tell the AI what to do — e.g. rephrase this more concisely…"></textarea>'
+                + '<textarea class="wcp-freeform-prompt" rows="2" placeholder="What should the new description cover? — e.g. expand into 5 use cases with examples…"></textarea>'
                 + '<div style="margin-top:6px;">'
                 + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-freeform-run" data-item-id="' + itemId + '">Run</button>'
                 + ' <button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Cancel</button>'
@@ -2243,9 +2387,12 @@ jQuery(document).ready(function($) {
             beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
             success: function(r) {
                 if (!r.success || !r.proposal) { $result.html('<em style="color:#c0392b;">Error</em>'); return; }
-                wcpRenderItemProposal($result, itemId, r.proposal);
+                wcpRenderDescProposal($result, itemId, r.proposal.content || '');
             },
-            error: function() { $result.html('<em style="color:#c0392b;">Error</em>'); }
+            error: function(xhr) {
+                var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Error';
+                $result.html('<em style="color:#c0392b;">' + $('<span>').text(msg).html() + '</em>');
+            }
         });
     });
 
@@ -2262,7 +2409,7 @@ jQuery(document).ready(function($) {
             url: wcpThemeData.restUrl + '/items/' + itemId + '/ai',
             method: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify({ action: 'find_references_for_item', page_id: $panel.data('page-id'), query: query }),
+            data: JSON.stringify({ action: 'find_references_for_item', page_id: $panel.data('page-id'), query: query, phrase: $btn.data('phrase') || '', phrase_start: $btn.data('start') || 0 }),
             beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
             success: function(r) {
                 if (!r.success) { $result.html('<em style="color:#c0392b;">' + (r.message || 'Error') + '</em>'); return; }
@@ -2829,6 +2976,208 @@ jQuery(document).ready(function($) {
     });
 
     // ==========================================================================
+    // Page content + AI mission inline editors (same pattern as page notes)
+    // ==========================================================================
+
+    $(document).on('click', '.wcp-inline-edit-btn, .wcp-inline-edit-placeholder', function() {
+        var $wrap = $(this).closest('.wcp-inline-edit');
+        $wrap.find('.wcp-inline-edit-display').hide();
+        $wrap.find('.wcp-inline-edit-editor').show();
+        $wrap.find('.wcp-inline-edit-textarea').focus();
+    });
+
+    $(document).on('click', '.wcp-inline-edit-cancel', function() {
+        var $wrap = $(this).closest('.wcp-inline-edit');
+        $wrap.find('.wcp-inline-edit-editor').hide();
+        $wrap.find('.wcp-inline-edit-display').show();
+        $wrap.find('.wcp-inline-edit-status').text('');
+    });
+
+    $(document).on('click', '.wcp-inline-edit-save', function() {
+        var $wrap   = $(this).closest('.wcp-inline-edit');
+        var field   = $wrap.data('field'); // 'content' | 'mission'
+        var pageId  = $wrap.data('page-id');
+        var text    = $wrap.find('.wcp-inline-edit-textarea').val();
+        var $btn    = $(this);
+        var $status = $wrap.find('.wcp-inline-edit-status');
+        var payload = {};
+        payload[field] = text;
+
+        $btn.prop('disabled', true).text('Saving…');
+
+        $.ajax({
+            url: wcpThemeData.restUrl + '/pages/' + pageId + '/' + field,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(payload),
+            beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
+            success: function(response) {
+                var $display = $wrap.find('.wcp-inline-edit-display');
+                var saved    = response[field] || '';
+                var empty    = $.trim(saved) === '';
+                if (empty) {
+                    $display.empty().append($('<span class="wcp-inline-edit-placeholder">')
+                        .text(field === 'mission' ? 'Set an AI mission for this page…' : 'Add page content…'));
+                } else if (field === 'content') {
+                    // Server-rendered (the_content, kses-filtered) HTML.
+                    $display.html(response.html);
+                } else {
+                    // Mission is plain text: escape, then keep line breaks.
+                    $display.html($('<div>').text(saved).html().replace(/\r\n|\r|\n/g, '<br>'));
+                }
+                $display.toggleClass('wcp-page-notes-empty', empty);
+                $wrap.find('.wcp-inline-edit-textarea').val(saved);
+                $wrap.find('.wcp-inline-edit-editor').hide();
+                $display.show();
+                $status.text('');
+                $btn.prop('disabled', false).text('Save');
+            },
+            error: function() {
+                $status.text('Could not save — please try again.');
+                $btn.prop('disabled', false).text('Save');
+            }
+        });
+    });
+
+    // ==========================================================================
+    // Researcher-mode writing mode: prose paragraphs with highlightable phrases
+    // ==========================================================================
+
+    // Render a paragraph from its raw text + known phrase items: each phrase's
+    // first occurrence is wrapped in <mark>; phrases no longer found in the text
+    // are listed below as "detached" rather than dropped.
+    function wcpRenderWritingParagraph($p) {
+        var raw     = String($p.data('raw') || '');
+        var phrases = $p.data('phrases') || [];
+        var $wrap   = $p.closest('.wcp-writing-wrap');
+        var spans = [], detached = [];
+
+        phrases.forEach(function(ph) {
+            var idx = ph.text ? raw.toLowerCase().indexOf(ph.text.toLowerCase()) : -1;
+            // Prefer the stored offset when the text still sits there.
+            if (ph.text && raw.substr(ph.start, ph.text.length).toLowerCase() === ph.text.toLowerCase()) { idx = ph.start; }
+            var end = idx + (ph.text ? ph.text.length : 0);
+            var overlaps = spans.some(function(sp) { return idx < sp.end && end > sp.start; });
+            if (idx < 0 || overlaps) { detached.push(ph); return; }
+            spans.push({ start: idx, end: end, ph: ph });
+        });
+        spans.sort(function(a, b) { return a.start - b.start; });
+
+        $p.empty();
+        var pos = 0;
+        spans.forEach(function(sp) {
+            $p.append(document.createTextNode(raw.slice(pos, sp.start)));
+            $p.append($('<mark class="wcp-phrase">').attr('data-phrase-id', sp.ph.id)
+                .attr('title', sp.ph.refs + ' reference' + (sp.ph.refs === 1 ? '' : 's'))
+                .text(raw.slice(sp.start, sp.end)));
+            pos = sp.end;
+        });
+        $p.append(document.createTextNode(raw.slice(pos)));
+
+        var $d = $wrap.find('.wcp-writing-detached').empty();
+        if (detached.length) {
+            $d.append($('<span>').text('Detached phrases: '));
+            detached.forEach(function(ph, i) {
+                if (i) { $d.append(document.createTextNode(', ')); }
+                $d.append($('<span class="wcp-phrase-detached">').text(ph.text));
+            });
+        }
+    }
+
+    $('.wcp-writing-paragraph').each(function() { wcpRenderWritingParagraph($(this)); });
+
+    // Toggle writing mode on an item (top-level, researcher mode only).
+    $(document).on('click', '.wcp-writing-toggle', function() {
+        var $btn = $(this);
+        var on   = $btn.data('on') === 1 || $btn.data('on') === '1';
+        $btn.prop('disabled', true);
+        updateItem($btn.data('item-id'), { writing_mode: on ? 0 : 1 })
+            .done(function() { location.reload(); })
+            .fail(function(xhr) {
+                $btn.prop('disabled', false);
+                window.alert((xhr.responseJSON && xhr.responseJSON.message) || 'Could not change writing mode.');
+            });
+    });
+
+    // [edit text]: edit the paragraph's source (the title when there is no
+    // description, otherwise the description) with the normal inline editors, then
+    // re-render the paragraph from the saved text.
+    $(document).on('click', '.wcp-writing-edit', function() {
+        var $wrap = $(this).closest('.wcp-writing-wrap');
+        var $p    = $wrap.find('.wcp-writing-paragraph');
+        var $row  = $wrap.closest('.wcp-item-row');
+        wcpHidePhraseFab();
+
+        if ($p.data('source') === 'title') {
+            var $title = $row.find('.wcp-item-title');
+            $wrap.hide();
+            $row.one('wcp:title-saved', function() {
+                $title.addClass('wcp-writing-hidden');
+                $p.data('raw', $title.text());
+                wcpRenderWritingParagraph($p);
+                $wrap.show();
+            });
+            $title.removeClass('wcp-writing-hidden').trigger('click');
+            return;
+        }
+
+        var $span = $wrap.siblings('.wcp-item-description').first();
+        $wrap.hide();
+        $span.removeClass('wcp-writing-hidden').trigger('click');
+        // saveDesc updates the span's data-raw on blur; re-render from it afterwards.
+        $span.next('.wcp-item-description-edit').one('blur', function() {
+            setTimeout(function() {
+                $span.addClass('wcp-writing-hidden');
+                $p.data('raw', $span.data('raw'));
+                wcpRenderWritingParagraph($p);
+                $wrap.show();
+            }, 0);
+        });
+    });
+
+    // Highlighting text in a paragraph offers "Find references" for that phrase.
+    var $phraseFab = null;
+    function wcpHidePhraseFab() { if ($phraseFab) { $phraseFab.remove(); $phraseFab = null; } }
+
+    // Document-level (not delegated to the paragraph): a drag-selection often
+    // finishes with the pointer just outside the paragraph element.
+    $(document).on('mouseup keyup', function(e) {
+        if ($(e.target).closest('.wcp-phrase-fab').length) { return; }
+        var sel = window.getSelection();
+        wcpHidePhraseFab();
+        if (!sel || sel.isCollapsed || !sel.rangeCount) { return; }
+        var range  = sel.getRangeAt(0);
+        var node   = range.commonAncestorContainer;
+        var $p     = $(node.nodeType === 1 ? node : node.parentNode).closest('.wcp-writing-paragraph');
+        var phrase = sel.toString().replace(/\s+/g, ' ').trim();
+        if (!$p.length || !phrase) { return; }
+
+        var pre = range.cloneRange();
+        pre.selectNodeContents($p[0]);
+        pre.setEnd(range.startContainer, range.startOffset);
+        var start = pre.toString().length;
+
+        var rect = range.getBoundingClientRect();
+        $phraseFab = $('<button type="button" class="wcp-phrase-fab wcp-btn wcp-btn-primary wcp-btn-sm">Find references</button>')
+            .css({ top: window.scrollY + rect.bottom + 6, left: window.scrollX + rect.left })
+            .appendTo(document.body)
+            .on('mousedown', function(e) { e.preventDefault(); }) // keep the selection
+            .on('click', function() {
+                var $row   = $p.closest('.wcp-item-row');
+                var $panel = $row.find('.wcp-item-ai-panel').first();
+                var $chip  = $panel.find('.wcp-item-ai-chip[data-action="find_references_for_item"]');
+                wcpHidePhraseFab();
+                if (!$chip.length) { return; }
+                $panel.data({ phrase: phrase, 'phrase-start': start, 'phrase-fresh': true }).show();
+                $chip.trigger('click');
+            });
+    });
+
+    $(document).on('mousedown', function(e) {
+        if ($phraseFab && !$(e.target).closest('.wcp-phrase-fab').length) { wcpHidePhraseFab(); }
+    });
+
+    // ==========================================================================
     // Heading / subpage / dynamic list creation
     // ==========================================================================
 
@@ -3208,7 +3557,12 @@ jQuery(document).ready(function($) {
                 var dx   = endX - _dragStartX;
                 var THRESHOLD = 40;
 
-                if (dx > THRESHOLD && _dragPrevItemId) {
+                // Indent/outdent is a purely horizontal gesture: the row must land back
+                // where it started. If it moved to a new position or list (e.g. under a
+                // different heading), sideways drift is incidental — treat it as a reorder.
+                var stayedPut = evt.from === evt.to && evt.oldIndex === evt.newIndex;
+
+                if (stayedPut && dx > THRESHOLD && _dragPrevItemId) {
                     // Dragged right — indent under the item that was above it
                     var itemId   = parseInt(evt.item.dataset.itemId, 10);
                     var $prevRow = $('[data-item-id="' + _dragPrevItemId + '"]').first();
@@ -3219,7 +3573,7 @@ jQuery(document).ready(function($) {
                     return;
                 }
 
-                if (dx < -THRESHOLD && _dragParentId) {
+                if (stayedPut && dx < -THRESHOLD && _dragParentId) {
                     // Dragged left — outdent
                     var itemId = parseInt(evt.item.dataset.itemId, 10);
                     updateItem(itemId, { post_parent: 0 })

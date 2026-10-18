@@ -40,6 +40,13 @@ $_reference_icons = array('pdf_upload' => '📄', 'web_search' => '🌐', 'doc' 
 $_reference_source_type = $_is_reference ? get_post_meta($item->ID, '_wcp_source_type', true) : '';
 $_reference_icon = $_reference_icons[$_reference_source_type] ?? '📝';
 ?>
+<?php
+// Researcher-mode writing mode (item-level action, not an AI action): the item is
+// shown as selectable prose (phrases rendered by theme.js); the plain description
+// span stays in the DOM, hidden, as the click-to-edit surface.
+$_can_write = !$item->post_parent && function_exists('wcp_researcher_mode_enabled') && wcp_researcher_mode_enabled();
+$_writing_mode = $_can_write && get_post_meta($item->ID, '_wcp_writing_mode', true) === '1';
+?>
 <div class="wcp-item-row<?php echo $is_done ? ' wcp-task-done' : ''; echo esc_attr($_creator_class); echo $_is_pinned ? ' wcp-pinned' : ''; ?>"
      id="wcp-item-<?php echo esc_attr($item->ID); ?>"
      data-item-id="<?php echo esc_attr($item->ID); ?>"
@@ -61,7 +68,12 @@ $_reference_icon = $_reference_icons[$_reference_source_type] ?? '📝';
            data-item-id="<?php echo esc_attr($item->ID); ?>"
            <?php checked($is_done); ?>
            style="<?php echo $is_task ? '' : 'display:none;'; ?>">
-    <span class="wcp-item-title"><?php echo esc_html($item->post_title); ?></span>
+    <?php
+    // In writing mode the paragraph is the description when there is one, otherwise
+    // the title (most one-line items keep their text in the title).
+    $_writing_source = ($_writing_mode && trim(wp_strip_all_tags($item->post_content)) === '') ? 'title' : 'content';
+    ?>
+    <span class="wcp-item-title<?php echo ($_writing_mode && $_writing_source === 'title') ? ' wcp-writing-hidden' : ''; ?>"><?php echo esc_html($item->post_title); ?></span>
     <input type="text" class="wcp-item-title-input" style="display:none;" value="<?php echo esc_attr($item->post_title); ?>">
     <span class="wcp-item-created" title="<?php echo esc_attr(get_the_time('j M Y', $item)); ?>"><?php echo esc_html(human_time_diff(get_post_time('U', true, $item))); ?> ago</span>
 
@@ -110,6 +122,9 @@ $_reference_icon = $_reference_icons[$_reference_source_type] ?? '📝';
         <button type="button" class="wcp-item-tag-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">+ tag</button>
         <button type="button" class="wcp-item-delete wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>">[delete]</button>
         <a href="<?php echo esc_url(get_permalink($item->ID)); ?>" class="wcp-item-view-link wcp-edit-link" title="View item">[view]</a>
+        <?php if ($_can_write) : ?>
+        <button type="button" class="wcp-writing-toggle wcp-edit-link<?php echo $_writing_mode ? ' active' : ''; ?>" data-item-id="<?php echo esc_attr($item->ID); ?>" data-on="<?php echo $_writing_mode ? '1' : '0'; ?>" title="<?php esc_attr_e('Writing mode: show as a paragraph you can highlight phrases in', 'work-copilot-theme'); ?>">[write]</button>
+        <?php endif; ?>
         <button type="button" class="wcp-item-ai-btn wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>" title="AI actions">[ai]</button>
         <button type="button" class="wcp-desc-toggle wcp-edit-link" data-item-id="<?php echo esc_attr($item->ID); ?>" title="Show/hide description">[desc]</button>
         <?php if (!empty($_item_has_children)) : ?>
@@ -138,10 +153,23 @@ $_reference_icon = $_reference_icons[$_reference_source_type] ?? '📝';
         <a href="<?php echo esc_url($_library_paper_url); ?>" class="wcp-library-link" title="<?php esc_attr_e('View in Library', 'work-copilot-theme'); ?>"><?php _e('View in Library', 'work-copilot-theme'); ?></a>
     <?php endif; ?>
 
-    <?php $_desc_raw = wp_strip_all_tags($item->post_content); ?>
-    <span class="wcp-item-description<?php echo empty($item->post_content) ? ' wcp-item-description-empty' : ''; ?>"
+    <?php
+    $_desc_raw = wp_strip_all_tags($item->post_content);
+    ?>
+    <span class="wcp-item-description<?php echo empty($item->post_content) ? ' wcp-item-description-empty' : ''; echo $_writing_mode ? ' wcp-writing-hidden' : ''; ?>"
           data-item-id="<?php echo esc_attr($item->ID); ?>"
           data-raw="<?php echo esc_attr($_desc_raw); ?>"><?php echo esc_html($_desc_raw); ?></span>
+    <?php if ($_writing_mode) : ?>
+    <div class="wcp-writing-wrap" data-item-id="<?php echo esc_attr($item->ID); ?>" data-page-id="<?php echo esc_attr(isset($page_id) ? (int) $page_id : 0); ?>">
+        <div class="wcp-writing-paragraph"
+             data-source="<?php echo esc_attr($_writing_source); ?>"
+             data-raw="<?php echo esc_attr($_writing_source === 'title' ? $item->post_title : $_desc_raw); ?>"
+             data-phrases="<?php echo esc_attr(wp_json_encode(function_exists('wcp_theme_get_item_phrases') ? wcp_theme_get_item_phrases($item->ID) : array())); ?>"></div>
+        <div class="wcp-writing-hint"><?php _e('Highlight words or a phrase to find references for it.', 'work-copilot-theme'); ?>
+            <button type="button" class="wcp-writing-edit wcp-edit-link"><?php _e('[edit text]', 'work-copilot-theme'); ?></button></div>
+        <div class="wcp-writing-detached"></div>
+    </div>
+    <?php endif; ?>
 
     <?php // Reference items are multi-context by design (the Library page's
     // Summary heading, plus wherever they're also filed) — showing those as
@@ -210,7 +238,7 @@ $_reference_icon = $_reference_icons[$_reference_source_type] ?? '📝';
                 <button type="button" class="wcp-item-ai-chip" data-action="action_plan_from_context">Action plan from context</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="improve_phrasing">Improve phrasing</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="coach_item">Coach me</button>
-                <button type="button" class="wcp-item-ai-chip" data-action="freeform">Freeform…</button>
+                <button type="button" class="wcp-item-ai-chip" data-action="freeform">Brainstorm description…</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="suggest_subtasks">Add subtasks</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="suggest_contexts">Auto-associate</button>
                 <button type="button" class="wcp-item-ai-chip" data-action="to_goal">Convert to goal</button>
