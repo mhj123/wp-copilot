@@ -13,6 +13,15 @@ if (!defined('ABSPATH')) {
 class WCP_AI_Client {
 
     private static $instance = null;
+    /**
+     * Fallback default when nothing is configured. The single place a model
+     * ID is spelled out as a default — everything else asks default_model().
+     */
+    const DEFAULT_MODEL = 'claude-sonnet-5-5';
+
+    /** Extra max_tokens allowed when the model is thinking, so reasoning doesn't eat the reply. */
+    const THINKING_HEADROOM_TOKENS = 8192;
+
     private $api_key;
     private $api_url = 'https://api.anthropic.com/v1/messages';
     private $model;
@@ -28,21 +37,135 @@ class WCP_AI_Client {
 
     private function __construct() {
         $this->api_key = get_option('wcp_anthropic_api_key', '');
-        $this->model = get_option('wcp_ai_model', 'claude-sonnet-4-6');
+        $this->model   = self::default_model();
     }
 
     /**
-     * Override model and thinking budget for a single request cycle.
-     * Call once before dispatching an action; resets after use.
+     * The one registry of selectable models. The settings screen, the widget
+     * picker and every allowlist check read from here, so a new model is a
+     * one-line change (or no code change at all, via the filter).
      *
-     * @param string|null $model          Model ID, or null to use the site default.
-     * @param int         $thinking_budget Tokens for extended thinking (0 = disabled).
-     *                                    Only Opus 4.8 supports extended thinking.
+     * Per model:
+     *  - label / short_label: settings screen and widget picker text.
+     *  - thinking_off: the `thinking` value that switches reasoning off for
+     *    this model, or null if the model cannot switch it off. The value is
+     *    model-specific and the API rejects the wrong one with a 400:
+     *    Sonnet 5.5 takes "between_tools", Haiku 5.5 takes "disabled", and
+     *    Opus 5.5 always thinks.
+     *  - refusal_fallback: whether the API's server-side refusal fallback is
+     *    available for this model.
+     *
+     * A model added through the filter without `thinking_off` is sent no
+     * `thinking` field at all and runs on its own default.
+     *
+     * @return array<string, array{label: string, short_label: string, thinking_off: ?array, refusal_fallback: bool}>
+     */
+    public static function models() {
+        $models = array(
+            'claude-sonnet-5-5' => array(
+                'label'            => 'Claude Sonnet 5.5 (Recommended)',
+                'short_label'      => 'Sonnet 5.5 — Balanced',
+                'thinking_off'     => array('type' => 'between_tools'),
+                'refusal_fallback' => true,
+            ),
+            'claude-opus-5-5' => array(
+                'label'            => 'Claude Opus 5.5 (Most Capable)',
+                'short_label'      => 'Opus 5.5 — Powerful',
+                'thinking_off'     => null,
+                'refusal_fallback' => true,
+            ),
+            'claude-haiku-5-5' => array(
+                'label'            => 'Claude Haiku 5.5 (Fast)',
+                'short_label'      => 'Haiku 5.5 — Fast',
+                'thinking_off'     => array('type' => 'disabled'),
+                'refusal_fallback' => false,
+            ),
+        );
+
+        $models = apply_filters('wcp_ai_models', $models);
+
+        return is_array($models) && !empty($models) ? $models : array();
+    }
+
+    /**
+     * Whether $model is one this install will send requests to.
+     */
+    public static function is_allowed_model($model) {
+        return is_string($model) && $model !== '' && array_key_exists($model, self::models());
+    }
+
+    /**
+     * Map a model ID to one in the registry. IDs saved by earlier versions
+     * of the plugin (and still sitting in the wcp_ai_model option, or in a
+     * browser tab opened before an update) are moved to the same tier's
+     * current model rather than being sent to the API as they are.
+     *
+     * @param string|null $model
+     * @return string|null A registry model ID, or null if $model is unknown.
+     */
+    public static function resolve_model($model) {
+        if (!is_string($model) || $model === '') {
+            return null;
+        }
+        if (self::is_allowed_model($model)) {
+            return $model;
+        }
+
+        foreach (array('sonnet', 'opus', 'haiku') as $tier) {
+            if (strpos($model, 'claude-' . $tier . '-') !== 0) {
+                continue;
+            }
+            foreach (array_keys(self::models()) as $candidate) {
+                if (strpos($candidate, 'claude-' . $tier . '-') === 0) {
+                    return $candidate;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The site's default model: the saved setting if it is (or maps to) a
+     * registry model, otherwise the first-choice fallback.
+     */
+    public static function default_model() {
+        $resolved = self::resolve_model(get_option('wcp_ai_model', ''));
+        if ($resolved) {
+            return $resolved;
+        }
+
+        $fallback = apply_filters('wcp_ai_default_model', self::DEFAULT_MODEL);
+        if (self::is_allowed_model($fallback)) {
+            return $fallback;
+        }
+
+        $ids = array_keys(self::models());
+
+        return $ids ? $ids[0] : self::DEFAULT_MODEL;
+    }
+
+    /**
+     * Override model and reasoning for a single request cycle.
+     * Call once before dispatching an action; call again with no arguments
+     * to reset.
+     *
+     * @param string|null $model           Model ID, or null to use the site default.
+     *                                     Unknown IDs fall back to the site default.
+     * @param int         $thinking_budget > 0 asks the model to reason before answering.
+     *                                     Current models no longer take a token budget —
+     *                                     depth is set with effort — so this is on/off.
      */
     public function set_overrides( $model = null, $thinking_budget = 0 ) {
-        $allowed = array( 'claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-8' );
-        $this->_override_model  = ( $model && in_array( $model, $allowed, true ) ) ? $model : null;
+        $this->_override_model  = self::resolve_model( $model );
         $this->_thinking_budget = max( 0, (int) $thinking_budget );
+    }
+
+    /**
+     * The model the next request will be sent to.
+     */
+    public function effective_model() {
+        return $this->_override_model ?: $this->model;
     }
 
     /**
@@ -60,7 +183,33 @@ class WCP_AI_Client {
             return new WP_Error('not_configured', 'AI API key not configured');
         }
 
-        $effective_model = $this->_override_model ?: $this->model;
+        $effective_model = $this->effective_model();
+        $registry        = self::models();
+        $model_config    = isset($registry[$effective_model]) ? $registry[$effective_model] : array();
+        $wants_thinking  = $this->_thinking_budget > 0;
+        $thinking_off    = isset($model_config['thinking_off']) ? $model_config['thinking_off'] : null;
+
+        // Reasoning. Current models reason by default and no longer accept a
+        // token budget or sampling parameters (both are rejected with a 400).
+        //  - Asked to think: adaptive thinking at high effort.
+        //  - Not asked: switch it off where the model allows, so short
+        //    structured calls stay fast and their max_tokens stays accurate.
+        //  - Model can't switch it off: leave its default and budget for it.
+        $thinking_active = true;
+        $thinking_param  = null;
+        if ($wants_thinking) {
+            $thinking_param = array('type' => 'adaptive');
+        } elseif (is_array($thinking_off)) {
+            $thinking_param  = $thinking_off;
+            $thinking_active = false;
+        }
+
+        if ($thinking_active) {
+            // Reasoning tokens count against max_tokens; without headroom a
+            // small cap would be spent before the reply starts.
+            $max_tokens += self::THINKING_HEADROOM_TOKENS;
+            $timeout     = max($timeout, 120);
+        }
 
         $body = array(
             'model'      => $effective_model,
@@ -72,19 +221,31 @@ class WCP_AI_Client {
             $body['system'] = $system;
         }
 
-        // Extended thinking — Opus 4.8 only; requires temperature: 1
-        if ( $this->_thinking_budget > 0 ) {
-            $body['thinking']    = array( 'type' => 'enabled', 'budget_tokens' => $this->_thinking_budget );
-            $body['temperature'] = 1;
+        if ($thinking_param) {
+            $body['thinking'] = $thinking_param;
+        }
+        if ($wants_thinking) {
+            $body['output_config'] = array('effort' => 'high');
+        }
+
+        $headers = array(
+            'Content-Type'      => 'application/json',
+            'x-api-key'         => $this->api_key,
+            'anthropic-version' => '2023-06-01',
+        );
+
+        // Refusal fallback: if the model's safety classifiers decline a
+        // request, the API re-runs it on a fallback model inside the same
+        // call instead of returning nothing. Opt-in on the API side; turn
+        // off here with add_filter('wcp_ai_refusal_fallback', '__return_false').
+        if (!empty($model_config['refusal_fallback']) && apply_filters('wcp_ai_refusal_fallback', true, $effective_model)) {
+            $headers['anthropic-beta'] = 'server-side-fallback-2026-07-01';
+            $body['fallbacks']         = 'default';
         }
 
         $response = wp_remote_post($this->api_url, array(
-            'headers' => array(
-                'Content-Type' => 'application/json',
-                'x-api-key' => $this->api_key,
-                'anthropic-version' => '2023-06-01',
-            ),
-            'body' => wp_json_encode($body),
+            'headers' => $headers,
+            'body'    => wp_json_encode($body),
             'timeout' => $timeout,
         ));
 
@@ -101,13 +262,34 @@ class WCP_AI_Client {
             return new WP_Error('api_error', $error_message, array('status' => $response_code));
         }
 
-        // When thinking is enabled, Anthropic returns thinking blocks before text blocks.
-        // Strip them so all callers can safely use content[0]['text'].
-        if ( $this->_thinking_budget > 0 && isset( $data['content'] ) ) {
-            $data['content'] = array_values( array_filter(
-                $data['content'],
-                function ( $block ) { return isset( $block['type'] ) && $block['type'] === 'text'; }
-            ) );
+        // A refusal is an HTTP 200 with no usable text — surface it as an
+        // error rather than letting callers treat it as an empty reply.
+        if (isset($data['stop_reason']) && $data['stop_reason'] === 'refusal') {
+            return new WP_Error(
+                'ai_refused',
+                __('The AI model declined this request. Try rephrasing it, or pick a different model.', 'work-copilot'),
+                array('status' => 422)
+            );
+        }
+
+        // Responses can carry thinking (and fallback) blocks before the text.
+        // Keep only text blocks so every caller can safely read
+        // content[0]['text'], and join them in case the reply was split.
+        $text = '';
+        if (isset($data['content']) && is_array($data['content'])) {
+            foreach ($data['content'] as $block) {
+                if (isset($block['type'], $block['text']) && $block['type'] === 'text') {
+                    $text .= $block['text'];
+                }
+            }
+        }
+        $data['content'] = array(array('type' => 'text', 'text' => $text));
+
+        // The model that actually answered (it differs from the one asked
+        // for when a refusal fallback served the turn) — this is what the
+        // audit log should record.
+        if (empty($data['model'])) {
+            $data['model'] = $effective_model;
         }
 
         return $data;
@@ -174,126 +356,6 @@ class WCP_AI_Client {
     }
 
     /**
-     * Page-scoped chat
-     */
-    public function page_chat($page_context, $prompt) {
-        $system_prompt = "You are a helpful assistant analyzing a user's work page and its associated notes. ";
-        $system_prompt .= "Provide clear, actionable insights based on the context provided.";
-
-        $user_message = "Page: {$page_context['page']['title']}\n\n";
-
-        if (!empty($page_context['page']['content'])) {
-            $user_message .= "Page Description:\n{$page_context['page']['content']}\n\n";
-        }
-
-        if (!empty($page_context['recent_items'])) {
-            $user_message .= "Recent Items:\n";
-            foreach ($page_context['recent_items'] as $item) {
-                $user_message .= "- {$item['title']}: {$item['content']}\n";
-            }
-            $user_message .= "\n";
-        }
-
-        $user_message .= "User Question: {$prompt}";
-
-        $response = $this->request(array(
-            array(
-                'role' => 'user',
-                'content' => $user_message,
-            ),
-        ), 2048, $system_prompt);
-
-        if (is_wp_error($response)) {
-            return $response;
-        }
-
-        return array(
-            'message' => isset($response['content'][0]['text']) ? $response['content'][0]['text'] : '',
-            'model' => $this->model,
-        );
-    }
-
-    /**
-     * Coaching prompts - generates candidate ItemPosts
-     */
-    public function coaching($context, $prompt_type) {
-        $system_prompts = array(
-            'coach' => 'You are an executive coach. Review the user\'s work and learnings, then provide coaching insights as actionable notes.',
-            'business' => 'You are a business owner advisor. Reframe the user\'s work from a business ownership perspective.',
-            'pm' => 'You are a product management coach. Reframe the user\'s work from a product manager\'s perspective.',
-            'generate_plan' => 'You are a planning assistant. Generate a structured plan based on the user\'s context.',
-        );
-
-        $system = isset($system_prompts[$prompt_type]) ? $system_prompts[$prompt_type] : $system_prompts['coach'];
-
-        $user_message = "Context: {$context['page']['title']}\n\n";
-
-        if (!empty($context['recent_items'])) {
-            $user_message .= "Current Items:\n";
-            foreach ($context['recent_items'] as $item) {
-                $user_message .= "- {$item['title']}\n";
-            }
-            $user_message .= "\n";
-        }
-
-        if (!empty($context['learnings'])) {
-            $user_message .= "Key Learnings:\n";
-            foreach ($context['learnings'] as $learning) {
-                $user_message .= "- {$learning['title']}: {$learning['content']}\n";
-            }
-            $user_message .= "\n";
-        }
-
-        $user_message .= "Generate 2-5 specific, actionable insights or recommendations as separate notes.\n\n";
-        $user_message .= "Respond ONLY with valid JSON in this format:\n";
-        $user_message .= '[{"title": "Note title", "content": "Note content", "item_type": "learning|info|task"}]';
-
-        $response = $this->request(array(
-            array(
-                'role' => 'user',
-                'content' => $user_message,
-            ),
-        ), 2048, $system);
-
-        if (is_wp_error($response)) {
-            return $response;
-        }
-
-        $text = isset($response['content'][0]['text']) ? $response['content'][0]['text'] : '';
-
-        // Strip markdown code blocks if present
-        $text = preg_replace('/```json\s*/i', '', $text);
-        $text = preg_replace('/```\s*$/i', '', $text);
-        $text = trim($text);
-
-        // Extract JSON array
-        $json_start = strpos($text, '[');
-        $json_end = strrpos($text, ']');
-
-        if ($json_start !== false && $json_end !== false) {
-            $json_str = substr($text, $json_start, $json_end - $json_start + 1);
-            $candidates = json_decode($json_str, true);
-
-            if (json_last_error() === JSON_ERROR_NONE && is_array($candidates)) {
-                return array(
-                    'candidates' => $candidates,
-                    'model' => $this->model,
-                    'raw_response' => $text,
-                );
-            }
-        }
-
-        // More detailed error for debugging
-        $error_msg = 'Could not parse coaching response';
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            $error_msg .= ': ' . json_last_error_msg();
-        }
-        $error_msg .= '. Response: ' . substr($text, 0, 200);
-
-        return new WP_Error('parse_error', $error_msg);
-    }
-
-    /**
      * Make a request with conversation history
      *
      * @param string $system_prompt System prompt (3 layers combined)
@@ -344,7 +406,7 @@ class WCP_AI_Client {
 
         return array(
             'content' => $content,
-            'model' => $this->model,
+            'model' => $response['model'],
             'usage' => isset($response['usage']) ? $response['usage'] : null,
             'stop_reason' => isset($response['stop_reason']) ? $response['stop_reason'] : null,
         );
@@ -382,7 +444,6 @@ class WCP_AI_Client {
             return new WP_Error('empty_document', 'Attached PDF file is empty or unreadable');
         }
 
-        $effective_model = $this->_override_model ?: $this->model;
         $messages = array(array(
             'role'    => 'user',
             'content' => array(
@@ -408,7 +469,7 @@ class WCP_AI_Client {
 
         return array(
             'content' => $content,
-            'model' => $effective_model,
+            'model' => $response['model'],
             'usage' => isset($response['usage']) ? $response['usage'] : null,
             'stop_reason' => isset($response['stop_reason']) ? $response['stop_reason'] : null,
         );
@@ -432,7 +493,7 @@ class WCP_AI_Client {
         return array(
             'success' => true,
             'message' => isset($response['content'][0]['text']) ? $response['content'][0]['text'] : '',
-            'model' => $this->model,
+            'model' => $response['model'],
         );
     }
 }

@@ -227,6 +227,10 @@ here is applied blind.
 ## Privacy & control
 
 - Self-hosted: your notes live on your WordPress install.
+- Private by default: nothing is served to anyone who isn't logged in — not the front
+  end, feeds, the sitemap, or the REST API. (Items are ordinary WordPress posts, so
+  without this lock they would be public.) To run a deliberately public site, add
+  `define('WCP_PUBLIC_SITE', true);` to `wp-config.php`.
 - The AI is only ever called when you explicitly invoke it — nothing is sent on a
   schedule or in the background.
 - AI never mutates your data — it proposes; you decide.

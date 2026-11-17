@@ -106,20 +106,6 @@ class WCP_REST_API {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // AI: Page chat
-        register_rest_route($namespace, '/ai/page-chat', array(
-            'methods' => 'POST',
-            'callback' => array($this, 'ai_page_chat'),
-            'permission_callback' => array($this, 'check_permission'),
-        ));
-
-        // AI: Coaching prompt
-        register_rest_route($namespace, '/ai/coaching', array(
-            'methods' => 'POST',
-            'callback' => array($this, 'ai_coaching'),
-            'permission_callback' => array($this, 'check_permission'),
-        ));
-
         // NEW: Conversation-based AI endpoints
         // Initialize conversation for a page
         register_rest_route($namespace, '/ai/conversations/init', array(
@@ -146,13 +132,6 @@ class WCP_REST_API {
         register_rest_route($namespace, '/ai/structure/accept', array(
             'methods' => 'POST',
             'callback' => array($this, 'accept_structure'),
-            'permission_callback' => array($this, 'check_permission'),
-        ));
-
-        // AI: Accept/dismiss (LEGACY - generic pattern, must be AFTER specific routes)
-        register_rest_route($namespace, '/ai/(?P<action_id>[a-zA-Z0-9_-]+)/decide', array(
-            'methods' => 'POST',
-            'callback' => array($this, 'ai_decide'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
@@ -822,7 +801,7 @@ class WCP_REST_API {
         // Log AI action
         $logger = WCP_AI_Logger::instance();
         $action_id = $logger->log_action('tagging', array(
-            'model' => get_option('wcp_ai_model', 'claude-sonnet-4-6'),
+            'model' => $ai_client->effective_model(),
             'prompt' => 'Suggest tags for: ' . $title,
             'input_context' => array(
                 'title' => $title,
@@ -836,298 +815,6 @@ class WCP_REST_API {
             'action_id' => $action_id,
             'suggestions' => $suggestions,
         ));
-    }
-
-    /**
-     * AI: Page-scoped chat
-     * CRITICAL: Returns proposal only
-     */
-    public function ai_page_chat($request) {
-        $page_id = $request->get_param('page_id');
-        $prompt = $request->get_param('prompt');
-
-        // Check if AI is enabled
-        if (!get_option('wcp_ai_enabled', false)) {
-            return rest_ensure_response(array(
-                'success' => false,
-                'message' => 'AI features are not enabled.',
-            ));
-        }
-
-        $ai_client = WCP_AI_Client::instance();
-
-        if (!$ai_client->is_configured()) {
-            return rest_ensure_response(array(
-                'success' => false,
-                'message' => 'AI is not configured.',
-            ));
-        }
-
-        // Build context pack (with semantic search if available)
-        $context = $this->build_page_context($page_id, $prompt);
-
-        // Call AI
-        $result = $ai_client->page_chat($context, $prompt);
-
-        if (is_wp_error($result)) {
-            return rest_ensure_response(array(
-                'success' => false,
-                'message' => $result->get_error_message(),
-            ));
-        }
-
-        $response = array(
-            'message' => $result['message'],
-            'suggested_items' => array(),
-        );
-
-        // Log AI action
-        $logger = WCP_AI_Logger::instance();
-        $action_id = $logger->log_action('chat', array(
-            'model' => $result['model'],
-            'prompt' => $prompt,
-            'input_context' => $context,
-            'output' => $response,
-            'context_post_id' => $page_id,
-        ));
-
-        return rest_ensure_response(array(
-            'success' => true,
-            'action_id' => $action_id,
-            'response' => $response,
-        ));
-    }
-
-    /**
-     * AI: Coaching prompts
-     * CRITICAL: Returns candidate ItemPosts
-     */
-    public function ai_coaching($request) {
-        $context_id = $request->get_param('context_id');
-        $prompt_type = $request->get_param('prompt_type');
-
-        // Check if AI is enabled
-        if (!get_option('wcp_ai_enabled', false)) {
-            return rest_ensure_response(array(
-                'success' => false,
-                'message' => 'AI features are not enabled.',
-            ));
-        }
-
-        $ai_client = WCP_AI_Client::instance();
-
-        if (!$ai_client->is_configured()) {
-            return rest_ensure_response(array(
-                'success' => false,
-                'message' => 'AI is not configured.',
-            ));
-        }
-
-        $context = $this->build_page_context($context_id);
-
-        // Call AI
-        $result = $ai_client->coaching($context, $prompt_type);
-
-        if (is_wp_error($result)) {
-            return rest_ensure_response(array(
-                'success' => false,
-                'message' => $result->get_error_message(),
-            ));
-        }
-
-        $candidate_items = isset($result['candidates']) ? $result['candidates'] : array();
-
-        // Log AI action
-        $logger = WCP_AI_Logger::instance();
-        $action_id = $logger->log_action('coaching', array(
-            'model' => $result['model'],
-            'prompt' => 'Coaching prompt: ' . $prompt_type,
-            'input_context' => $context,
-            'output' => $candidate_items,
-            'context_post_id' => $context_id,
-        ));
-
-        return rest_ensure_response(array(
-            'success' => true,
-            'action_id' => $action_id,
-            'candidate_items' => $candidate_items,
-        ));
-    }
-
-    /**
-     * AI: Accept or dismiss candidates (OLD ENDPOINT - LEGACY)
-     * CRITICAL: This is the ONLY way AI content enters the database
-     */
-    public function ai_decide($request) {
-        // Debug: Log that OLD endpoint is being called
-        file_put_contents(
-            WCP_PLUGIN_DIR . 'debug-log.txt',
-            date('Y-m-d H:i:s') . " - OLD ai_decide endpoint called!\n",
-            FILE_APPEND
-        );
-
-        $action_id = $request->get_param('action_id');
-        $accepted = $request->get_param('accepted');
-        $dismissed = $request->get_param('dismissed');
-
-        $accepted_post_ids = array();
-
-        // Create posts from accepted candidates
-        if (!empty($accepted)) {
-            foreach ($accepted as $candidate) {
-                $post_id = wp_insert_post(array(
-                    'post_type' => 'post',
-                    'post_title' => $candidate['title'],
-                    'post_content' => $candidate['content'],
-                    'post_status' => 'publish',
-                ));
-
-                if (!is_wp_error($post_id)) {
-                    // Mark as AI-generated
-                    update_post_meta($post_id, '_wcp_ai_generated', true);
-                    update_post_meta($post_id, '_wcp_ai_action_id', $action_id);
-                    WCP_Post_Types::mark_creator($post_id, 'copilot');
-
-                    // Apply taxonomies
-                    if (!empty($candidate['contexts'])) {
-                        wp_set_post_terms($post_id, $candidate['contexts'], 'wcp_context');
-                    }
-
-                    if (!empty($candidate['item_type'])) {
-                        wp_set_post_terms($post_id, $candidate['item_type'], 'item_type');
-                    }
-
-                    $accepted_post_ids[] = $post_id;
-                }
-            }
-        }
-
-        // Log decisions
-        $logger = WCP_AI_Logger::instance();
-        $logger->log_decisions($action_id, $accepted_post_ids, $dismissed);
-
-        return rest_ensure_response(array(
-            'success' => true,
-            'created_posts' => $accepted_post_ids,
-        ));
-    }
-
-    /**
-     * Build context pack for AI
-     * Enhanced with semantic search when available
-     */
-    private function build_page_context($post_id, $query = null) {
-        $post = get_post($post_id);
-
-        if (!$post) {
-            return array();
-        }
-
-        $context = array(
-            'page' => array(
-                'title' => $post->post_title,
-                'content' => $post->post_content,
-            ),
-            'headings' => array(),
-            'recent_items' => array(),
-            'pinned_items' => array(),
-            'learnings' => array(),
-        );
-
-        // Get context term
-        $ref_type = $post->post_type === 'page' ? 'page' : 'wcp_heading';
-        $terms = get_terms(array(
-            'taxonomy' => 'wcp_context',
-            'hide_empty' => false,
-            'meta_query' => array(
-                array('key' => 'wcp_ref_type', 'value' => $ref_type),
-                array('key' => 'wcp_ref_id', 'value' => $post_id),
-            ),
-        ));
-
-        if (!empty($terms)) {
-            $term_id = $terms[0]->term_id;
-
-            // Use semantic search if embeddings are enabled and query is provided
-            $use_semantic_search = false;
-            if ($query && get_option('wcp_embeddings_enabled', false)) {
-                $embeddings_client = WCP_Embeddings_Client::instance();
-                if ($embeddings_client->is_configured()) {
-                    $use_semantic_search = true;
-                }
-            }
-
-            if ($use_semantic_search) {
-                // Get all posts in this context
-                $args = array(
-                    'post_type' => 'post',
-                    'post_status' => 'publish',
-                    'posts_per_page' => -1,
-                    'fields' => 'ids',
-                    'tax_query' => array(
-                        array(
-                            'taxonomy' => 'wcp_context',
-                            'field' => 'term_id',
-                            'terms' => $term_id,
-                        ),
-                    ),
-                );
-                $context_post_ids = get_posts($args);
-
-                if (!empty($context_post_ids)) {
-                    // Use semantic search to find most relevant items
-                    $similar_posts = $embeddings_client->find_similar_posts(
-                        $query,
-                        15, // Get top 15 most relevant
-                        'post',
-                        array() // Don't exclude any
-                    );
-
-                    if (!is_wp_error($similar_posts)) {
-                        // Filter to only posts in this context
-                        foreach ($similar_posts as $similar) {
-                            if (in_array($similar['post_id'], $context_post_ids)) {
-                                $item = get_post($similar['post_id']);
-                                if ($item) {
-                                    $context['recent_items'][] = array(
-                                        'title' => $item->post_title,
-                                        'content' => $item->post_content,
-                                        'similarity' => $similar['similarity'],
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Fallback to recent items if semantic search not used or returned nothing
-            if (empty($context['recent_items'])) {
-                $args = array(
-                    'post_type' => 'post',
-                    'posts_per_page' => 20,
-                    'orderby' => 'date',
-                    'order' => 'DESC',
-                    'tax_query' => array(
-                        array(
-                            'taxonomy' => 'wcp_context',
-                            'field' => 'term_id',
-                            'terms' => $term_id,
-                        ),
-                    ),
-                );
-
-                $items = get_posts($args);
-                foreach ($items as $item) {
-                    $context['recent_items'][] = array(
-                        'title' => $item->post_title,
-                        'content' => $item->post_content,
-                    );
-                }
-            }
-        }
-
-        return $context;
     }
 
     /**
@@ -2274,14 +1961,10 @@ class WCP_REST_API {
         // Build the list of {title, content, item_type} to create
         $to_create = array();
 
-        // For AI-backed modes, pick a valid model. The site default option can
-        // hold a stale/deprecated id, so fall back to a current model rather
-        // than letting set_overrides silently revert to it.
+        // For AI-backed modes, use the model picked in the widget. Unknown
+        // or outdated ids resolve to the site default inside set_overrides().
         if ($mode === 'summary' || $mode === 'multiple') {
-            $allowed  = array('claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-8');
-            $req_model = sanitize_text_field((string) $request->get_param('model'));
-            $use_model = in_array($req_model, $allowed, true) ? $req_model : 'claude-sonnet-4-6';
-            WCP_AI_Client::instance()->set_overrides($use_model, 0);
+            WCP_AI_Client::instance()->set_overrides(sanitize_text_field((string) $request->get_param('model')), 0);
         }
 
         if ($mode === 'multiple') {

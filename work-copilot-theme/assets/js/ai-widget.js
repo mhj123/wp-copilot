@@ -17,7 +17,9 @@
         contextMode: 'page',
         selectedPages: [],
         pagesCache: null,
-        selectedModel: 'claude-sonnet-4-6',
+        // Empty = let the server use the site default. Set from the picker,
+        // whose options and preselection come from the plugin's model registry.
+        selectedModel: '',
         thinkingBudget: 0,
         contextsFlat: null,
 
@@ -113,6 +115,7 @@
             });
 
             // Model selector
+            this.selectedModel = $('#wcp-ai-model').val() || '';
             $(document).on('change', '#wcp-ai-model', (e) => {
                 this.selectedModel = $(e.target).val();
             });

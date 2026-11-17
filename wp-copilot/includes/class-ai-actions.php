@@ -4338,7 +4338,7 @@ class WCP_AI_Actions {
 
         $logger    = WCP_AI_Logger::instance();
         $action_id = $logger->log_action( 'plan_goal', array(
-            'model'          => $response['model'] ?? get_option( 'wcp_ai_model', 'claude-sonnet-4-6' ),
+            'model'          => $response['model'] ?? WCP_AI_Client::instance()->effective_model(),
             'prompt'         => $goal_description,
             'input_context'  => $context_data,
             'output'         => $parsed,
