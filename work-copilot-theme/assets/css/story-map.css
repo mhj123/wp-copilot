@@ -1,0 +1,331 @@
+/**
+ * Story map — full-screen board overlay (see assets/js/story-map.js).
+ *
+ * Its own file for the same reason as slideshow.css: a full takeover with no
+ * rule overlap with theme.css. The overlay is appended to <body>, outside
+ * .wcp-theme-container, so it carries its own copies of the workspace tokens.
+ * The accent is decorative only (lines, focus rings) — text never sits on it
+ * or in it, because a section accent can be as light as yellow.
+ */
+
+.wcp-sm-overlay {
+    --wcp-sm-accent: hsl(252 82% 62%);
+    --wcp-sm-bg: #f6f7fb;
+    --wcp-sm-surface: #fff;
+    --wcp-sm-border: #e3e7ef;
+    --wcp-sm-border-strong: #cfd5e1;
+    --wcp-sm-text: #20242d;
+    --wcp-sm-muted: #5b6472;
+    --wcp-sm-col: 232px;
+    --wcp-sm-gutter: 132px;
+
+    position: fixed;
+    inset: 0;
+    z-index: 10001; /* same layer as the slideshow; only one is ever open */
+    display: flex;
+    flex-direction: column;
+    background: var(--wcp-sm-bg);
+    color: var(--wcp-sm-text);
+    font: 13px/1.4 Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.wcp-sm-overlay *,
+.wcp-sm-overlay *::before,
+.wcp-sm-overlay *::after { box-sizing: border-box; }
+
+body.wcp-sm-open { overflow: hidden; }
+body.admin-bar .wcp-sm-overlay { top: 32px; }
+
+/* ---- Toolbar ---------------------------------------------------------- */
+
+.wcp-sm-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 20px;
+    padding: 12px 20px;
+    background: var(--wcp-sm-surface);
+    border-bottom: 1px solid var(--wcp-sm-border);
+}
+
+.wcp-sm-heading { min-width: 0; }
+.wcp-sm-kicker {
+    display: block;
+    color: var(--wcp-sm-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+.wcp-sm-title {
+    margin: 2px 0 0;
+    overflow: hidden;
+    color: var(--wcp-sm-text);
+    font-size: 19px;
+    font-weight: 720;
+    letter-spacing: -.02em;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wcp-sm-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.wcp-sm-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.wcp-sm-chip,
+.wcp-sm-btn {
+    min-height: 32px;
+    padding: 5px 11px;
+    border: 1px solid var(--wcp-sm-border-strong);
+    border-radius: 7px;
+    background: var(--wcp-sm-surface);
+    color: var(--wcp-sm-text);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+.wcp-sm-chip { border-radius: 99px; text-transform: capitalize; }
+.wcp-sm-chip[aria-pressed="false"] {
+    border-style: dashed;
+    background: transparent;
+    color: var(--wcp-sm-muted);
+    text-decoration: line-through;
+}
+.wcp-sm-chip:hover,
+.wcp-sm-btn:hover { background: #eef0f5; }
+.wcp-sm-close { background: var(--wcp-sm-text); border-color: var(--wcp-sm-text); color: #fff; }
+.wcp-sm-close:hover { background: #000; }
+
+.wcp-sm-status { min-width: 52px; color: var(--wcp-sm-muted); font-size: 12px; }
+.wcp-sm-status.is-error { color: #b42318; font-weight: 600; }
+
+.wcp-sm-overlay button:focus-visible,
+.wcp-sm-overlay a:focus-visible,
+.wcp-sm-overlay input:focus-visible,
+.wcp-sm-card:focus-visible {
+    outline: 2px solid var(--wcp-sm-text);
+    outline-offset: 2px;
+}
+
+/* ---- Board ------------------------------------------------------------ */
+
+.wcp-sm-scroll { flex: 1; min-height: 0; overflow: auto; }
+
+.wcp-sm-empty-board { max-width: 46ch; margin: 12vh auto; padding: 0 20px; color: var(--wcp-sm-muted); font-size: 15px; text-align: center; }
+
+.wcp-sm-board {
+    display: grid;
+    grid-template-columns: var(--wcp-sm-gutter) repeat(var(--wcp-sm-cols, 1), var(--wcp-sm-col));
+    width: max-content;
+    min-width: 100%;
+    padding: 0 20px 48px 0;
+}
+
+/* Column headings stay put while the cards scroll under them. */
+.wcp-sm-corner,
+.wcp-sm-col-head {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--wcp-sm-bg);
+    border-bottom: 1px solid var(--wcp-sm-border-strong);
+}
+.wcp-sm-corner { left: 0; z-index: 4; }
+
+.wcp-sm-col-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 14px 10px 10px;
+}
+.wcp-sm-col-title {
+    min-width: 0;
+    color: var(--wcp-sm-text);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+    text-decoration: none;
+}
+a.wcp-sm-col-title:hover { text-decoration: underline; }
+.wcp-sm-col-head.is-page-column .wcp-sm-col-title { color: var(--wcp-sm-muted); font-style: italic; font-weight: 600; }
+.wcp-sm-col-count {
+    flex: none;
+    min-width: 22px;
+    padding: 1px 6px;
+    border-radius: 99px;
+    background: #e6e9f0;
+    color: var(--wcp-sm-muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+}
+
+/* Release names stay put while the columns scroll sideways. */
+.wcp-sm-gutter {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    display: flex;
+    align-items: flex-end;
+    padding: 10px 8px 6px 20px;
+    background: var(--wcp-sm-bg);
+}
+
+.wcp-sm-cell {
+    position: relative;
+    padding: 10px 6px 14px;
+    border-left: 1px dashed var(--wcp-sm-border);
+}
+
+/* The release line: one continuous rule along the bottom of the slice. */
+.wcp-sm-gutter.has-line,
+.wcp-sm-cell.has-line { border-bottom: 2px solid var(--wcp-sm-accent); }
+
+.wcp-sm-list { display: flex; flex-direction: column; gap: 6px; min-height: 34px; height: 100%; }
+
+.wcp-sm-release { width: 100%; }
+.wcp-sm-release-name {
+    display: block;
+    width: 100%;
+    padding: 2px 4px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--wcp-sm-text);
+    cursor: text;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+.wcp-sm-release-name:hover { background: #e6e9f0; }
+.wcp-sm-release-input {
+    width: 100%;
+    padding: 2px 4px;
+    border: 1px solid var(--wcp-sm-border-strong);
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+.wcp-sm-release-later { padding: 2px 4px; color: var(--wcp-sm-muted); font-size: 12px; font-weight: 600; align-self: flex-start; }
+.wcp-sm-gutter:has(.wcp-sm-release-later) { align-items: flex-start; }
+.wcp-sm-release-actions { display: flex; gap: 2px; margin-top: 2px; }
+
+.wcp-sm-icon {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--wcp-sm-muted);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+}
+.wcp-sm-icon:hover:not(:disabled) { border-color: var(--wcp-sm-border-strong); background: var(--wcp-sm-surface); color: var(--wcp-sm-text); }
+.wcp-sm-icon:disabled { cursor: default; opacity: .3; }
+
+/* Per-column handle sitting on the line: move it past one card. */
+.wcp-sm-line-nudge {
+    position: absolute;
+    left: 50%;
+    bottom: -13px;
+    z-index: 1;
+    display: flex;
+    gap: 1px;
+    padding: 0 2px;
+    border: 1px solid var(--wcp-sm-border-strong);
+    border-radius: 99px;
+    background: var(--wcp-sm-surface);
+    opacity: 0;
+    transform: translateX(-50%);
+    transition: opacity .12s;
+}
+.wcp-sm-cell:hover .wcp-sm-line-nudge,
+.wcp-sm-line-nudge:focus-within { opacity: 1; }
+.wcp-sm-line-nudge .wcp-sm-icon { width: 22px; height: 22px; font-size: 9px; }
+
+/* ---- Cards ------------------------------------------------------------ */
+
+.wcp-sm-card {
+    padding: 8px 9px;
+    border: 1px solid var(--wcp-sm-border);
+    border-radius: 7px;
+    background: var(--wcp-sm-surface);
+    box-shadow: 0 1px 1px rgba(20, 24, 33, .04);
+    cursor: grab;
+}
+.wcp-sm-card:hover { border-color: var(--wcp-sm-border-strong); }
+.wcp-sm-card-ghost { opacity: .35; }
+.wcp-sm-card-drag { box-shadow: 0 8px 22px rgba(20, 24, 33, .18); cursor: grabbing; }
+
+.wcp-sm-card-title { font-size: 13px; font-weight: 550; line-height: 1.35; overflow-wrap: anywhere; }
+
+.wcp-sm-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }
+.wcp-sm-card-meta:empty { display: none; }
+
+.wcp-sm-tag {
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: #eef0f5;
+    color: var(--wcp-sm-muted);
+    font-size: 10.5px;
+    font-weight: 650;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+}
+.wcp-sm-tag-high { background: #fde8e6; color: #9f1c12; }
+.wcp-sm-tag-quiet { background: transparent; padding-left: 0; text-transform: none; font-weight: 500; }
+
+.wcp-sm-card-open {
+    margin-left: auto;
+    color: var(--wcp-sm-muted);
+    font-size: 11px;
+    text-decoration: underline;
+}
+.wcp-sm-card-open:hover { color: var(--wcp-sm-text); }
+
+.wcp-sm-subitems {
+    margin: 7px 0 0;
+    padding: 6px 0 0 14px;
+    border-top: 1px solid var(--wcp-sm-border);
+    color: var(--wcp-sm-muted);
+    font-size: 12px;
+    line-height: 1.35;
+}
+.wcp-sm-subitems li { margin: 2px 0; overflow-wrap: anywhere; }
+
+/* ---- Small screens and motion ----------------------------------------- */
+
+@media (max-width: 782px) {
+    body.admin-bar .wcp-sm-overlay { top: 46px; }
+}
+
+@media (max-width: 640px) {
+    .wcp-sm-overlay { --wcp-sm-col: 200px; --wcp-sm-gutter: 96px; }
+    .wcp-sm-toolbar { padding: 10px 16px; }
+    .wcp-sm-gutter { padding-left: 16px; }
+    .wcp-sm-board { padding-right: 16px; }
+    /* No hover on touch: keep the line handles and open links visible. */
+    .wcp-sm-line-nudge { opacity: 1; }
+}
+
+@media (hover: none) {
+    .wcp-sm-line-nudge { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wcp-sm-line-nudge { transition: none; }
+}

@@ -110,6 +110,7 @@ WP Copilot → AI Audit Log shows the prompt, input context, output, and your ac
 == Changelog ==
 
 = Unreleased =
+* Added: Story map view for Pages and Headings (next to Slides). Headings run left to right as columns with their items beneath; add named release lines across the board, drag items above or below them, between headings, or move a line past one item in a single column. Order and filing are shared with the normal page view.
 * Security: the site is now private by default. Anonymous visitors are sent to the login screen, and feeds, the sitemap and the REST API are closed to them. Opt out with `define('WCP_PUBLIC_SITE', true);`.
 * Security: Markdown rendered in the workspace (including AI replies) is sanitised with DOMPurify before display.
 * Fixed: most AI actions were being written to the AI Audit Log without their type, model, prompt or context.

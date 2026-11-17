@@ -46,6 +46,13 @@ WP Copilot has three building blocks:
 A lightweight taxonomy (type, priority, tags, pinned) lets you filter and aggregate
 across everything.
 
+**Story map.** Any Page or Heading can also be opened as a story map: a Page's
+Headings run left to right as columns with their items underneath (for a Heading, its
+top-level items are the columns and their sub-items the cards). Add release lines
+across the board and drag items above or below them to see, across every dimension of
+a project at once, what comes next. It is the same data as the page view — reordering
+or moving an item on the map reorders or re-files it everywhere.
+
 ---
 
 ## How it works

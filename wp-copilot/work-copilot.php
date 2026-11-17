@@ -65,6 +65,7 @@ class Work_Copilot {
         require_once WCP_PLUGIN_DIR . 'includes/class-ai-actions.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-recap.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-section-manager.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-story-map.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-researcher-mode.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-raindrop-importer.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-csv-exporter.php';
@@ -142,6 +143,7 @@ class Work_Copilot {
         WCP_Taxonomy_Sync::instance();
         WCP_Recap::instance();
         WCP_REST_API::instance();
+        WCP_Story_Map::instance();
         WCP_Embeddings_Manager::instance();
         WCP_Page_Template_Manager::instance();
         WCP_Page_Scheduler::instance();

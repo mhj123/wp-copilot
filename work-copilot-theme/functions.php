@@ -124,6 +124,13 @@ function wcp_theme_scripts() {
         wp_enqueue_script('wcp-slideshow', get_template_directory_uri() . '/assets/js/slideshow.js', array('wcp-theme-js'), filemtime(get_template_directory() . '/assets/js/slideshow.js'), true);
     }
 
+    // Story map view (page/heading board with release lines). Logged-in only,
+    // and only where the plugin class that serves it is present.
+    if (is_user_logged_in() && class_exists('WCP_Story_Map')) {
+        wp_enqueue_style('wcp-story-map', get_template_directory_uri() . '/assets/css/story-map.css', array(), filemtime(get_template_directory() . '/assets/css/story-map.css'));
+        wp_enqueue_script('wcp-story-map', get_template_directory_uri() . '/assets/js/story-map.js', array('wcp-theme-js', 'sortablejs'), filemtime(get_template_directory() . '/assets/js/story-map.js'), true);
+    }
+
     // PptxGenJS (slideshow "Export .pptx"): ~470KB, so it is NOT enqueued — slideshow.js
     // loads it on demand from this URL the first time the user exports. MIT licensed,
     // see assets/js/vendor/pptxgenjs.LICENSE.txt.
