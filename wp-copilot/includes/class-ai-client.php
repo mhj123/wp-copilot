@@ -300,13 +300,13 @@ class WCP_AI_Client {
      */
     public function suggest_tags($title, $content) {
         $prompt = "Analyze this note and suggest:\n";
-        $prompt .= "1. Item type (task, info, or learning)\n";
+        $prompt .= "1. Item type (task, note, or learning)\n";
         $prompt .= "2. Priority (high, medium, or low)\n";
         $prompt .= "3. Relevant tags (2-5 tags)\n\n";
         $prompt .= "Title: {$title}\n\n";
         $prompt .= "Content: {$content}\n\n";
         $prompt .= "Respond ONLY with valid JSON in this format:\n";
-        $prompt .= '{"item_type": "task|info|learning", "priority": "high|medium|low", "tags": ["tag1", "tag2"]}';
+        $prompt .= '{"item_type": "task|note|learning", "priority": "high|medium|low", "tags": ["tag1", "tag2"]}';
 
         $response = $this->request(array(
             array(

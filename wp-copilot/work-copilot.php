@@ -197,6 +197,7 @@ class Work_Copilot {
         flush_rewrite_rules();
         wp_clear_scheduled_hook('wcp_raindrop_import');
         wp_clear_scheduled_hook('wcp_ai_actions_retention');
+        wp_clear_scheduled_hook('wcp_scheduled_page_check');
     }
 
     public function run_ai_log_retention() {

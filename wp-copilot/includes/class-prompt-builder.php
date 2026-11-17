@@ -29,7 +29,7 @@ WPCopilot is a personal knowledge and work management system built on WordPress.
 - **Pages** are context areas — topics, projects, or domains of your work.
 - **Headings** are sub-sections within a page, grouping related items.
 - **Items** are atomic notes attached to pages and/or headings. Each item has a type:
-  `task` (actionable to-do), `info` (reference/factual note), or `learning` (insight to remember).
+  `task` (actionable to-do), `note` (reference/factual note), or `learning` (insight to remember).
 - An item can belong to multiple pages simultaneously.
 
 **Your role as AI assistant:**
@@ -160,14 +160,14 @@ MD;
             // Generate items action for frontend widget
             'generate-single' => "Generate ONE actionable item based on the user's request and the context provided. "
                 . "Be specific and concrete. Format your response as valid JSON:\n"
-                . '{"title": "Item title", "content": "Detailed content", "item_type": "task|info|learning"}'
+                . '{"title": "Item title", "content": "Detailed content", "item_type": "task|note|learning"}'
                 . "\n\n'content' may use Markdown (bullet lists with -, **bold**, headings with #) where it improves clarity — it will be rendered, not shown as raw text.",
 
             'generate-multiple' => "{$item_count_instruction} based on the user's request and context. "
                 . "Each item should be specific, concrete, and immediately useful.\n\n"
                 . "IMPORTANT: Respond with ONLY a valid JSON array. No text before or after. Example format:\n"
                 . '[{"title": "Item title", "content": "Detailed content", "item_type": "task"}]\n\n'
-                . "Valid item_type values: task, info, learning. Start your response with [ and end with ]. "
+                . "Valid item_type values: task, note, learning. Start your response with [ and end with ]. "
                 . "'content' may use Markdown (bullet lists with -, **bold**, headings with #) where it improves clarity — it will be rendered, not shown as raw text.",
 
             'generate-headings' => "Generate headings to structure the current page based on the user's request and context. "
@@ -184,7 +184,7 @@ MD;
                 . "Otherwise place each item under the heading whose topic it best fits.\n\n"
                 . "IMPORTANT: Respond with ONLY a valid JSON object. No text before or after. Format:\n"
                 . '{"headings":[{"ref":"h1","title":"Heading title"}],"items":[{"title":"Item title","content":"Detail or empty","item_type":"task","target":{"type":"new","ref":"h1"}}]}' . "\n\n"
-                . "Rules: item_type is one of task|info|learning|spec. target.type is one of: "
+                . "Rules: item_type is one of task|note|learning|spec. target.type is one of: "
                 . "\"new\" (also give \"ref\" matching a heading in your headings list), "
                 . "\"existing\" (also give \"id\" = an existing heading id from the structure, and \"title\" = that heading's title), or "
                 . "\"page\" (page level). Use an empty headings array if creating no new headings. "
@@ -200,7 +200,7 @@ MD;
                 . "clearly belongs there instead), or at PAGE level (only for content with no clear heading).\n\n"
                 . "IMPORTANT: Respond with ONLY a valid JSON object. No text before or after. Format:\n"
                 . '{"headings":[{"ref":"h1","title":"Heading title"}],"items":[{"title":"Item title","content":"Detail or empty","item_type":"task","target":{"type":"new","ref":"h1"}}]}' . "\n\n"
-                . "Rules: item_type is one of task|info|learning|spec — pick whichever best matches what the "
+                . "Rules: item_type is one of task|note|learning|spec — pick whichever best matches what the "
                 . "content represents (a to-do reads as task, reference/background as info, a requirement/spec "
                 . "as spec, a lesson/insight as learning). target.type is one of: "
                 . "\"new\" (also give \"ref\" matching a heading in your headings list), "
@@ -242,7 +242,7 @@ MD;
             'fetch_interpret' => "Extract database query parameters from the user's request. "
                 . "Today's date is " . date('Y-m-d') . ".\n\n"
                 . "IMPORTANT: Respond with ONLY a valid JSON object. No text before or after. "
-                . "Use null for any field the user did not specify. Valid item_type values: task, info, learning. "
+                . "Use null for any field the user did not specify. Valid item_type values: task, note, learning. "
                 . "Valid task_status values: to-do, in-progress, done. "
                 . "Express dates as absolute Y-m-d strings. Format:\n"
                 . '{"date_from":null,"date_to":null,"item_type":null,"task_status":null,"parent_page_id":null,"limit":10}'

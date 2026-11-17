@@ -96,16 +96,21 @@ class WCP_Context_Builder {
      * @return string Truncated content
      */
     private function truncate_content($content, $max_chars) {
-        if (strlen($content) <= $max_chars) {
+        // Count and cut in characters, not bytes: a byte cut can land in the
+        // middle of a multibyte character (accents, CJK, emoji) and leave
+        // invalid UTF-8, which json_encode() then refuses to send.
+        if (mb_strlen($content) <= $max_chars) {
             return $content;
         }
 
         // Truncate to max_chars - 3 (for ellipsis)
-        $truncated = substr($content, 0, $max_chars - 3);
+        $truncated = mb_substr($content, 0, $max_chars - 3);
 
-        // Find last space to preserve word boundary
+        // Find last space to preserve word boundary. A space is a single
+        // byte and never part of a multibyte sequence, so the byte-based
+        // search and cut are safe on the already character-safe string.
         $last_space = strrpos($truncated, ' ');
-        if ($last_space !== false && $last_space > $max_chars * 0.8) {
+        if ($last_space !== false && $last_space > strlen($truncated) * 0.8) {
             $truncated = substr($truncated, 0, $last_space);
         }
 

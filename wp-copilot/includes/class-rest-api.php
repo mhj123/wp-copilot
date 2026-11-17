@@ -694,7 +694,7 @@ class WCP_REST_API {
         }
 
         // Immediately embed the new item (bypasses save_post throttle)
-        if (get_option('wcp_ai_enabled', false)) {
+        if (WCP_Embeddings_Manager::is_enabled()) {
             WCP_Embeddings_Manager::instance()->generate_embedding($post_id);
         }
 
@@ -1972,7 +1972,7 @@ class WCP_REST_API {
             $sys = "Split the assistant message below into atomic knowledge/work items — one single idea, task, or fact each. "
                  . "Prefer 2–6 items; never invent content not present in the message. "
                  . "Return ONLY a JSON array, no prose: "
-                 . '[{"title":"short title","content":"the item body","item_type":"task|info|learning|spec"}].';
+                 . '[{"title":"short title","content":"the item body","item_type":"task|note|learning|spec"}].';
             $resp = $ai->request_with_conversation($sys, $content, array(), 2048, 60);
             if (is_wp_error($resp)) {
                 return $resp;
@@ -2171,7 +2171,7 @@ class WCP_REST_API {
             update_post_meta($post_id, '_wcp_source_conversation_id', $shared['conversation_id']);
         }
 
-        if (get_option('wcp_embeddings_enabled', false)) {
+        if (WCP_Embeddings_Manager::is_enabled()) {
             WCP_Embeddings_Manager::instance()->generate_embedding($post_id);
         }
 
@@ -2334,7 +2334,7 @@ class WCP_REST_API {
         }
 
         // Re-embed immediately, bypassing the 60-second save_post throttle
-        if (get_option('wcp_ai_enabled', false)) {
+        if (WCP_Embeddings_Manager::is_enabled()) {
             WCP_Embeddings_Manager::instance()->generate_embedding($item_id);
         }
 
@@ -2355,9 +2355,9 @@ class WCP_REST_API {
 
         // Delete embedding before trashing — wp_trash_post fires trashed_post not delete_post,
         // so the delete_post hook in WCP_Embeddings_Manager would never fire.
-        if (get_option('wcp_ai_enabled', false)) {
-            WCP_Embeddings_Manager::instance()->delete_embedding($item_id);
-        }
+        // Unconditional: it is a local row delete (no API call), and a stale
+        // vector must go even if embeddings were switched off after it was made.
+        WCP_Embeddings_Manager::instance()->delete_embedding($item_id);
 
         wp_trash_post($item_id);
 
@@ -2783,8 +2783,8 @@ class WCP_REST_API {
                 $sys  = "Turn the user's coaching feedback into concrete follow-up items and tasks for the item "
                       . "titled \"{$item->post_title}\". Extract only genuinely actionable or noteworthy points — "
                       . "do not pad the list. Return ONLY a valid JSON array, no text before or after:\n"
-                      . '[{"title":"...","content":"...","item_type":"task|info|learning|spec"}]' . "\n\n"
-                      . "Use \"task\" for something to do, \"info\"/\"learning\" for something to note or remember, "
+                      . '[{"title":"...","content":"...","item_type":"task|note|learning|spec"}]' . "\n\n"
+                      . "Use \"task\" for something to do, \"note\"/\"learning\" for something to note or remember, "
                       . "\"spec\" for a requirement. 'content' must be at least a short one-sentence rationale or "
                       . "detail — never an empty string. Start with [ and end with ].";
                 $usr  = "Coaching feedback:\n{$cti_feedback}";

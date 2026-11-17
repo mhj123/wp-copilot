@@ -39,11 +39,14 @@ $options = array(
     'wcp_db_version',
     'wcp_default_terms_created',
     'wcp_embeddings_enabled',
+    'wcp_exa_api_key',
+    'wcp_info_renamed_to_note',
     'wcp_openai_api_key',
     'wcp_raindrop_api_key',
     'wcp_raindrop_import_frequency',
     'wcp_raindrop_last_import',
     'wcp_raindrop_selected_collections',
+    'wcp_reference_terms_created',
     'wcp_researcher_library_page_id',
     // Retired: no longer written (the template version constants were never read
     // back, so they were removed). Kept here to clean up installs that still
@@ -53,6 +56,7 @@ $options = array(
     'wcp_researcher_research_root_id',
     'wcp_researcher_mode_active',
     'wcp_saved_prompts',
+    'wcp_source_terms_created',
     'wcp_spec_terms_created',
     'wcp_task_status_terms_created',
 );
