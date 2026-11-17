@@ -650,8 +650,9 @@
             const className = isHermes ? 'wcp-ai-message-hermes' : 'wcp-ai-message-' + role;
 
             const $bubble = $('<div>').addClass('wcp-ai-message-content');
-            if ((role === 'assistant' || isHermes) && typeof marked !== 'undefined') {
-                $bubble.html(marked.parse(content));
+            if ((role === 'assistant' || isHermes) && typeof window.wcpSafeMarkdown === 'function') {
+                // Sanitised: replies can carry text from web results, PDFs and imports.
+                $bubble.html(window.wcpSafeMarkdown(content));
             } else {
                 $bubble.text(content);
             }

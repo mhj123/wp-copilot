@@ -153,8 +153,8 @@ window.WcpSlideshow = (function ($) {
     // Same defensive pattern as theme.js:539-540 — feature-detect marked.js
     // rather than assuming it's present.
     function wcpSlideshowMarkdown(raw) {
-        if (window.marked && typeof window.marked.parse === 'function') {
-            return marked.parse(raw || '');
+        if (typeof window.wcpSafeMarkdown === 'function') {
+            return window.wcpSafeMarkdown(raw || '');
         }
         return $('<div>').text(raw || '').html();
     }

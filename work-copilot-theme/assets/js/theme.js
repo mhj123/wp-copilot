@@ -679,8 +679,8 @@ jQuery(document).ready(function($) {
     // such rather than as an unbroken line of plain text). Falls back to
     // plain text if marked.js isn't loaded for some reason.
     function wcpRenderMarkdown($el, raw) {
-        if (window.marked && typeof window.marked.parse === 'function') {
-            $el.html(marked.parse(raw || ''));
+        if (typeof window.wcpSafeMarkdown === 'function') {
+            $el.html(window.wcpSafeMarkdown(raw || ''));
         } else {
             $el.text(raw || '');
         }
