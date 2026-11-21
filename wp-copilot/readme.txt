@@ -54,7 +54,7 @@ WP Copilot never acts autonomously. Every AI action is explicitly invoked, all A
 
 == External Services ==
 
-WP Copilot connects to third-party APIs **only for the specific features listed below, only if you supply an API key for that feature, and only when you actively trigger the related action.** No content leaves your site if you don't configure a key. No data is sent on a schedule or in the background for these AI features — each call happens synchronously in response to something you clicked.
+WP Copilot connects to third-party APIs **only for the specific features listed below, and only when you actively trigger the related action.** Every service except OpenAlex needs an API key you supply; OpenAlex answers without one, but is only contacted when you choose it in "Find references". No data is sent on a schedule or in the background for these AI features — each call happens synchronously in response to something you clicked.
 
 **1. Anthropic (Claude API)** — used for all AI assistant features (chat, drafting/editing items, page summaries, coaching prompts).
 
@@ -73,6 +73,18 @@ WP Copilot connects to third-party APIs **only for the specific features listed 
 * What is sent: your Raindrop.io API token (to authenticate the request); no WordPress content is sent to Raindrop.io, data only flows inbound from Raindrop.io to your site.
 * When: on a schedule you configure (e.g. daily), or when you trigger a manual import.
 * Service: https://raindrop.io — Terms of Service: https://raindrop.io/terms — Privacy Policy: https://raindrop.io/privacy
+
+**4. Exa (web and paper search)** — used by "Find references" (Researcher Mode) to search the web or scholarly papers for sources, and to fetch a source's text when you ask for a full summary.
+
+* What is sent: the search query (written by the AI from your instruction, and editable by you before it runs), the URL of a result you choose to summarise in full, and your Exa API key.
+* When: only when you run "Find references" with an Exa option selected.
+* Service: https://exa.ai — Terms of Service and Privacy Policy: linked from the footer of https://exa.ai
+
+**5. OpenAlex (scholarly search)** — offered alongside Exa in "Find references", as keyword or semantic search over scholarly works.
+
+* What is sent: the search query (written by the AI from your instruction, and editable by you before it runs). If you have set them in Settings, also your OpenAlex API key and your contact email (OpenAlex's "mailto" parameter, which puts requests in its faster "polite pool"). Leave the email blank to search without identifying yourself.
+* When: only when you run "Find references" with an OpenAlex option selected.
+* Service: https://openalex.org — Terms of Service and Privacy Policy: linked from the footer of https://openalex.org
 
 You are responsible for reviewing each provider's terms and privacy policy before enabling the corresponding feature, and for ensuring your use complies with any obligations you have regarding the notes/content you store in WordPress.
 

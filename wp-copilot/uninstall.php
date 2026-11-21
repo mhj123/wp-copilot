@@ -43,6 +43,7 @@ $options = array(
     'wcp_raindrop_api_key',
     'wcp_openalex_api_key',
     'wcp_openalex_email',
+    'wcp_phrase_refs_migrated_to_graph',
     'wcp_raindrop_import_frequency',
     'wcp_raindrop_last_import',
     'wcp_raindrop_selected_collections',

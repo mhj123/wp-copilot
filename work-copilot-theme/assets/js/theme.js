@@ -1820,31 +1820,60 @@ jQuery(document).ready(function($) {
             $result.html('<em style="color:#888;font-size:12px;">No references found.</em>');
             return;
         }
-        var rows = proposals.map(function(p) {
+        // Built as DOM nodes with .text()/.attr(), not concatenated HTML:
+        // titles, snippets, abstracts and URLs come from the search provider
+        // and the model, and a quote in any of them would otherwise break out
+        // of an attribute.
+        var $list = $('<ul class="wcp-fri-list" style="margin:0 0 8px;padding-left:16px;font-size:12px;list-style:none;">');
+        proposals.forEach(function(p) {
             var it = p.item || {};
-            var source = it.url
-                ? ' — <a href="' + $('<span>').text(it.url).html() + '" target="_blank" rel="noopener" style="color:#4a9eff;">' + $('<span>').text(it.domain || it.url).html() + '</a>'
-                : '';
-            var esc = function(t) { return $('<span>').text(t).html(); };
+            var $label = $('<label>')
+                .append($('<input type="checkbox" class="wcp-fri-cb" checked>').attr('data-proposal-id', p.proposal_id))
+                .append(' ')
+                .append($('<strong>').text(it.title || ''));
+            if (it.url) {
+                var $source = wcpSafeLink(it.url, it.domain || it.url);
+                if ($source) {
+                    $label.append(' — ').append($source.css('color', '#4a9eff'));
+                }
+            }
+            var $li = $('<li style="margin-bottom:10px;">').append($label);
+
             var metaLine = wcpRefMetaLine(it.meta);
+            if (metaLine) {
+                $li.append($('<div style="margin:2px 0 0 20px;color:#666;">').text(metaLine));
+            }
+
             // The AI-written description, minus the trailing "Source:" line.
             var desc = String(it.content || '').split(/\n\nSource:/)[0].trim();
-            var short = desc.length > 300 ? desc.slice(0, 300).replace(/\s+\S*$/, '') + '…' : desc;
-            return '<li style="margin-bottom:10px;"><label>'
-                + '<input type="checkbox" class="wcp-fri-cb" checked data-proposal-id="' + p.proposal_id + '"> '
-                + '<strong>' + esc(it.title || '') + '</strong>' + source
-                + '</label>'
-                + (metaLine ? '<div style="margin:2px 0 0 20px;color:#666;">' + esc(metaLine) + '</div>' : '')
-                + (desc ? '<div class="wcp-fri-desc" style="margin:2px 0 0 20px;color:#444;" data-full="' + esc(desc) + '" data-short="' + esc(short) + '">' + esc(short)
-                    + (short !== desc ? ' <a href="#" class="wcp-fri-desc-toggle" style="color:#4a9eff;">more</a>' : '') + '</div>' : '')
-                + '</li>';
-        }).join('');
-        $result.html(
-            '<p style="font-size:12px;margin:0 0 6px;color:#555;">' + $('<span>').text(r.message || 'Found references').html() + '</p>'
-            + '<ul class="wcp-fri-list" style="margin:0 0 8px;padding-left:16px;font-size:12px;list-style:none;">' + rows + '</ul>'
-            + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-fri-accept" data-batch-id="' + r.batch_id + '">Add selected</button>'
-            + ' <button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
-        );
+            if (desc) {
+                var short = desc.length > 300 ? desc.slice(0, 300).replace(/\s+\S*$/, '') + '…' : desc;
+                var $desc = $('<div class="wcp-fri-desc" style="margin:2px 0 0 20px;color:#444;">')
+                    .data('full', desc)
+                    .data('short', short)
+                    .text(short);
+                if (short !== desc) {
+                    $desc.append(' ').append($('<a href="#" class="wcp-fri-desc-toggle" style="color:#4a9eff;">').text('more'));
+                }
+                $li.append($desc);
+            }
+            $list.append($li);
+        });
+        $result.empty()
+            .append($('<p style="font-size:12px;margin:0 0 6px;color:#555;">').text(r.message || 'Found references'))
+            .append($list)
+            .append($('<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-fri-accept">Add selected</button>').attr('data-batch-id', r.batch_id))
+            .append(' ')
+            .append($('<button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'));
+    }
+
+    // A link to an outside source, or null when the URL isn't plain http(s)
+    // (a javascript: or data: URL from a search result must never be clickable).
+    function wcpSafeLink(url, label) {
+        if (!/^https?:\/\//i.test(String(url || ''))) {
+            return null;
+        }
+        return $('<a target="_blank" rel="noopener noreferrer">').attr('href', url).text(label);
     }
 
     $(document).on('click', '.wcp-fri-desc-toggle', function(e) {
@@ -2290,6 +2319,12 @@ jQuery(document).ready(function($) {
             beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
             success: function(response) {
                 if (response.success) {
+                    // A batch can succeed overall while single references
+                    // fail; say which, rather than reloading as if all went in.
+                    if (response.errors && response.errors.length) {
+                        alert((response.message || 'Some references were not added.') + '\n\n'
+                            + response.errors.map(function(e) { return '• ' + e.error; }).join('\n'));
+                    }
                     $btn.closest('.wcp-item-ai-panel').slideUp(120);
                     location.reload();
                 } else {

@@ -206,7 +206,7 @@ class WCP_Settings {
         foreach (array('wcp_openalex_api_key', 'wcp_openalex_email') as $openalex_option) {
             register_setting('wcp_settings', $openalex_option, array(
                 'type' => 'string',
-                'sanitize_callback' => 'sanitize_text_field',
+                'sanitize_callback' => $openalex_option === 'wcp_openalex_email' ? 'sanitize_email' : 'sanitize_text_field',
                 'default' => '',
             ));
         }
@@ -689,7 +689,7 @@ class WCP_Settings {
     public function render_openalex_email_field() {
         ?>
         <input type="email" name="wcp_openalex_email" value="<?php echo esc_attr(get_option('wcp_openalex_email', '')); ?>" class="regular-text" placeholder="you@example.com">
-        <p class="description"><?php _e('Optional. Sent as OpenAlex\'s "mailto" so requests use its faster polite pool.', 'work-copilot'); ?></p>
+        <p class="description"><?php _e('Optional. Sent to OpenAlex with every OpenAlex search (as its "mailto" parameter) so requests use its faster polite pool. Leave blank to search without identifying yourself.', 'work-copilot'); ?></p>
         <?php
     }
 

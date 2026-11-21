@@ -1013,6 +1013,72 @@ class WCP_AI_Actions {
         return $item;
     }
 
+    /** Set once every pre-graph phrase reference has been copied to an edge. */
+    const PHRASE_REFS_MIGRATED_OPTION = 'wcp_phrase_refs_migrated_to_graph';
+
+    /**
+     * One-time migration: phrase references saved before references moved
+     * to wcp-graph were stored as post meta on the reference item
+     * (_wcp_rel = 'about', _wcp_rel_target = phrase anchor ID). Nothing
+     * reads that meta any more, so without this those references vanish
+     * from their phrase and duplicate detection stops seeing them.
+     *
+     * Copies each one to a reference --discusses--> anchor edge. The old
+     * meta is left in place, so the migration can be re-run safely and
+     * nothing is lost if it is interrupted. Runs on admin_init; if
+     * wcp-graph isn't active yet it does nothing and tries again later.
+     *
+     * @return array|null Counts {migrated, existing, skipped}, or null when it did not run.
+     */
+    public static function migrate_phrase_refs_to_graph() {
+        if (get_option(self::PHRASE_REFS_MIGRATED_OPTION)) {
+            return null;
+        }
+        if (!class_exists('WCPG_Graph_Repository')) {
+            return null; // retry once the add-on is active
+        }
+
+        $graph  = WCPG_Graph_Repository::instance();
+        $counts = array('migrated' => 0, 'existing' => 0, 'skipped' => 0);
+
+        $reference_ids = get_posts(array(
+            'post_type'      => 'post',
+            'post_status'    => 'any',
+            'posts_per_page' => -1,
+            'fields'         => 'ids',
+            'meta_query'     => array(
+                array('key' => '_wcp_rel', 'value' => 'about'),
+                array('key' => '_wcp_rel_target', 'compare' => 'EXISTS'),
+            ),
+        ));
+
+        foreach ($reference_ids as $reference_id) {
+            $anchor_id = (int) get_post_meta($reference_id, '_wcp_rel_target', true);
+            if (!$anchor_id) {
+                $counts['skipped']++;
+                continue;
+            }
+
+            $edge = $graph->add_edge((int) $reference_id, 'discusses', $anchor_id);
+            if (!is_wp_error($edge)) {
+                $counts['migrated']++;
+            } elseif ($edge->get_error_code() === 'wcpg_duplicate') {
+                $counts['existing']++;
+            } else {
+                // Typically the anchor or reference was deleted or trashed:
+                // there is nothing left to link.
+                $counts['skipped']++;
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log(sprintf('WP Copilot: phrase reference %d -> %d not migrated: %s', $reference_id, $anchor_id, $edge->get_error_message()));
+                }
+            }
+        }
+
+        update_option(self::PHRASE_REFS_MIGRATED_OPTION, $counts, false);
+
+        return $counts;
+    }
+
     /**
      * IDs of the phrase anchors a reference item is linked to (outbound
      * 'discusses' edges). Empty when wcp-graph isn't active.
@@ -3988,10 +4054,24 @@ class WCP_AI_Actions {
                             // anchor's inbound edges, never stored twice.
                             $edge = WCPG_Graph_Repository::instance()->add_edge($topic_item_id, 'discusses', $phrase_item_id);
                             if (is_wp_error($edge)) {
-                                $debug_info['edge_error'] = $edge->get_error_message();
-                            } else {
-                                $debug_info['edge_id'] = $edge['id'];
+                                // Without the link this topic item is an orphan
+                                // the user never asked for, and reporting success
+                                // would hide that the phrase got no reference.
+                                // Remove it and fail; the Library page and
+                                // Summary item stay (they are valid on their
+                                // own), so a retry only redoes this step.
+                                wp_delete_post($topic_item_id, true);
+                                return new WP_Error(
+                                    'phrase_link_failed',
+                                    sprintf(
+                                        '"%s" was added to the Library, but could not be linked to the phrase "%s": %s',
+                                        $paper_title,
+                                        (string) get_post_meta($phrase_item_id, '_wcp_anchor_text', true),
+                                        $edge->get_error_message()
+                                    )
+                                );
                             }
+                            $debug_info['edge_id'] = $edge['id'];
                         }
                         $created_posts[] = $topic_item_id;
                     }
