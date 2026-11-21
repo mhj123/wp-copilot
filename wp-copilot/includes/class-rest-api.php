@@ -1418,7 +1418,8 @@ class WCP_REST_API {
                     $conversation_id,
                     $request->get_param('query'),
                     $include_relevance === null ? true : (bool) $include_relevance,
-                    (bool) $include_summary
+                    (bool) $include_summary,
+                    (string) $request->get_param('provider')
                 );
                 break;
 
@@ -3335,7 +3336,7 @@ class WCP_REST_API {
                 // Researcher-mode gate lives in guard_find_references_for_item().
                 $page_id_param = (int) $request->get_param('page_id');
                 $conversation_id_param = $request->get_param('conversation_id');
-                $fri_result = WCP_AI_Actions::instance()->find_references_for_item( $item_id, $page_id_param, $conversation_id_param, $request->get_param('query'), (string) $request->get_param('phrase'), (int) $request->get_param('phrase_start') );
+                $fri_result = WCP_AI_Actions::instance()->find_references_for_item( $item_id, $page_id_param, $conversation_id_param, $request->get_param('query'), (string) $request->get_param('phrase'), (int) $request->get_param('phrase_start'), (string) $request->get_param('provider') );
                 if ( is_wp_error( $fri_result ) ) {
                     return $fri_result;
                 }

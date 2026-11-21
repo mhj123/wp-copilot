@@ -201,6 +201,30 @@ class WCP_Settings {
             'wcp_web_search_section'
         );
 
+        // OpenAlex (scholarly search) — works without either; both only
+        // improve rate limits.
+        foreach (array('wcp_openalex_api_key', 'wcp_openalex_email') as $openalex_option) {
+            register_setting('wcp_settings', $openalex_option, array(
+                'type' => 'string',
+                'sanitize_callback' => 'sanitize_text_field',
+                'default' => '',
+            ));
+        }
+        add_settings_field(
+            'wcp_openalex_api_key',
+            __('OpenAlex API Key (optional)', 'work-copilot'),
+            array($this, 'render_openalex_api_key_field'),
+            'work-copilot-settings',
+            'wcp_web_search_section'
+        );
+        add_settings_field(
+            'wcp_openalex_email',
+            __('OpenAlex Contact Email (optional)', 'work-copilot'),
+            array($this, 'render_openalex_email_field'),
+            'work-copilot-settings',
+            'wcp_web_search_section'
+        );
+
         // Raindrop settings
         register_setting('wcp_settings', 'wcp_raindrop_api_key', array(
             'type'              => 'string',
@@ -650,6 +674,22 @@ class WCP_Settings {
         ?>
         <p><?php _e('Configure the AI assistant\'s "Web search" action, powered by Exa.', 'work-copilot'); ?></p>
         <p><?php _e('When you enable it, the AI can search the live web and bring back findings you can review and save as items — nothing is saved automatically.', 'work-copilot'); ?></p>
+        <?php
+    }
+
+    public function render_openalex_api_key_field() {
+        ?>
+        <input type="password" name="wcp_openalex_api_key" value="<?php echo esc_attr(get_option('wcp_openalex_api_key', '')); ?>" class="regular-text" placeholder="...">
+        <p class="description">
+            <?php _e('Recommended. OpenAlex (keyword and semantic scholarly search) is offered alongside Exa in "Find references". Keyless requests share a tiny daily budget per IP; a free key from', 'work-copilot'); ?> <a href="https://openalex.org/settings/api" target="_blank">openalex.org/settings/api</a> <?php _e('gives you your own daily allowance.', 'work-copilot'); ?>
+        </p>
+        <?php
+    }
+
+    public function render_openalex_email_field() {
+        ?>
+        <input type="email" name="wcp_openalex_email" value="<?php echo esc_attr(get_option('wcp_openalex_email', '')); ?>" class="regular-text" placeholder="you@example.com">
+        <p class="description"><?php _e('Optional. Sent as OpenAlex\'s "mailto" so requests use its faster polite pool.', 'work-copilot'); ?></p>
         <?php
     }
 

@@ -55,6 +55,7 @@ class Work_Copilot {
         require_once WCP_PLUGIN_DIR . 'includes/class-ai-client.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-embeddings-client.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-exa-client.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-openalex-client.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-embeddings-manager.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-conversations-manager.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-context-builder.php';

@@ -1802,6 +1802,18 @@ jQuery(document).ready(function($) {
     // find_references_for_item chip no longer calls the actual search
     // directly, so this rendering can't stay inline in the generic chip
     // dispatch's success callback.
+    // "Authors · Venue · Year · cited by N · Open access" from a finding's meta.
+    function wcpRefMetaLine(m) {
+        m = m || {};
+        var parts = [];
+        if (m.authors) { parts.push(m.authors); }
+        if (m.venue)   { parts.push(m.venue); }
+        if (m.year)    { parts.push(m.year); }
+        if (m.cited_by !== undefined) { parts.push('cited by ' + m.cited_by); }
+        if (m.is_oa)   { parts.push('open access'); }
+        return parts.join(' · ');
+    }
+
     function wcpRenderFriResults($result, r) {
         var proposals = r.proposals || [];
         if (!proposals.length) {
@@ -1813,10 +1825,19 @@ jQuery(document).ready(function($) {
             var source = it.url
                 ? ' — <a href="' + $('<span>').text(it.url).html() + '" target="_blank" rel="noopener" style="color:#4a9eff;">' + $('<span>').text(it.domain || it.url).html() + '</a>'
                 : '';
-            return '<li style="margin-bottom:4px;"><label>'
+            var esc = function(t) { return $('<span>').text(t).html(); };
+            var metaLine = wcpRefMetaLine(it.meta);
+            // The AI-written description, minus the trailing "Source:" line.
+            var desc = String(it.content || '').split(/\n\nSource:/)[0].trim();
+            var short = desc.length > 300 ? desc.slice(0, 300).replace(/\s+\S*$/, '') + '…' : desc;
+            return '<li style="margin-bottom:10px;"><label>'
                 + '<input type="checkbox" class="wcp-fri-cb" checked data-proposal-id="' + p.proposal_id + '"> '
-                + '<strong>' + $('<span>').text(it.title || '').html() + '</strong>' + source
-                + '</label></li>';
+                + '<strong>' + esc(it.title || '') + '</strong>' + source
+                + '</label>'
+                + (metaLine ? '<div style="margin:2px 0 0 20px;color:#666;">' + esc(metaLine) + '</div>' : '')
+                + (desc ? '<div class="wcp-fri-desc" style="margin:2px 0 0 20px;color:#444;" data-full="' + esc(desc) + '" data-short="' + esc(short) + '">' + esc(short)
+                    + (short !== desc ? ' <a href="#" class="wcp-fri-desc-toggle" style="color:#4a9eff;">more</a>' : '') + '</div>' : '')
+                + '</li>';
         }).join('');
         $result.html(
             '<p style="font-size:12px;margin:0 0 6px;color:#555;">' + $('<span>').text(r.message || 'Found references').html() + '</p>'
@@ -1825,6 +1846,13 @@ jQuery(document).ready(function($) {
             + ' <button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Dismiss</button>'
         );
     }
+
+    $(document).on('click', '.wcp-fri-desc-toggle', function(e) {
+        e.preventDefault();
+        var $d = $(this).closest('.wcp-fri-desc');
+        var expand = $(this).text() === 'more';
+        $d.text($d.data(expand ? 'full' : 'short')).append(' ').append($('<a href="#" class="wcp-fri-desc-toggle" style="color:#4a9eff;">').text(expand ? 'less' : 'more'));
+    });
 
     // "Coach me" step 2: render the items/tasks extracted from the (possibly
     // edited) coaching text as a checkbox list, same shape as wcpRenderFriResults
@@ -2006,14 +2034,16 @@ jQuery(document).ready(function($) {
                 success: function(r) {
                     if (!r.success) { $result.html('<em style="color:#c0392b;">' + (r.message || 'Error') + '</em>'); return; }
                     $result.html(
-                        '<p style="font-size:12px;margin:0 0 6px;color:#555;">Search query for Exa (edit if needed):</p>'
+                        '<p style="font-size:12px;margin:0 0 6px;color:#555;">Search query (edit if needed):</p>'
                         + '<textarea class="wcp-fri-query-input" rows="2" style="width:100%;box-sizing:border-box;font-size:12px;">' + $('<span>').text(r.query).html() + '</textarea>'
                         + '<div style="margin-top:6px;">'
+                        + '<select class="wcp-fri-provider" style="font-size:12px;margin-right:6px;"><option value="exa">Exa — web</option><option value="exa_papers">Exa — papers</option><option value="openalex">OpenAlex — keyword</option><option value="openalex_semantic">OpenAlex — semantic</option></select>'
                         + '<button type="button" class="wcp-btn wcp-btn-primary wcp-btn-sm wcp-fri-search" data-item-id="' + itemId + '">Search</button>'
                         + ' <button type="button" class="wcp-edit-link wcp-item-ai-dismiss">Cancel</button>'
                         + '</div>'
                     );
                     $result.find('.wcp-fri-search').data({ phrase: fri.phrase, start: fri.start });
+                    try { $result.find('.wcp-fri-provider').val(localStorage.getItem('wcpRefProvider') || 'exa'); } catch (err) {}
                     if (fri.phrase) {
                         $result.prepend($('<p style="font-size:12px;margin:0 0 6px;color:#555;">').append('About: ').append($('<strong>').text('“' + fri.phrase + '”')));
                     }
@@ -2426,13 +2456,16 @@ jQuery(document).ready(function($) {
         var $panel  = $btn.closest('.wcp-item-ai-panel');
         var query   = $result.find('.wcp-fri-query-input').val().trim();
         if (!query) { $result.find('.wcp-fri-query-input').focus(); return; }
+        // Read before the panel is replaced with the "Searching…" placeholder.
+        var provider = $result.find('.wcp-fri-provider').val() || 'exa';
+        try { localStorage.setItem('wcpRefProvider', provider); } catch (err) {}
 
         $result.html('<em style="color:#aaa;font-size:12px;">Searching…</em>');
         $.ajax({
             url: wcpThemeData.restUrl + '/items/' + itemId + '/ai',
             method: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify({ action: 'find_references_for_item', page_id: $panel.data('page-id'), query: query, phrase: $btn.data('phrase') || '', phrase_start: $btn.data('start') || 0 }),
+            data: JSON.stringify({ action: 'find_references_for_item', page_id: $panel.data('page-id'), query: query, phrase: $btn.data('phrase') || '', phrase_start: $btn.data('start') || 0, provider: provider }),
             beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', wcpThemeData.nonce); },
             success: function(r) {
                 if (!r.success) { $result.html('<em style="color:#c0392b;">' + (r.message || 'Error') + '</em>'); return; }
@@ -3091,7 +3124,7 @@ jQuery(document).ready(function($) {
         spans.forEach(function(sp) {
             $p.append(document.createTextNode(raw.slice(pos, sp.start)));
             $p.append($('<mark class="wcp-phrase">').attr('data-phrase-id', sp.ph.id)
-                .attr('title', sp.ph.refs + ' reference' + (sp.ph.refs === 1 ? '' : 's'))
+                .attr('title', sp.ph.refs.length + ' reference' + (sp.ph.refs.length === 1 ? '' : 's'))
                 .text(raw.slice(sp.start, sp.end)));
             pos = sp.end;
         });
@@ -3108,6 +3141,36 @@ jQuery(document).ready(function($) {
     }
 
     $('.wcp-writing-paragraph').each(function() { wcpRenderWritingParagraph($(this)); });
+
+    // Click a highlighted phrase to list the references saved against it (built
+    // with .text()/attr only — titles and URLs come from saved content).
+    $(document).on('click', '.wcp-phrase', function() {
+        var $mark = $(this);
+        var $wrap = $mark.closest('.wcp-writing-wrap');
+        var $box  = $wrap.find('.wcp-phrase-refs');
+        if ($box.length && $box.data('phrase-id') === $mark.data('phrase-id')) { $box.remove(); return; }
+        $box.remove();
+        var phrases = $wrap.find('.wcp-writing-paragraph').data('phrases') || [];
+        var ph = phrases.filter(function(p) { return String(p.id) === String($mark.data('phrase-id')); })[0];
+        if (!ph) { return; }
+        $box = $('<div class="wcp-phrase-refs">').data('phrase-id', $mark.data('phrase-id'));
+        $box.append($('<div class="wcp-phrase-refs-title">').text('References for \u201c' + ph.text + '\u201d'));
+        if (!ph.refs.length) {
+            $box.append($('<div class="wcp-phrase-refs-empty">').text('None saved yet.'));
+        } else {
+            var $ul = $('<ul>').appendTo($box);
+            ph.refs.forEach(function(r) {
+                var $li = $('<li>').append($('<span class="wcp-phrase-refs-pred">').text(r.predicate + ' '));
+                if (/^https?:\/\//i.test(r.url)) {
+                    $li.append($('<a target="_blank" rel="noopener">').attr('href', r.url).text(r.title));
+                } else {
+                    $li.append(document.createTextNode(r.title));
+                }
+                $ul.append($li);
+            });
+        }
+        $wrap.find('.wcp-writing-hint').before($box);
+    });
 
     // Toggle writing mode on an item (top-level, researcher mode only).
     $(document).on('click', '.wcp-writing-toggle', function() {
