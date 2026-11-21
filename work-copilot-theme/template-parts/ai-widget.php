@@ -84,9 +84,16 @@ if (empty($saved_prompts)) {
         <!-- Model selector -->
         <div class="wcp-ai-model-selector">
             <select id="wcp-ai-model">
-                <option value="claude-haiku-4-5-20251001">Haiku 4.5 &mdash; Fast</option>
-                <option value="claude-sonnet-4-6" selected>Sonnet 4.6 &mdash; Balanced</option>
-                <option value="claude-opus-4-8">Opus 4.8 &mdash; Powerful</option>
+                <?php
+                // Options come from the plugin's model registry, with the
+                // site default (WP Copilot → Settings) preselected.
+                $wcp_models        = class_exists('WCP_AI_Client') ? WCP_AI_Client::models() : array();
+                $wcp_default_model = class_exists('WCP_AI_Client') ? WCP_AI_Client::default_model() : '';
+                foreach ($wcp_models as $wcp_model_id => $wcp_model) :
+                    $wcp_model_label = !empty($wcp_model['short_label']) ? $wcp_model['short_label'] : $wcp_model_id;
+                    ?>
+                    <option value="<?php echo esc_attr($wcp_model_id); ?>"<?php selected($wcp_default_model, $wcp_model_id); ?>><?php echo esc_html($wcp_model_label); ?></option>
+                <?php endforeach; ?>
             </select>
         </div>
 

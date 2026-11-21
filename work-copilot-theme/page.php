@@ -192,6 +192,7 @@ get_header();
                 <?php wp_nonce_field('wcp_export_page_md_' . $page_id); ?>
             </form>
             <button type="button" id="wcp-btn-page-slideshow" class="wcp-edit-link" data-page-id="<?php echo esc_attr($page_id); ?>" title="View this page as a slideshow">[slides]</button>
+            <button type="button" id="wcp-btn-page-storymap" class="wcp-edit-link" data-page-id="<?php echo esc_attr($page_id); ?>" title="View this page as a story map: headings as columns, with release lines">[story map]</button>
             <button type="button" id="wcp-toggle-tags" class="wcp-edit-link" title="Show tags used on this page">[tags]</button>
             <?php if (get_option('wcp_ai_enabled', false)) : ?>
             <button type="button" id="wcp-page-ai-btn" class="wcp-edit-link" title="AI actions">[ai]</button>
@@ -317,6 +318,7 @@ get_header();
                     <?php endif; ?>
                     <button type="button" class="wcp-heading-export-md wcp-edit-link" data-heading-id="<?php echo esc_attr($heading_id); ?>" title="Export this section as Markdown">[export]</button>
                     <button type="button" class="wcp-heading-slideshow wcp-edit-link" data-heading-id="<?php echo esc_attr($heading_id); ?>" title="View this section as a slideshow">[slides]</button>
+                    <button type="button" class="wcp-heading-storymap wcp-edit-link" data-heading-id="<?php echo esc_attr($heading_id); ?>" title="View this section as a story map: items as columns, sub-items as cards">[story map]</button>
                     <button type="button" class="wcp-heading-duplicate wcp-edit-link" data-heading-id="<?php echo esc_attr($heading_id); ?>" title="Duplicate this section, resetting task statuses">[duplicate]</button>
                     <button type="button" class="wcp-heading-delete wcp-edit-link" data-heading-id="<?php echo esc_attr($heading_id); ?>">[delete]</button>
                 </h3>

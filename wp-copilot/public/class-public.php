@@ -101,7 +101,7 @@ class WCP_Public {
             $items_html .= '<select class="wcp-filter" data-filter="item_type">';
             $items_html .= '<option value="">' . __('All Types', 'work-copilot') . '</option>';
             $items_html .= '<option value="task">' . __('Tasks', 'work-copilot') . '</option>';
-            $items_html .= '<option value="info">' . __('Info', 'work-copilot') . '</option>';
+            $items_html .= '<option value="note">' . __('Notes', 'work-copilot') . '</option>';
             $items_html .= '<option value="learning">' . __('Learnings', 'work-copilot') . '</option>';
             $items_html .= '</select>';
 

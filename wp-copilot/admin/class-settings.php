@@ -52,8 +52,8 @@ class WCP_Settings {
 
         register_setting('wcp_settings', 'wcp_ai_model', array(
             'type' => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
-            'default' => 'claude-3-5-sonnet-20241022',
+            'sanitize_callback' => array($this, 'sanitize_model'),
+            'default' => WCP_AI_Client::DEFAULT_MODEL,
         ));
 
         register_setting('wcp_settings', 'wcp_ai_enabled', array(
@@ -430,13 +430,21 @@ class WCP_Settings {
         <?php
     }
 
+    /**
+     * Only ever store a model the registry knows about.
+     */
+    public function sanitize_model($value) {
+        $resolved = WCP_AI_Client::resolve_model(sanitize_text_field((string) $value));
+
+        return $resolved ? $resolved : WCP_AI_Client::default_model();
+    }
+
     public function render_model_field() {
-        $model = get_option('wcp_ai_model', 'claude-sonnet-4-6');
-        $models = array(
-            'claude-sonnet-4-6' => 'Claude Sonnet 4.6 (Recommended)',
-            'claude-opus-4-7' => 'Claude Opus 4.7 (Most Capable)',
-            'claude-haiku-4-5-20251001' => 'Claude Haiku 4.5 (Fast)',
-        );
+        // One source of truth for model ids — see WCP_AI_Client::models().
+        // default_model() also maps an id saved by an older version onto its
+        // current equivalent, so the right option shows as selected.
+        $model  = WCP_AI_Client::default_model();
+        $models = wp_list_pluck(WCP_AI_Client::models(), 'label');
         ?>
         <select name="wcp_ai_model" class="regular-text">
             <?php foreach ($models as $value => $label) : ?>

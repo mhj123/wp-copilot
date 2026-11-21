@@ -101,8 +101,15 @@ function wcp_theme_scripts() {
     // see assets/js/vendor/marked.LICENSE.md.
     wp_enqueue_script('marked', get_template_directory_uri() . '/assets/js/vendor/marked.min.js', array(), '12.0.0', true);
 
+    // marked does not sanitise, and what it renders is not trusted (AI output
+    // can carry text from web results, PDFs and imports). Every render goes
+    // through DOMPurify via window.wcpSafeMarkdown() — see safe-markdown.js.
+    // Bundled locally (Apache-2.0 / MPL-2.0) — see assets/js/vendor/purify.LICENSE.txt.
+    wp_enqueue_script('dompurify', get_template_directory_uri() . '/assets/js/vendor/purify.min.js', array(), '3.2.6', true);
+    wp_enqueue_script('wcp-safe-markdown', get_template_directory_uri() . '/assets/js/safe-markdown.js', array('marked', 'dompurify'), filemtime(get_template_directory() . '/assets/js/safe-markdown.js'), true);
+
     // Theme JavaScript — filemtime()-versioned, same reasoning as theme.css above.
-    wp_enqueue_script('wcp-theme-js', get_template_directory_uri() . '/assets/js/theme.js', array('jquery', 'sortablejs', 'marked'), filemtime(get_template_directory() . '/assets/js/theme.js'), true);
+    wp_enqueue_script('wcp-theme-js', get_template_directory_uri() . '/assets/js/theme.js', array('jquery', 'sortablejs', 'wcp-safe-markdown'), filemtime(get_template_directory() . '/assets/js/theme.js'), true);
 
     // Quick-jump palette (Cmd/Ctrl+K). Logged-in only — it navigates the
     // workspace, so there's no reason to ship the page index to visitors.
@@ -115,6 +122,13 @@ function wcp_theme_scripts() {
     if (is_user_logged_in()) {
         wp_enqueue_style('wcp-slideshow', get_template_directory_uri() . '/assets/css/slideshow.css', array(), filemtime(get_template_directory() . '/assets/css/slideshow.css'));
         wp_enqueue_script('wcp-slideshow', get_template_directory_uri() . '/assets/js/slideshow.js', array('wcp-theme-js'), filemtime(get_template_directory() . '/assets/js/slideshow.js'), true);
+    }
+
+    // Story map view (page/heading board with release lines). Logged-in only,
+    // and only where the plugin class that serves it is present.
+    if (is_user_logged_in() && class_exists('WCP_Story_Map')) {
+        wp_enqueue_style('wcp-story-map', get_template_directory_uri() . '/assets/css/story-map.css', array(), filemtime(get_template_directory() . '/assets/css/story-map.css'));
+        wp_enqueue_script('wcp-story-map', get_template_directory_uri() . '/assets/js/story-map.js', array('wcp-theme-js', 'sortablejs'), filemtime(get_template_directory() . '/assets/js/story-map.js'), true);
     }
 
     // PptxGenJS (slideshow "Export .pptx"): ~470KB, so it is NOT enqueued — slideshow.js
@@ -468,7 +482,7 @@ function wcp_theme_enqueue_ai_widget() {
     wp_enqueue_script(
         'wcp-ai-widget',
         get_template_directory_uri() . '/assets/js/ai-widget.js',
-        array('jquery', 'marked'),
+        array('jquery', 'wcp-safe-markdown'),
         file_exists($widget_js_path) ? filemtime($widget_js_path) : false,
         true
     );
@@ -1427,26 +1441,6 @@ function wcp_theme_query_dynamic_listing($listing) {
     ));
 }
 
-/**
- * Require authentication for ALL REST API requests.
- *
- * This site sits behind a server-level Basic Auth gate that must exempt
- * /wp-json so Application Password credentials reach WordPress. This filter
- * puts an equivalent lock back at the WP layer: logged-in sessions (theme
- * nonce requests) and Application Passwords (Hermes) pass; anonymous
- * requests get a 401 instead of content. If credentials were supplied but
- * failed, $result already holds that error and is passed through untouched.
- */
-add_filter('rest_authentication_errors', function ($result) {
-    if (!empty($result)) {
-        return $result;
-    }
-    if (!is_user_logged_in()) {
-        return new WP_Error(
-            'rest_authentication_required',
-            __('Authentication required.', 'work-copilot-theme'),
-            array('status' => 401)
-        );
-    }
-    return $result;
-});
+// Anonymous access (front end, feeds, sitemaps, REST) is locked down by the
+// plugin — see WCP_Privacy in wp-copilot/includes/class-privacy.php — so the
+// lock holds whichever theme is active.

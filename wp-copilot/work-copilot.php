@@ -49,6 +49,7 @@ class Work_Copilot {
         require_once WCP_PLUGIN_DIR . 'includes/class-post-types.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-taxonomies.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-taxonomy-sync.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-privacy.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-rest-auth.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-rest-api.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-ai-logger.php';
@@ -64,6 +65,7 @@ class Work_Copilot {
         require_once WCP_PLUGIN_DIR . 'includes/class-ai-actions.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-recap.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-section-manager.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-story-map.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-researcher-mode.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-raindrop-importer.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-csv-exporter.php';
@@ -135,11 +137,13 @@ class Work_Copilot {
     }
 
     public function init() {
+        WCP_Privacy::instance();
         WCP_Post_Types::instance();
         WCP_Taxonomies::instance();
         WCP_Taxonomy_Sync::instance();
         WCP_Recap::instance();
         WCP_REST_API::instance();
+        WCP_Story_Map::instance();
         WCP_Embeddings_Manager::instance();
         WCP_Page_Template_Manager::instance();
         WCP_Page_Scheduler::instance();
@@ -195,6 +199,7 @@ class Work_Copilot {
         flush_rewrite_rules();
         wp_clear_scheduled_hook('wcp_raindrop_import');
         wp_clear_scheduled_hook('wcp_ai_actions_retention');
+        wp_clear_scheduled_hook('wcp_scheduled_page_check');
     }
 
     public function run_ai_log_retention() {

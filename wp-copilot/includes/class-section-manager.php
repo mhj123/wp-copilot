@@ -232,7 +232,7 @@ class WCP_Section_Manager {
         // - _wcp_created_by / _wcp_ai_generated / _wcp_ai_action_id / _wcp_source_conversation_id
         //   (audit-trail fields belong to the source item, not the copy)
 
-        if (get_option('wcp_ai_enabled', false)) {
+        if (WCP_Embeddings_Manager::is_enabled()) {
             WCP_Embeddings_Manager::instance()->generate_embedding($new_id);
         }
 

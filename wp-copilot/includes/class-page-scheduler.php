@@ -51,6 +51,16 @@ class WCP_Page_Scheduler {
      * Called on init (self-healing, mirrors Raindrop pattern).
      */
     public function ensure_cron_scheduled() {
+        // The scheduler is behind a feature flag. With the flag off there is
+        // nothing for the event to do, so don't keep one firing every 15
+        // minutes — and remove one left behind from when the flag was on.
+        if ( ! wcp_feature( 'page_scheduler' ) ) {
+            if ( wp_next_scheduled( self::CRON_HOOK ) ) {
+                wp_clear_scheduled_hook( self::CRON_HOOK );
+            }
+            return;
+        }
+
         if ( ! wp_next_scheduled( self::CRON_HOOK ) ) {
             wp_schedule_event( time(), self::CRON_INTERVAL, self::CRON_HOOK );
         }
@@ -205,6 +215,12 @@ class WCP_Page_Scheduler {
      * Runs every 15 minutes. Finds all pages whose next_run is due and creates them.
      */
     public function check_and_run_due_schedules() {
+        // Guard the unattended path itself, not just its scheduling: an
+        // event queued before the flag was turned off must not create pages.
+        if ( ! wcp_feature( 'page_scheduler' ) ) {
+            return;
+        }
+
         $now = time();
 
         $pages = get_posts( array(

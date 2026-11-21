@@ -2118,7 +2118,7 @@ class WCP_AI_Actions {
     /**
      * Brainstorm Mode A: given a specific set of existing item IDs (selected
      * by the user), propose a rewrite for each (optional — the model may
-     * decide an item needs no change) and/or new sub-items typed task/info/
+     * decide an item needs no change) and/or new sub-items typed task/note/
      * spec, to be created as real post_parent children of that item.
      * AI guardrail: everything is a proposal — nothing is written here.
      */
@@ -2337,7 +2337,7 @@ class WCP_AI_Actions {
              . "nothing in the existing list already covers. Do not propose anything that duplicates or "
              . "near-duplicates an existing item. Do NOT propose changes to any existing item — new items only. "
              . "Return ONLY a JSON array: [{\"title\": \"...\", \"content\": \"...\", \"item_type\": "
-             . "\"task|info|learning|spec\"}, ...]. Content may use Markdown (bullet lists with -, **bold**, "
+             . "\"task|note|learning|spec\"}, ...]. Content may use Markdown (bullet lists with -, **bold**, "
              . "headings with #) where it improves clarity.";
         if ($heading_title !== '') {
             $sys .= " Every item you propose belongs under the \"{$heading_title}\" heading — do not propose items for the rest of the page.";
@@ -3054,7 +3054,7 @@ class WCP_AI_Actions {
 
         // Everything created from an imported document is provenance-typed
         // 'source' — it represents external source material, not
-        // internally-authored task/info/learning/spec content — regardless
+        // internally-authored task/note/learning/spec content — regardless
         // of what type the AI would otherwise have classified it as.
         if (!empty($parsed['items']) && is_array($parsed['items'])) {
             foreach ($parsed['items'] as &$_imported_item) {
@@ -4338,7 +4338,7 @@ class WCP_AI_Actions {
 
         $logger    = WCP_AI_Logger::instance();
         $action_id = $logger->log_action( 'plan_goal', array(
-            'model'          => $response['model'] ?? get_option( 'wcp_ai_model', 'claude-sonnet-4-6' ),
+            'model'          => $response['model'] ?? WCP_AI_Client::instance()->effective_model(),
             'prompt'         => $goal_description,
             'input_context'  => $context_data,
             'output'         => $parsed,

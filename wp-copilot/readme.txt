@@ -109,6 +109,14 @@ WP Copilot → AI Audit Log shows the prompt, input context, output, and your ac
 
 == Changelog ==
 
+= Unreleased =
+* Added: Story map view for Pages and Headings (next to Slides). Headings run left to right as columns with their items beneath; add named release lines across the board, drag items above or below them, between headings, or move a line past one item in a single column. Order and filing are shared with the normal page view.
+* Security: the site is now private by default. Anonymous visitors are sent to the login screen, and feeds, the sitemap and the REST API are closed to them. Opt out with `define('WCP_PUBLIC_SITE', true);`.
+* Security: Markdown rendered in the workspace (including AI replies) is sanitised with DOMPurify before display.
+* Fixed: most AI actions were being written to the AI Audit Log without their type, model, prompt or context.
+* Removed: three unused legacy AI endpoints (page-chat, coaching, and the old decide route).
+* Updated: model choices are now Claude Sonnet 5.5, Opus 5.5 and Haiku 5.5, defined in one place (filter: `wcp_ai_models`). A previously saved model is moved to its current equivalent. The assistant's model picker now starts on the model chosen in Settings.
+
 = 1.2.2 =
 * Improved JSON parsing reliability for multi-item AI edit proposals.
 * Fixed response truncation handling for large bulk-edit requests.

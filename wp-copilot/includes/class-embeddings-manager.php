@@ -31,6 +31,16 @@ class WCP_Embeddings_Manager {
     }
 
     /**
+     * Whether embeddings should be generated. The one gate for every caller:
+     * it is its own setting (wcp_embeddings_enabled), separate from the AI
+     * assistant switch — embeddings go to a different provider, and the
+     * readme promises nothing is sent there unless this is on.
+     */
+    public static function is_enabled() {
+        return (bool) get_option('wcp_embeddings_enabled', false);
+    }
+
+    /**
      * Maybe generate embedding when post is saved
      */
     public function maybe_generate_embedding($post_id, $post, $update) {
@@ -50,7 +60,7 @@ class WCP_Embeddings_Manager {
         }
 
         // Check if embeddings are enabled
-        if (!get_option('wcp_embeddings_enabled', false)) {
+        if (!self::is_enabled()) {
             return;
         }
 

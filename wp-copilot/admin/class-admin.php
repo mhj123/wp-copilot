@@ -423,7 +423,7 @@ class WCP_Admin {
                                 <select id="wcp-item-type" style="width: 100%;">
                                     <option value="">-</option>
                                     <option value="task"><?php _e('Task', 'work-copilot'); ?></option>
-                                    <option value="info"><?php _e('Info', 'work-copilot'); ?></option>
+                                    <option value="note"><?php _e('Note', 'work-copilot'); ?></option>
                                     <option value="learning"><?php _e('Learning', 'work-copilot'); ?></option>
                                 </select>
                             </div>
