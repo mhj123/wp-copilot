@@ -41,9 +41,11 @@ class WCP_Exa_Client {
      *
      * @param string $query       Search query (natural language is fine — Exa is a neural search engine)
      * @param int    $num_results Max results to return
+     * @param string $category    Optional Exa category; 'publication' restricts the
+     *   neural search to scholarly papers.
      * @return array|WP_Error Array of {title, url, snippet}, or WP_Error
      */
-    public function search($query, $num_results = 8) {
+    public function search($query, $num_results = 8, $category = '') {
         if (!$this->is_configured()) {
             return new WP_Error('not_configured', 'Exa API key not configured');
         }
@@ -52,21 +54,26 @@ class WCP_Exa_Client {
             return new WP_Error('empty_query', 'Cannot search with an empty query');
         }
 
+        $body = array(
+            'query'         => $query,
+            'numResults'    => $num_results,
+            'contents'      => array(
+                'highlights' => array(
+                    'numSentences'     => 1,
+                    'highlightsPerUrl' => 1,
+                ),
+            ),
+        );
+        if ($category !== '') {
+            $body['category'] = $category;
+        }
+
         $response = wp_remote_post($this->api_url, array(
             'headers' => array(
                 'Content-Type' => 'application/json',
                 'x-api-key'    => $this->api_key,
             ),
-            'body' => wp_json_encode(array(
-                'query'         => $query,
-                'numResults'    => $num_results,
-                'contents'      => array(
-                    'highlights' => array(
-                        'numSentences'     => 1,
-                        'highlightsPerUrl' => 1,
-                    ),
-                ),
-            )),
+            'body' => wp_json_encode($body),
             'timeout' => 30,
         ));
 
@@ -103,10 +110,22 @@ class WCP_Exa_Client {
                 $snippet = mb_substr($result['text'], 0, 400);
             }
 
+            // Publication results carry author + date; lead the excerpt with
+            // them so the synthesis step knows who/when, as OpenAlex's does.
+            $meta = trim(($result['author'] ?? '') . (!empty($result['publishedDate']) ? ' (' . substr($result['publishedDate'], 0, 4) . ')' : ''));
+            if ($meta !== '') {
+                $snippet = $meta . '. ' . $snippet;
+            }
+
             $findings[] = array(
                 'title'   => $result['title'] ?? $result['url'] ?? 'Untitled',
                 'url'     => $result['url'] ?? '',
                 'snippet' => $this->truncate_snippet(trim($snippet), 500),
+                // Structured fields for display (only present for publication results).
+                'meta'    => array_filter(array(
+                    'authors' => sanitize_text_field($result['author'] ?? ''),
+                    'year'    => !empty($result['publishedDate']) ? (int) substr($result['publishedDate'], 0, 4) : '',
+                )),
             );
         }
 

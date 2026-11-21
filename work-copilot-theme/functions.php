@@ -595,8 +595,10 @@ function wcp_theme_get_item_children( $item_id ) {
     ) );
 }
 
-// Phrase items of a writing-mode paragraph: children linked 'contained_in',
-// each with the count of references saved 'about' it.
+// Phrase anchors of a writing-mode paragraph: children carrying
+// _wcp_anchor_text, each with the references linked to it. Those links are
+// wcp-graph edges (reference --discusses--> anchor), read here from the anchor's
+// inbound edges; without wcp-graph the lists are simply empty.
 function wcp_theme_get_item_phrases( $item_id ) {
     $phrases = array();
     $children = get_posts( array(
@@ -604,26 +606,28 @@ function wcp_theme_get_item_phrases( $item_id ) {
         'post_status'    => 'publish',
         'post_parent'    => (int) $item_id,
         'posts_per_page' => -1,
-        'meta_key'       => '_wcp_rel',
-        'meta_value'     => 'contained_in',
+        'meta_key'       => '_wcp_anchor_text',
     ) );
+    $graph = class_exists( 'WCPG_Graph_Repository' ) ? WCPG_Graph_Repository::instance() : null;
     foreach ( $children as $child ) {
-        $refs = get_posts( array(
-            'post_type'      => 'post',
-            'post_status'    => 'publish',
-            'post_parent'    => (int) $item_id,
-            'posts_per_page' => -1,
-            'fields'         => 'ids',
-            'meta_query'     => array(
-                array( 'key' => '_wcp_rel', 'value' => 'about' ),
-                array( 'key' => '_wcp_rel_target', 'value' => $child->ID ),
-            ),
-        ) );
+        $refs = array();
+        if ( $graph ) {
+            $edges = $graph->edges_for_post( $child->ID );
+            foreach ( $edges['inbound'] as $edge ) {
+                if ( ! empty( $edge['derived'] ) ) { continue; } // contains/within structure, not references
+                $refs[] = array(
+                    'id'        => (int) $edge['subject_id'],
+                    'title'     => (string) $edge['subject_title'],
+                    'url'       => (string) get_post_meta( $edge['subject_id'], '_wcp_source_url', true ),
+                    'predicate' => (string) $edge['predicate'],
+                );
+            }
+        }
         $phrases[] = array(
             'id'    => $child->ID,
             'text'  => (string) get_post_meta( $child->ID, '_wcp_anchor_text', true ),
             'start' => (int) get_post_meta( $child->ID, '_wcp_anchor_start', true ),
-            'refs'  => count( $refs ),
+            'refs'  => $refs,
         );
     }
     return $phrases;
@@ -1319,12 +1323,18 @@ function wcp_theme_get_item_library_paper_url($item_id, $exclude_page_id = 0) {
         return '';
     }
 
-    $terms = wp_get_post_terms($item_id, 'wcp_context');
-    if (empty($terms) || is_wp_error($terms)) {
-        return '';
+    // Item-level Find References topic items aren't filed under the paper
+    // page, so they carry its ID directly.
+    $paper_id = (int) get_post_meta($item_id, '_wcp_library_page_id', true);
+    if ($paper_id && $paper_id !== (int) $exclude_page_id) {
+        $paper = get_post($paper_id);
+        if ($paper && $paper->post_status === 'publish' && (int) $paper->post_parent === (int) $library_id) {
+            return get_permalink($paper_id);
+        }
     }
 
-    foreach ($terms as $term) {
+    $terms = wp_get_post_terms($item_id, 'wcp_context');
+    foreach ((is_wp_error($terms) ? array() : $terms) as $term) {
         $page_id = wcp_theme_resolve_context_term_page_id($term->term_id);
         if (!$page_id || $page_id === $exclude_page_id) {
             continue;
@@ -1332,6 +1342,15 @@ function wcp_theme_get_item_library_paper_url($item_id, $exclude_page_id = 0) {
         $page = get_post($page_id);
         if ($page && (int) $page->post_parent === (int) $library_id) {
             return get_permalink($page_id);
+        }
+    }
+
+    // Topic items accepted before the meta existed: match by source URL.
+    $source_url = get_post_meta($item_id, '_wcp_source_url', true);
+    if ($source_url && get_post_meta($item_id, '_wcp_source_type', true) === 'web_search') {
+        $match = get_posts(array('post_type' => 'page', 'post_parent' => $library_id, 'meta_key' => '_wcp_source_url', 'meta_value' => $source_url, 'posts_per_page' => 1, 'fields' => 'ids'));
+        if (!empty($match) && (int) $match[0] !== (int) $exclude_page_id) {
+            return get_permalink($match[0]);
         }
     }
 

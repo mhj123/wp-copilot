@@ -315,8 +315,10 @@
                 const includeSummary = $msg.find('.wcp-ai-query-summarize').prop('checked');
                 if (!includeRelevance && !includeSummary) { return; }
                 const instruction = $msg.data('instruction');
+                const provider = $msg.find('.wcp-ai-query-provider').val() || 'exa';
+                try { localStorage.setItem('wcpRefProvider', provider); } catch (err) {}
                 $msg.remove();
-                this.runReferenceSearch(instruction, query, includeRelevance, includeSummary);
+                this.runReferenceSearch(instruction, query, includeRelevance, includeSummary, provider);
             });
             $(document).on('click', '.wcp-ai-query-cancel', (e) => {
                 $(e.currentTarget).closest('.wcp-ai-query-confirm').remove();
@@ -1127,12 +1129,26 @@
          * Find references, step 2: show the derived query for review/editing
          * before it's actually sent to Exa.
          */
+        getSavedRefProvider: function() {
+            try { return localStorage.getItem('wcpRefProvider') || 'exa'; } catch (err) { return 'exa'; }
+        },
+
         renderQueryConfirm: function(instruction, query) {
             const $container = $('.wcp-ai-messages');
             const $message = $('<div>').addClass('wcp-ai-message wcp-ai-message-assistant wcp-ai-query-confirm');
             $message.data('instruction', instruction);
-            $message.append($('<div>').addClass('wcp-ai-message-content').text('Search query for Exa (edit if needed):'));
+            $message.append($('<div>').addClass('wcp-ai-message-content').text('Search query (edit if needed):'));
             $message.append($('<textarea>').addClass('wcp-ai-query-input').attr('rows', 2).val(query));
+            $message.append(
+                $('<div>').addClass('wcp-ai-query-options')
+                    .append($('<label>').addClass('wcp-ai-query-option').text('Search with ')
+                        .append($('<select>').addClass('wcp-ai-query-provider')
+                            .append($('<option>').val('exa').text('Exa — web'))
+                            .append($('<option>').val('exa_papers').text('Exa — papers'))
+                            .append($('<option>').val('openalex').text('OpenAlex — keyword'))
+                            .append($('<option>').val('openalex_semantic').text('OpenAlex — semantic'))
+                            .val(this.getSavedRefProvider())))
+            );
             $message.append(
                 $('<div>').addClass('wcp-ai-query-options')
                     .append(
@@ -1158,7 +1174,7 @@
         },
 
         /**
-         * Find references, step 3: run the actual Exa search with the
+         * Find references, step 3: run the actual search (Exa or OpenAlex) with the
          * (possibly edited) query, bypassing re-derivation server-side.
          *
          * @param {boolean} includeRelevance Create the short "describe
@@ -1166,7 +1182,7 @@
          * @param {boolean} includeSummary   Create a second, separate item
          *   per finding: a faithful long-form summary of its full content.
          */
-        runReferenceSearch: function(instruction, query, includeRelevance, includeSummary) {
+        runReferenceSearch: function(instruction, query, includeRelevance, includeSummary, provider) {
             this.showLoading(true, 'Searching for references…');
             const data = {
                 action_type: 'research_find_references',
@@ -1174,6 +1190,7 @@
                 query: query,
                 include_relevance: includeRelevance ? '1' : '',
                 include_summary: includeSummary ? '1' : '',
+                provider: provider || 'exa',
                 page_id: wcpAiWidgetData.pageId,
                 conversation_id: this.conversationId,
                 context_mode: this.contextMode,
@@ -1442,6 +1459,11 @@
                             .addClass('wcp-ai-proposal-source')
                             .attr({ href: item.url, target: '_blank', rel: 'noopener' })
                             .text(item.domain || item.url) : '',
+                        (item.meta && Object.keys(item.meta).length) ? $('<div>')
+                            .addClass('wcp-ai-proposal-meta')
+                            .text([item.meta.authors, item.meta.venue, item.meta.year,
+                                   item.meta.cited_by !== undefined ? 'cited by ' + item.meta.cited_by : '',
+                                   item.meta.is_oa ? 'open access' : ''].filter(Boolean).join(' · ')) : '',
                         $('<div>')
                             .addClass('wcp-ai-proposal-content')
                             .text(item.content),

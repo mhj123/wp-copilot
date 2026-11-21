@@ -56,6 +56,7 @@ class Work_Copilot {
         require_once WCP_PLUGIN_DIR . 'includes/class-ai-client.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-embeddings-client.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-exa-client.php';
+        require_once WCP_PLUGIN_DIR . 'includes/class-openalex-client.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-embeddings-manager.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-conversations-manager.php';
         require_once WCP_PLUGIN_DIR . 'includes/class-context-builder.php';
@@ -125,6 +126,9 @@ class Work_Copilot {
         // activation — dbDelta() is safe to re-run (it diffs and only applies
         // what changed), so this stays cheap once the version matches.
         add_action('admin_init', array($this, 'maybe_upgrade_db'));
+
+        // One-time copy of pre-graph phrase references to wcp-graph edges.
+        add_action('admin_init', array('WCP_AI_Actions', 'migrate_phrase_refs_to_graph'));
     }
 
     public function maybe_upgrade_db() {

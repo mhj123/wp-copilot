@@ -370,7 +370,11 @@ class WCP_AI_Actions {
     private function research_derive_search_query($instruction, $page_id, $atoms) {
         $page_title = get_the_title($page_id);
         $page_body = $this->page_body_text($page_id);
+        // One natural-language sentence, not a keyword string: the semantic
+        // providers (Exa, OpenAlex search.semantic) match on meaning and do
+        // worse on keyword soup; keyword OpenAlex still copes with a sentence.
         $sys = 'You turn a research assistant instruction into a single, well-formed search query for an academic/web search API. '
+             . 'Write it as one concise natural-language sentence describing the kind of source being sought (not a list of keywords), keeping any key technical terms or proper nouns verbatim. '
              . 'Ground the query in the research space\'s actual topic (page title, page content, and accepted atoms/summaries below) — '
              . 'do not search for the literal instruction text (e.g. "items on this page" is not a search query). '
              . 'Respond with ONLY the search query itself: no quotes, no explanation, no markdown.';
@@ -379,7 +383,7 @@ class WCP_AI_Actions {
              . ($page_body !== '' ? "Page content:\n{$page_body}\n\n" : '')
              . "Accepted atoms/summaries in this space:\n" . $this->research_atoms_text($atoms);
 
-        $response = WCP_AI_Client::instance()->request_with_conversation($sys, $usr, array(), 100, 30);
+        $response = WCP_AI_Client::instance()->request_with_conversation($sys, $usr, array(), 150, 30);
         if (is_wp_error($response) || empty(trim($response['content'] ?? ''))) {
             return trim($instruction);
         }
@@ -577,7 +581,7 @@ class WCP_AI_Actions {
      *   full text, not just the search excerpt). Off by default — opt-in since
      *   it's slower (a full-text fetch per finding) and more verbose.
      */
-    public function research_find_references($instruction, $page_id, $conversation_id = null, $query_override = null, $include_relevance = true, $include_summary = false) {
+    public function research_find_references($instruction, $page_id, $conversation_id = null, $query_override = null, $include_relevance = true, $include_summary = false, $provider = 'exa') {
         $guard = $this->require_researcher_mode($page_id);
         if (is_wp_error($guard)) { return $guard; }
         $instruction = trim($instruction);
@@ -587,8 +591,9 @@ class WCP_AI_Actions {
         // the original default rather than surfacing a confusing empty result.
         if (!$include_relevance && !$include_summary) { $include_relevance = true; }
 
-        $exa_client = WCP_Exa_Client::instance();
-        if (!$exa_client->is_configured()) {
+        $provider = $this->normalise_reference_provider($provider);
+        $search_client = $this->reference_search_client($provider);
+        if (!$search_client->is_configured()) {
             return new WP_Error('not_configured', 'Exa API key not configured. Add one in WP Copilot → Settings.');
         }
 
@@ -599,7 +604,7 @@ class WCP_AI_Actions {
             $query = $this->research_derive_search_query($instruction, $page_id, $atoms);
         }
 
-        $findings = $exa_client->search($query, 6);
+        $findings = $this->reference_search_new_only($provider, $query, 6, $skipped_in_library);
         if (is_wp_error($findings)) { return $findings; }
 
         $items = array();
@@ -613,9 +618,9 @@ class WCP_AI_Actions {
         list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, 'research_find_references', 'References');
 
         WCP_AI_Logger::instance()->log_action('research_find_references', array(
-            'model' => 'exa-web-search',
+            'model' => $provider . '-search',
             'prompt' => $instruction,
-            'input_context' => array('page_id' => $page_id, 'source' => 'Exa web search', 'derived_query' => $query, 'full_text_loaded' => false, 'typed_links_used' => false),
+            'input_context' => array('page_id' => $page_id, 'source' => $this->reference_provider_label($provider), 'derived_query' => $query, 'full_text_loaded' => false, 'typed_links_used' => false),
             'output' => $items,
             'context_post_id' => $page_id,
         ));
@@ -623,13 +628,108 @@ class WCP_AI_Actions {
         // Surface the actual Exa query in the reply — the instruction and the
         // search query are no longer the same text, and seeing the gap is the
         // whole point of exposing this (was previously invisible).
-        $summary = 'Searched Exa for: "' . $query . '" — found ' . count($proposals) . ' reference candidate(s) for review.';
+        $summary = 'Searched ' . $this->reference_provider_label($provider, true) . ' for: "' . $query . '" — found ' . count($proposals) . ' reference candidate(s) for review' . $this->skipped_in_library_note($skipped_in_library) . '.';
         if ($conversation_id) {
             WCP_Conversations_Manager::instance()->add_message($conversation_id, 'user', $instruction);
             WCP_Conversations_Manager::instance()->add_message($conversation_id, 'assistant', $summary, array('batch_id' => $batch_id));
         }
 
-        return array('outcome' => 'create_items', 'proposals' => $proposals, 'batch_id' => $batch_id, 'metadata' => array('source' => 'Exa web search', 'query' => $query), 'message' => $summary);
+        return array('outcome' => 'create_items', 'proposals' => $proposals, 'batch_id' => $batch_id, 'metadata' => array('source' => $this->reference_provider_label($provider), 'query' => $query), 'message' => $summary);
+    }
+
+    /**
+     * Reference-search providers for the Find References flows. The user
+     * picks one at the point of placing the query; anything unrecognised
+     * falls back to Exa. Both return findings in the same
+     * {title, url, snippet} shape, so nothing downstream is provider-aware
+     * except where noted (full-text fetches, which only Exa can do).
+     */
+    private function normalise_reference_provider($provider) {
+        return in_array($provider, array('exa', 'exa_papers', 'openalex', 'openalex_semantic'), true) ? $provider : 'exa';
+    }
+
+    private function reference_search_client($provider) {
+        return strpos($provider, 'openalex') === 0 ? WCP_OpenAlex_Client::instance() : WCP_Exa_Client::instance();
+    }
+
+    /**
+     * Run the chosen provider's search. Exa "papers" and OpenAlex "semantic"
+     * are modes of the same two clients, not separate clients.
+     */
+    private function reference_search($provider, $query, $num_results = 6) {
+        $client = $this->reference_search_client($provider);
+        switch ($provider) {
+            case 'exa_papers':        return $client->search($query, $num_results, 'publication');
+            case 'openalex_semantic': return $client->search($query, $num_results, true);
+            default:                  return $client->search($query, $num_results);
+        }
+    }
+
+    /**
+     * Search, then drop findings already in the Library so they aren't
+     * proposed again. Over-fetches (2x) so the user still gets roughly
+     * $num_results new candidates. $skipped is set to the number dropped.
+     */
+    private function reference_search_new_only($provider, $query, $num_results, &$skipped) {
+        $skipped = 0;
+        $findings = $this->reference_search($provider, $query, $num_results * 2);
+        if (is_wp_error($findings)) { return $findings; }
+
+        $library_id = WCP_Researcher_Mode::instance()->get_library_page_id();
+        if (!$library_id) { return array_slice($findings, 0, $num_results); }
+
+        $norm_url = function ($url) {
+            return strtolower(untrailingslashit(preg_replace('#^https?://(www\.)?#i', '', trim((string) $url))));
+        };
+        $norm_title = function ($title) {
+            return preg_replace('/[^a-z0-9]+/', '', strtolower((string) $title));
+        };
+
+        // Match on source URL or title: the same paper can come back under a
+        // different URL (publisher page from Exa vs DOI from OpenAlex).
+        $known_urls = array();
+        $known_titles = array();
+        $paper_ids = get_posts(array('post_type' => 'page', 'post_parent' => $library_id, 'post_status' => 'any', 'posts_per_page' => -1, 'fields' => 'ids'));
+        foreach ($paper_ids as $paper_id) {
+            $known_urls[$norm_url(get_post_meta($paper_id, '_wcp_source_url', true))] = true;
+            $known_titles[$norm_title(get_the_title($paper_id))] = true;
+        }
+        unset($known_urls[''], $known_titles['']);
+
+        $new = array();
+        foreach ($findings as $finding) {
+            if (isset($known_urls[$norm_url($finding['url'] ?? '')]) || isset($known_titles[$norm_title($finding['title'] ?? '')])) {
+                $skipped++;
+                continue;
+            }
+            $new[] = $finding;
+        }
+        return array_slice($new, 0, $num_results);
+    }
+
+    private function skipped_in_library_note($skipped) {
+        return $skipped > 0 ? ' (' . $skipped . ' already in Library skipped)' : '';
+    }
+
+    private function reference_provider_label($provider, $short = false) {
+        switch ($provider) {
+            case 'exa_papers':        return $short ? 'Exa (papers)' : 'Exa paper search';
+            case 'openalex':          return 'OpenAlex (keyword)';
+            case 'openalex_semantic': return 'OpenAlex (semantic)';
+            default:                  return $short ? 'Exa' : 'Exa web search';
+        }
+    }
+
+    /**
+     * Full text for a finding: Exa fetches it from the URL; OpenAlex has no
+     * page-text endpoint (and its DOI URLs usually hit paywalled landing
+     * pages), so its abstract is the full text we have.
+     */
+    private function reference_full_text($finding) {
+        if (($finding['provider'] ?? '') === 'openalex') {
+            return !empty($finding['abstract']) ? $finding['abstract'] : new WP_Error('no_content', 'OpenAlex returned no abstract for this work');
+        }
+        return WCP_Exa_Client::instance()->get_full_text($finding['url']);
     }
 
     /**
@@ -740,6 +840,8 @@ class WCP_AI_Actions {
                 'url' => $url,
                 'domain' => $domain,
                 'source_type' => 'web_search',
+                'provider' => $finding['provider'] ?? 'exa',
+                'meta' => $finding['meta'] ?? array(),
                 'topic' => $query,
                 'summary_content' => $summary_content !== '' ? sanitize_textarea_field($summary_content) : '',
                 'summary_relevance' => $summary_relevance !== '' ? sanitize_textarea_field($summary_relevance) : '',
@@ -759,7 +861,7 @@ class WCP_AI_Actions {
         $full_texts = array();
         foreach ($findings as $i => $finding) {
             if (empty($finding['url'])) { continue; }
-            $full_text = WCP_Exa_Client::instance()->get_full_text($finding['url']);
+            $full_text = $this->reference_full_text($finding);
             // A fetch failure just drops this one finding from the "summarise
             // content" set rather than failing the whole action — the other
             // findings (and the "describe relevance" set, if also requested)
@@ -801,6 +903,8 @@ class WCP_AI_Actions {
                 'url' => $url,
                 'domain' => $domain,
                 'source_type' => 'web_search',
+                'provider' => $finding['provider'] ?? 'exa',
+                'meta' => $finding['meta'] ?? array(),
                 'topic' => $query,
                 // Distinguishes this item from the "describe relevance" item
                 // for the same source at accept time: routed to its own
@@ -909,6 +1013,88 @@ class WCP_AI_Actions {
         return $item;
     }
 
+    /** Set once every pre-graph phrase reference has been copied to an edge. */
+    const PHRASE_REFS_MIGRATED_OPTION = 'wcp_phrase_refs_migrated_to_graph';
+
+    /**
+     * One-time migration: phrase references saved before references moved
+     * to wcp-graph were stored as post meta on the reference item
+     * (_wcp_rel = 'about', _wcp_rel_target = phrase anchor ID). Nothing
+     * reads that meta any more, so without this those references vanish
+     * from their phrase and duplicate detection stops seeing them.
+     *
+     * Copies each one to a reference --discusses--> anchor edge. The old
+     * meta is left in place, so the migration can be re-run safely and
+     * nothing is lost if it is interrupted. Runs on admin_init; if
+     * wcp-graph isn't active yet it does nothing and tries again later.
+     *
+     * @return array|null Counts {migrated, existing, skipped}, or null when it did not run.
+     */
+    public static function migrate_phrase_refs_to_graph() {
+        if (get_option(self::PHRASE_REFS_MIGRATED_OPTION)) {
+            return null;
+        }
+        if (!class_exists('WCPG_Graph_Repository')) {
+            return null; // retry once the add-on is active
+        }
+
+        $graph  = WCPG_Graph_Repository::instance();
+        $counts = array('migrated' => 0, 'existing' => 0, 'skipped' => 0);
+
+        $reference_ids = get_posts(array(
+            'post_type'      => 'post',
+            'post_status'    => 'any',
+            'posts_per_page' => -1,
+            'fields'         => 'ids',
+            'meta_query'     => array(
+                array('key' => '_wcp_rel', 'value' => 'about'),
+                array('key' => '_wcp_rel_target', 'compare' => 'EXISTS'),
+            ),
+        ));
+
+        foreach ($reference_ids as $reference_id) {
+            $anchor_id = (int) get_post_meta($reference_id, '_wcp_rel_target', true);
+            if (!$anchor_id) {
+                $counts['skipped']++;
+                continue;
+            }
+
+            $edge = $graph->add_edge((int) $reference_id, 'discusses', $anchor_id);
+            if (!is_wp_error($edge)) {
+                $counts['migrated']++;
+            } elseif ($edge->get_error_code() === 'wcpg_duplicate') {
+                $counts['existing']++;
+            } else {
+                // Typically the anchor or reference was deleted or trashed:
+                // there is nothing left to link.
+                $counts['skipped']++;
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log(sprintf('WP Copilot: phrase reference %d -> %d not migrated: %s', $reference_id, $anchor_id, $edge->get_error_message()));
+                }
+            }
+        }
+
+        update_option(self::PHRASE_REFS_MIGRATED_OPTION, $counts, false);
+
+        return $counts;
+    }
+
+    /**
+     * IDs of the phrase anchors a reference item is linked to (outbound
+     * 'discusses' edges). Empty when wcp-graph isn't active.
+     */
+    private function reference_anchor_ids($reference_id) {
+        if (!class_exists('WCPG_Graph_Repository')) { return array(); }
+        $edges = WCPG_Graph_Repository::instance()->edges_for_post($reference_id);
+        $ids = array();
+        foreach ($edges['outbound'] as $edge) {
+            if (empty($edge['derived']) && ($edge['predicate_slug'] ?? '') === 'discusses' && !empty($edge['object_id'])) {
+                $ids[] = (int) $edge['object_id'];
+            }
+        }
+        return $ids;
+    }
+
     /**
      * Find or create the phrase item for a writing-mode paragraph: a child of the
      * paragraph (contained-in), de-duplicated by its exact text. Called only from
@@ -924,7 +1110,6 @@ class WCP_AI_Actions {
             'post_status'    => 'any',
             'fields'         => 'ids',
             'meta_query'     => array(
-                array('key' => '_wcp_rel', 'value' => 'contained_in'),
                 array('key' => '_wcp_anchor_text', 'value' => $phrase),
             ),
         ));
@@ -945,7 +1130,6 @@ class WCP_AI_Actions {
         if (!is_wp_error($context_ids) && !empty($context_ids)) {
             wp_set_post_terms($phrase_id, $context_ids, 'wcp_context');
         }
-        update_post_meta($phrase_id, '_wcp_rel', 'contained_in');
         update_post_meta($phrase_id, '_wcp_anchor_text', $phrase);
         update_post_meta($phrase_id, '_wcp_anchor_start', max(0, (int) $phrase_start));
         return (int) $phrase_id;
@@ -995,13 +1179,14 @@ class WCP_AI_Actions {
      *   derived query before confirming), used verbatim instead of deriving
      *   a fresh one from the item's own title/content.
      */
-    public function find_references_for_item($item_id, $page_id, $conversation_id = null, $query_override = null, $phrase = '', $phrase_start = 0) {
+    public function find_references_for_item($item_id, $page_id, $conversation_id = null, $query_override = null, $phrase = '', $phrase_start = 0, $provider = 'exa') {
         $item = $this->guard_find_references_for_item($item_id, $page_id);
         if (is_wp_error($item)) { return $item; }
         $item_id = (int) $item_id;
 
-        $exa_client = WCP_Exa_Client::instance();
-        if (!$exa_client->is_configured()) {
+        $provider = $this->normalise_reference_provider($provider);
+        $search_client = $this->reference_search_client($provider);
+        if (!$search_client->is_configured()) {
             return new WP_Error('not_configured', 'Exa API key not configured. Add one in WP Copilot → Settings.');
         }
 
@@ -1015,7 +1200,7 @@ class WCP_AI_Actions {
             $query = $this->research_derive_search_query($instruction, $page_id, $atoms);
         }
 
-        $findings = $exa_client->search($query, 6);
+        $findings = $this->reference_search_new_only($provider, $query, 6, $skipped_in_library);
         if (is_wp_error($findings)) { return $findings; }
 
         $items = $this->research_findings_to_items($findings, $query);
@@ -1023,20 +1208,20 @@ class WCP_AI_Actions {
         list($proposals, $batch_id) = $this->research_create_item_proposals($items, $page_id, $conversation_id, 'find_references_for_item', '', $item_id, $phrase, $phrase_start);
 
         WCP_AI_Logger::instance()->log_action('find_references_for_item', array(
-            'model' => 'exa-web-search',
+            'model' => $provider . '-search',
             'prompt' => $item->post_title,
-            'input_context' => array('page_id' => $page_id, 'item_id' => $item_id, 'source' => 'Exa web search', 'derived_query' => $query, 'phrase' => $phrase),
+            'input_context' => array('page_id' => $page_id, 'item_id' => $item_id, 'source' => $this->reference_provider_label($provider), 'derived_query' => $query, 'phrase' => $phrase),
             'output' => $items,
             'context_post_id' => $page_id,
         ));
 
-        $summary = 'Searched Exa for: "' . $query . '" — found ' . count($proposals) . ' reference candidate(s) for "' . $item->post_title . '".';
+        $summary = 'Searched ' . $this->reference_provider_label($provider, true) . ' for: "' . $query . '" — found ' . count($proposals) . ' reference candidate(s) for "' . $item->post_title . '"' . $this->skipped_in_library_note($skipped_in_library) . '.';
         if ($conversation_id) {
             WCP_Conversations_Manager::instance()->add_message($conversation_id, 'user', 'Find references for: ' . $item->post_title);
             WCP_Conversations_Manager::instance()->add_message($conversation_id, 'assistant', $summary, array('batch_id' => $batch_id));
         }
 
-        return array('outcome' => 'create_items', 'proposals' => $proposals, 'batch_id' => $batch_id, 'metadata' => array('source' => 'Exa web search', 'query' => $query), 'message' => $summary);
+        return array('outcome' => 'create_items', 'proposals' => $proposals, 'batch_id' => $batch_id, 'metadata' => array('source' => $this->reference_provider_label($provider), 'query' => $query), 'message' => $summary);
     }
 
     /**
@@ -3645,7 +3830,7 @@ class WCP_AI_Actions {
         // back to the original shallow content on any failure — enrichment
         // is a quality upgrade, not something that should block accepting
         // the reference at all.
-        if ($item && ($item['source_type'] ?? '') === 'web_search' && !empty($item['url']) && ($item['summary_style'] ?? '') !== 'full') {
+        if ($item && ($item['source_type'] ?? '') === 'web_search' && ($item['provider'] ?? 'exa') !== 'openalex' && !empty($item['url']) && ($item['summary_style'] ?? '') !== 'full') {
             // "Summarise content" items already carry a full-text-grounded
             // long-form summary from proposal time — re-running the short
             // relevance-style synthesis here would overwrite it.
@@ -3803,26 +3988,36 @@ class WCP_AI_Actions {
                 $phrase_item_id = 0;
                 $phrase_text = trim((string) ($proposal['phrase'] ?? ''));
                 if ($phrase_text !== '') {
+                    // The reference→phrase link is a wcp-graph edge; fail closed
+                    // before writing anything if that add-on isn't active.
+                    if (!class_exists('WCPG_Graph_Repository')) {
+                        return new WP_Error('graph_missing', 'Saving a reference against a phrase needs the Work Copilot Graph plugin (wcp-graph) to be active.', array('status' => 400));
+                    }
                     $phrase_item_id = $this->find_or_create_phrase_item($parent_item_id_for_ref, $phrase_text, (int) ($proposal['phrase_start'] ?? 0), $user_id);
                 }
 
                 if ($source_url_key) {
                     // With a phrase, the same source may attach to a different phrase
                     // of the same paragraph, so dedup keys on (paragraph, URL, phrase).
-                    $dedup_args = array(
+                    $existing_subitems = get_posts(array(
                         'post_type'      => 'post',
                         'post_parent'    => $parent_item_id_for_ref,
-                        'posts_per_page' => 1,
+                        'posts_per_page' => -1,
                         'post_status'    => 'any',
+                        'fields'         => 'ids',
                         'meta_query'     => array(
                             array('key' => '_wcp_source_url', 'value' => $source_url_key),
-                            $phrase_item_id
-                                ? array('key' => '_wcp_rel_target', 'value' => $phrase_item_id)
-                                : array('key' => '_wcp_rel_target', 'compare' => 'NOT EXISTS'),
                         ),
-                    );
-                    $existing_subitems = get_posts($dedup_args);
-                    $existing_topic_item = !empty($existing_subitems);
+                    ));
+                    foreach ($existing_subitems as $existing_id) {
+                        $linked_anchors = $this->reference_anchor_ids($existing_id);
+                        // Phrase save: a duplicate only if this source is already
+                        // linked to THIS phrase. Plain save: only if it has no phrase link.
+                        if ($phrase_item_id ? in_array($phrase_item_id, $linked_anchors, true) : empty($linked_anchors)) {
+                            $existing_topic_item = true;
+                            break;
+                        }
+                    }
                 }
 
                 if (!$existing_topic_item) {
@@ -3849,10 +4044,34 @@ class WCP_AI_Actions {
                             update_post_meta($topic_item_id, '_wcp_source_url', $source_url_key);
                         }
                         update_post_meta($topic_item_id, '_wcp_source_type', 'web_search');
+                        // The topic item is filed under the triggering item's page,
+                        // not the Library, so remember its paper page for the
+                        // "View in Library" link.
+                        update_post_meta($topic_item_id, '_wcp_library_page_id', (int) $new_page_id);
                         if ($phrase_item_id) {
-                            // Relationship: this source is "an article about" the phrase.
-                            update_post_meta($topic_item_id, '_wcp_rel', 'about');
-                            update_post_meta($topic_item_id, '_wcp_rel_target', $phrase_item_id);
+                            // Edge direction is always reference → anchor ("this source
+                            // discusses that phrase"); the inverse is read from the
+                            // anchor's inbound edges, never stored twice.
+                            $edge = WCPG_Graph_Repository::instance()->add_edge($topic_item_id, 'discusses', $phrase_item_id);
+                            if (is_wp_error($edge)) {
+                                // Without the link this topic item is an orphan
+                                // the user never asked for, and reporting success
+                                // would hide that the phrase got no reference.
+                                // Remove it and fail; the Library page and
+                                // Summary item stay (they are valid on their
+                                // own), so a retry only redoes this step.
+                                wp_delete_post($topic_item_id, true);
+                                return new WP_Error(
+                                    'phrase_link_failed',
+                                    sprintf(
+                                        '"%s" was added to the Library, but could not be linked to the phrase "%s": %s',
+                                        $paper_title,
+                                        (string) get_post_meta($phrase_item_id, '_wcp_anchor_text', true),
+                                        $edge->get_error_message()
+                                    )
+                                );
+                            }
+                            $debug_info['edge_id'] = $edge['id'];
                         }
                         $created_posts[] = $topic_item_id;
                     }

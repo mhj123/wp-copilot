@@ -3789,6 +3789,7 @@ a.wcp-tag:hover {
 }
 
 .wcp-phrase {
+    cursor: pointer;
     background: #fff3b0;
     border-radius: 3px;
     padding: 0 2px;
@@ -3826,3 +3827,10 @@ a.wcp-tag:hover {
 .wcp-recap-list li.active { background: #eef4fb; }
 .wcp-recap-open { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font: inherit; color: inherit; display: flex; gap: 12px; flex-wrap: wrap; }
 .wcp-recap-open span { color: #777; font-size: 12px; }
+
+/* Writing mode: references saved against a phrase */
+.wcp-phrase-refs { margin: 4px 0 6px; padding: 8px 10px; background: #fffbe0; border: 1px solid #f0e3a0; border-radius: 6px; font-size: 12px; }
+.wcp-phrase-refs-title { font-weight: 600; margin-bottom: 4px; }
+.wcp-phrase-refs ul { margin: 0; padding-left: 16px; }
+.wcp-phrase-refs-pred { color: #888; }
+.wcp-phrase-refs-empty { color: #888; }
